@@ -52,7 +52,9 @@ jobs:
 
   production-approval:
     name: Production Approval
-    if: github.event_name == 'workflow_dispatch' && inputs.confirm_production_deploy == true
+    if: >-
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')) ||
+      (github.event_name == 'workflow_dispatch' && inputs.confirm_production_deploy == true)
     needs: quality
     runs-on: ubuntu-latest
     environment:
@@ -63,7 +65,9 @@ jobs:
 
   build-and-push:
     name: Build & Push Docker Images
-    if: github.event_name == 'workflow_dispatch' && inputs.confirm_production_deploy == true
+    if: >-
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')) ||
+      (github.event_name == 'workflow_dispatch' && inputs.confirm_production_deploy == true)
     needs: production-approval
     runs-on: ubuntu-latest
 
@@ -126,7 +130,9 @@ jobs:
 
   deploy-to-vps:
     name: Deploy to VPS
-    if: github.event_name == 'workflow_dispatch' && inputs.confirm_production_deploy == true
+    if: >-
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')) ||
+      (github.event_name == 'workflow_dispatch' && inputs.confirm_production_deploy == true)
     needs: build-and-push
     runs-on: ubuntu-latest
     environment:

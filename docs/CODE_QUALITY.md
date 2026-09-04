@@ -17,14 +17,16 @@ The gate checks:
 
 ## Release flow
 
-Pushing to `main` or `master` runs the quality gate only. It does not publish images or restart the VPS.
+Pushing to `main` or `master` runs the quality gate first and then pauses at the `production` environment approval. It does not publish images or restart the VPS until that approval is granted.
 
 To release a tested commit:
 
-1. Open **Actions → CI/CD Pipeline - KaamSaathi**.
-2. Click **Run workflow** and select the target branch.
-3. Tick `Confirm: build images and deploy to production VPS`.
+1. Push the tested commit to `main` or `master`.
+2. Open **Actions → CI/CD Pipeline - KaamSaathi**.
+3. Wait for `Quality Gate` to pass.
 4. Approve the `production` environment review when GitHub pauses the workflow.
+
+An alternative is **Run workflow** with the `Confirm: build images and deploy to production VPS` checkbox enabled.
 
 Configure at least one required reviewer under **Settings → Environments → production**. Without a required reviewer, the manual checkbox is still required but GitHub will not pause for a second approval.
 
