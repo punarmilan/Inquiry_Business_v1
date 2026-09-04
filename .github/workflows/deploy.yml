@@ -7,8 +7,34 @@ on:
       - master
 
 jobs:
+  quality:
+    name: Quality Gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.x
+
+      - name: Install project dependencies
+        run: |
+          npm ci --prefix mobile/backend
+          npm ci --prefix mobile/frontend
+          npm ci --prefix website/backend
+          npm ci --prefix website/frontend
+          npm ci --prefix website/admin-frontend
+
+      - name: Run quality gate
+        shell: pwsh
+        run: ./scripts/quality-check.ps1
+
   build-and-push:
     name: Build & Push Docker Images
+    needs: quality
     runs-on: ubuntu-latest
 
     steps:

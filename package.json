@@ -1,0 +1,8 @@
+{
+  "name": "inquiry-business-v1",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "quality": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/quality-check.ps1"
+  }
+}
