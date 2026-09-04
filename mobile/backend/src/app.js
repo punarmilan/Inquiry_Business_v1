@@ -36,7 +36,13 @@ if (env.nodeEnv !== 'test') {
 // loopback or proxy address instead of your real one, TRUST_PROXY is wrong and
 // every client is sharing a single rate-limit bucket.
 app.get('/health', (req, res) => {
-  res.json({ success: true, service: 'KaamSaathi Backend', status: 'ok', clientIp: req.ip });
+  res.json({
+    success: true,
+    message: 'App backend is live',
+    service: 'InquiryExperts App Backend',
+    status: 'ok',
+    clientIp: req.ip,
+  });
 });
 
 app.use(routes);

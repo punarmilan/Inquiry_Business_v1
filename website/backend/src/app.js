@@ -33,7 +33,12 @@ if (env.nodeEnv !== 'test') {
 }
 
 app.get('/health', (_req, res) => {
-  res.json({ success: true, service: 'KaamSaathi Web Backend', status: 'ok' });
+  res.json({
+    success: true,
+    message: 'Website backend is live',
+    service: 'InquiryExperts Website Backend',
+    status: 'ok',
+  });
 });
 
 app.use(routes);
