@@ -332,7 +332,7 @@ const userSchema = new mongoose.Schema(
     accountType: {
       type: String,
       enum: ['worker', 'employer', 'both'],
-      default: 'worker',
+      default: 'employer',
       index: true,
     },
     termsAccepted: {
@@ -398,9 +398,10 @@ const userSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    savedOffers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Offer' }],
     role: {
       type: String,
-      enum: ['user', 'admin'],
+      enum: ['user', 'staff', 'worker', 'admin', 'superadmin'],
       default: 'user',
       index: true,
     },

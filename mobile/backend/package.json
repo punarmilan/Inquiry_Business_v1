@@ -1,18 +1,20 @@
 {
   "name": "kaamsaathi-backend",
   "version": "1.0.0",
-  "description": "Node.js + Express + MongoDB backend for the KaamSaathi job marketplace.",
+  "description": "Node.js + Express + MongoDB backend for AnyWork hyperlocal offers and managed services.",
   "main": "src/server.js",
   "scripts": {
     "prestart": "node ../../scripts/ensureMongo.js",
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "check": "node --check src/server.js"
+    "check": "node --check src/server.js",
+    "test": "node --test tests/*.test.js"
+    ,"migrate:hyperlocal-indexes": "node src/scripts/migrateHyperlocalIndexes.js"
   },
   "keywords": [
     "kaamsaathi",
-    "jobs",
-    "marketplace",
+    "offers",
+    "local-services",
     "express",
     "mongodb"
   ],

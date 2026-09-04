@@ -78,6 +78,7 @@ export interface User {
   phone: string;
   avatar?: string;
   email?: string;
+  role?: 'user' | 'staff' | 'worker' | 'admin' | 'superadmin';
   accountType?: AccountType;
   dateOfBirth?: string;
   gender?: Gender;

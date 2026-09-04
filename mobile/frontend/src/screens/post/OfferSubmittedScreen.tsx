@@ -1,0 +1,11 @@
+import React from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { ScreenContainer } from '../../components/ScreenContainer';
+import { Button } from '../../components/Button';
+import type { PostStackParamList } from '../../navigation/types';
+import { theme } from '../../theme';
+type Props = NativeStackScreenProps<PostStackParamList, 'OfferSubmitted'>;
+export const OfferSubmittedScreen: React.FC<Props> = ({ navigation }) => <ScreenContainer style={styles.container}><View style={styles.icon}><MaterialCommunityIcons name="clock-check-outline" size={58} color={theme.colors.primary} /></View><Text style={styles.title}>Offer sent for review</Text><Text style={styles.body}>Your offer is with the admin team. Approval usually completes within 1 hour; it will appear for customers only after approval.</Text><Button label="Done" onPress={() => navigation.popToTop()} fullWidth style={styles.button} /></ScreenContainer>;
+const styles = StyleSheet.create({ container: { justifyContent: 'center', alignItems: 'center', padding: 28 }, icon: { width: 108, height: 108, borderRadius: 36, backgroundColor: theme.colors.successLight, alignItems: 'center', justifyContent: 'center' }, title: { ...theme.typography.h1, color: theme.colors.text, marginTop: 22 }, body: { ...theme.typography.body, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 22, marginTop: 8 }, button: { marginTop: 28 } });

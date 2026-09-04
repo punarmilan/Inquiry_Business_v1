@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
+const Worker = require('../models/Worker');
 const Rating = require('../models/Rating');
 const WalletTransaction = require('../models/WalletTransaction');
 const ApiError = require('../utils/ApiError');
@@ -17,7 +18,8 @@ const requireRegistrationFields = (body, user) => {
   if (!body.name) missing.push('name');
   if (!body.password && !user.passwordHash) missing.push('password');
   if (!body.termsAccepted) missing.push('termsAccepted');
-  if (!body.location && !hasExistingLocation) missing.push('location');
+  // Discovery location is requested contextually after login and always has a
+  // manual city/area fallback, so registration itself must not be blocked.
 
   if (missing.length) {
     throw new ApiError(422, `Missing required registration fields: ${missing.join(', ')}`, 'REGISTRATION_FIELDS_REQUIRED');
@@ -111,10 +113,15 @@ const profilePayload = async (body, user) => {
   // accountType is only settable on this endpoint during the very first profile submission
   // (requireRegistrationFields uses the same !user.name check to detect that moment). Once an
   // account exists, changing it requires an admin-approved request — see requestAccountTypeChange.
-  if (user.name) {
-    delete payload.accountType;
-  }
+  delete payload.accountType;
+  delete payload.workerProfile;
+  delete payload.employerProfile;
   return payload;
+};
+
+const syncProviderPhoto = async (user, payload) => {
+  if (payload.photoUrl === undefined) return;
+  await Worker.updateOne({ user: user._id }, { $set: { photoUrl: payload.photoUrl } });
 };
 
 const getProfile = asyncHandler(async (req, res) => {
@@ -125,6 +132,7 @@ const upsertProfile = asyncHandler(async (req, res) => {
   requireRegistrationFields(req.body, req.user);
   const payload = await profilePayload(req.body, req.user);
   const user = await User.findByIdAndUpdate(req.user._id, { $set: payload }, { new: true, runValidators: true });
+  await syncProviderPhoto(user, payload);
   res.json({ success: true, user });
 });
 
@@ -132,42 +140,16 @@ const updateProfile = asyncHandler(async (req, res) => {
   requireRegistrationFields(req.body, req.user);
   const payload = await profilePayload(req.body, req.user);
   const user = await User.findByIdAndUpdate(req.user._id, { $set: payload }, { new: true, runValidators: true });
+  await syncProviderPhoto(user, payload);
   res.json({ success: true, user });
 });
 
 const requestAccountTypeChange = asyncHandler(async (req, res) => {
-  const { requestedType } = req.body;
-  const user = req.user;
-
-  if (requestedType === user.accountType) {
-    throw new ApiError(422, 'That is already your current account type', 'ACCOUNT_TYPE_UNCHANGED');
-  }
-  if (user.accountTypeChange?.status === 'pending') {
-    throw new ApiError(409, 'You already have a pending account type request', 'ACCOUNT_TYPE_REQUEST_PENDING');
-  }
-
-  user.accountTypeChange = {
-    requestedType,
-    status: 'pending',
-    requestedAt: new Date(),
-    reviewedAt: undefined,
-    rejectionReason: '',
-  };
-  await user.save();
-
-  res.json({ success: true, user });
+  throw new ApiError(410, 'Public worker and employer modes have been retired', 'LEGACY_ACCOUNT_TYPE_RETIRED');
 });
 
 const cancelAccountTypeChangeRequest = asyncHandler(async (req, res) => {
-  const user = req.user;
-  if (user.accountTypeChange?.status !== 'pending') {
-    throw new ApiError(400, 'No pending account type request to cancel', 'ACCOUNT_TYPE_REQUEST_NOT_PENDING');
-  }
-
-  user.accountTypeChange = { status: 'none' };
-  await user.save();
-
-  res.json({ success: true, user });
+  throw new ApiError(410, 'Public worker and employer modes have been retired', 'LEGACY_ACCOUNT_TYPE_RETIRED');
 });
 
 const getUserRating = asyncHandler(async (req, res) => {

@@ -17,10 +17,10 @@ import { Avatar } from '../../components/Avatar';
 import { getThreadMessages, markThreadRead, BackendMessage } from '../../services/api';
 import { getSocket } from '../../services/socket';
 import { useApp } from '../../context/AppContext';
-import { ChatStackParamList, HomeStackParamList, SearchStackParamList, ProfileStackParamList } from '../../navigation/types';
+import { OffersStackParamList, ServicesStackParamList, MoreStackParamList, ProfileStackParamList, ProviderStackParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<
-  ChatStackParamList | HomeStackParamList | SearchStackParamList | ProfileStackParamList,
+  OffersStackParamList | ServicesStackParamList | MoreStackParamList | ProfileStackParamList | ProviderStackParamList,
   'ChatThread'
 >;
 
@@ -107,8 +107,8 @@ export const ChatThreadScreen: React.FC<Props> = ({ route, navigation }) => {
 
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={90}
+        behavior="padding"
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         <FlatList
           ref={listRef}

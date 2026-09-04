@@ -1,5 +1,4 @@
 import Constants from 'expo-constants';
-import { GoogleSignin, isSuccessResponse, isErrorWithCode, statusCodes } from '@react-native-google-signin/google-signin';
 // react-native-fbsdk-next is intentionally NOT imported here: merely importing it crashes the
 // app on launch (its native module throws "FacebookSdk has not been initialized" on first
 // property access) unless the config plugin ran with a real FACEBOOK_APP_ID — see app.config.js.
@@ -9,14 +8,30 @@ import { GoogleSignin, isSuccessResponse, isErrorWithCode, statusCodes } from '@
 
 let googleConfigured = false;
 
-const ensureGoogleConfigured = () => {
-  if (googleConfigured) return;
+const loadGoogleSignin = async () => {
+  try {
+    // Expo Go does not ship RNGoogleSignin. Loading it lazily prevents one unavailable native
+    // module from crashing the whole app before the user even reaches the login screen.
+    return await import('@react-native-google-signin/google-signin');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('RNGoogleSignin') || message.includes('TurboModuleRegistry')) {
+      throw new Error('Google Sign-In needs the InquiryExperts development build; it is not available in Expo Go.');
+    }
+    throw error;
+  }
+};
+
+const ensureGoogleConfigured = async () => {
+  const googleSigninModule = await loadGoogleSignin();
+  if (googleConfigured) return googleSigninModule;
   const webClientId = (Constants.expoConfig as any)?.extra?.googleWebClientId;
   if (!webClientId) {
     throw new Error('Google Sign-In is not configured for this build.');
   }
-  GoogleSignin.configure({ webClientId, offlineAccess: false });
+  googleSigninModule.GoogleSignin.configure({ webClientId, offlineAccess: false });
   googleConfigured = true;
+  return googleSigninModule;
 };
 
 export interface GoogleSignInResult {
@@ -27,7 +42,7 @@ export interface GoogleSignInResult {
 
 /** Resolves with the Google idToken + profile info, or throws (including on user cancellation). */
 export const signInWithGoogle = async (): Promise<GoogleSignInResult> => {
-  ensureGoogleConfigured();
+  const { GoogleSignin, isSuccessResponse, isErrorWithCode, statusCodes } = await ensureGoogleConfigured();
   try {
     await GoogleSignin.hasPlayServices();
     try {

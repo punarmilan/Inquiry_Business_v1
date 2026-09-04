@@ -22,9 +22,9 @@ app.set('trust proxy', 1);
 app.use(helmet());
 app.use(cors(corsOptions));
 app.use(compression());
-// Raised from the default 1mb so the Ads admin page can upload a base64-encoded banner
-// image directly on the JSON body (same pattern mobile/backend uses for profile photos).
-app.use(express.json({ limit: '8mb' }));
+// Image bytes are stored in TemplateAsset, while templates only keep a URL reference.
+// The request still carries a short-lived data URL for the upload itself.
+app.use(express.json({ limit: '12mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(globalLimiter);
 

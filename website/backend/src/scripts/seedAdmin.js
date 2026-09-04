@@ -12,27 +12,43 @@ const parseArgs = () => {
   return args;
 };
 
-const run = async () => {
-  const { email, password, name } = parseArgs();
+const isEnabled = (value) => value === true || value === 'true' || value === '1';
 
-  if (!email || !password || !name) {
-    console.error('Usage: node src/scripts/seedAdmin.js --email=admin@kaamsaathi.com --password=ChangeMe123! --name="Root Admin"');
+const run = async () => {
+  const args = parseArgs();
+  const { email, password, name } = args;
+
+  if (!email || !password || !name || !String(name).trim()) {
+    console.error('Usage: node src/scripts/seedAdmin.js --email=admin@kaamsaathi.com --password=ChangeMe123! --name="Root Admin" [--update=true] [--current-email=old@email.com]');
     process.exit(1);
   }
 
   await mongoose.connect(env.mongoUri);
 
-  const existing = await AdminUser.findOne({ email: email.toLowerCase() });
+  const normalizedEmail = String(email).trim().toLowerCase();
+  const lookupEmail = String(args['current-email'] || normalizedEmail).trim().toLowerCase();
+  const existing = await AdminUser.findOne({ email: lookupEmail });
   if (existing) {
-    console.error(`An admin with email ${email} already exists.`);
+    if (!isEnabled(args.update)) {
+      console.error(`An admin with email ${lookupEmail} already exists. Re-run with --update=true to update it.`);
+      await mongoose.disconnect();
+      process.exit(1);
+    }
+
+    existing.email = normalizedEmail;
+    existing.name = String(name).trim();
+    existing.passwordHash = await bcrypt.hash(password, env.bcryptSaltRounds);
+    existing.isActive = true;
+    await existing.save();
+    console.log(`Admin credentials updated for ${normalizedEmail}.`);
     await mongoose.disconnect();
-    process.exit(1);
+    process.exit(0);
   }
 
   const passwordHash = await bcrypt.hash(password, env.bcryptSaltRounds);
   const admin = await AdminUser.create({
     name,
-    email: email.toLowerCase(),
+    email: normalizedEmail,
     passwordHash,
     role: 'super-admin',
   });

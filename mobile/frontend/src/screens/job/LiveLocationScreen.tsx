@@ -9,17 +9,18 @@ import { ScreenContainer } from '../../components/ScreenContainer';
 import { IconButton } from '../../components/IconButton';
 import { Button } from '../../components/Button';
 import { useApp } from '../../context/AppContext';
-import { getSocket } from '../../services/socket';
-import { getJobLocations } from '../../services/api';
+import { connectSocket, getSocket } from '../../services/socket';
+import { getJobLocations, getServiceBookingLocations } from '../../services/api';
 import { haversineKm, formatDistance } from '../../utils/geo';
-import type { HomeStackParamList } from '../../navigation/types';
+import type { ProfileStackParamList, ProviderStackParamList, ServicesStackParamList } from '../../navigation/types';
 
-type Props = NativeStackScreenProps<HomeStackParamList, 'LiveLocation'>;
+type Props = NativeStackScreenProps<ProfileStackParamList | ServicesStackParamList | ProviderStackParamList, 'LiveLocation'>;
 
-const DEFAULT_CENTER = { latitude: 28.6139, longitude: 77.209 };
+const DEFAULT_CENTER = { latitude: 18.6298, longitude: 73.7997 };
 
 interface LocationUpdatePayload {
-  jobId: string;
+  jobId?: string;
+  bookingId?: string;
   userId: string;
   latitude: number;
   longitude: number;
@@ -29,7 +30,9 @@ interface LocationUpdatePayload {
 // Reused from every screen that can open it (JobDetail, JobApplicantsDetail) — same
 // component regardless of whether the current user is the poster or the worker.
 export const LiveLocationScreen: React.FC<Props> = ({ route, navigation }) => {
-  const { jobId, otherUserName } = route.params;
+  const { jobId, bookingId, otherUserName } = route.params;
+  const locationId = bookingId || jobId || '';
+  const isBookingLocation = Boolean(bookingId);
   const { accessToken, currentUser } = useApp();
   const mapRef = useRef<MapView>(null);
   const watchRef = useRef<Location.LocationSubscription | null>(null);
@@ -40,6 +43,12 @@ export const LiveLocationScreen: React.FC<Props> = ({ route, navigation }) => {
   const [otherLocation, setOtherLocation] = useState<{ latitude: number; longitude: number; updatedAt: string } | null>(
     null
   );
+
+  useEffect(() => {
+    const target = myLocation || otherLocation;
+    if (!target) return;
+    mapRef.current?.animateToRegion({ ...target, latitudeDelta: 0.01, longitudeDelta: 0.01 }, 400);
+  }, [myLocation, otherLocation]);
 
   // The floating tab bar renders on top of every screen's own layout regardless of flex
   // flow, so this screen's own bottom action bar needs the tab bar hidden while focused —
@@ -53,7 +62,8 @@ export const LiveLocationScreen: React.FC<Props> = ({ route, navigation }) => {
   // Seed the map with whatever last-known position exists before the first live tick arrives.
   useEffect(() => {
     if (!accessToken) return;
-    getJobLocations(accessToken, jobId)
+    const loadLocations = isBookingLocation ? getServiceBookingLocations(accessToken, locationId) : getJobLocations(accessToken, locationId);
+    loadLocations
       .then((res) => {
         const other = res.data.find((share) => share.userId !== currentUser?.id);
         if (other) {
@@ -61,7 +71,7 @@ export const LiveLocationScreen: React.FC<Props> = ({ route, navigation }) => {
         }
       })
       .catch(() => {});
-  }, [accessToken, jobId, currentUser?.id]);
+  }, [accessToken, locationId, isBookingLocation, currentUser?.id]);
 
   const distanceKm = myLocation && otherLocation ? haversineKm(myLocation, otherLocation) : null;
 
@@ -69,27 +79,27 @@ export const LiveLocationScreen: React.FC<Props> = ({ route, navigation }) => {
     watchRef.current?.remove();
     watchRef.current = null;
     setSharing(false);
-    getSocket()?.emit('location:stop', { jobId });
-  }, [jobId]);
+    getSocket()?.emit('location:stop', isBookingLocation ? { bookingId: locationId } : { jobId: locationId });
+  }, [isBookingLocation, locationId]);
 
   // Join the job's location room on mount (needed to receive the other side's updates even
   // if this user never starts sharing themselves), leave cleanly on unmount.
   useEffect(() => {
-    const socket = getSocket();
+    const socket = getSocket() || (accessToken ? connectSocket(accessToken) : null);
     if (!socket) return;
 
-    socket.emit('location:join', { jobId }, (ack: { ok: boolean; error?: string }) => {
+    socket.emit('location:join', isBookingLocation ? { bookingId: locationId } : { jobId: locationId }, (ack: { ok: boolean; error?: string }) => {
       if (!ack?.ok) {
         Alert.alert('Live location unavailable', ack?.error || 'This job is not active for live location.');
       }
     });
 
     const onUpdate = (payload: LocationUpdatePayload) => {
-      if (payload.jobId !== jobId || payload.userId === currentUser?.id) return;
+      if ((isBookingLocation ? payload.bookingId : payload.jobId) !== locationId || payload.userId === currentUser?.id) return;
       setOtherLocation({ latitude: payload.latitude, longitude: payload.longitude, updatedAt: payload.timestamp });
     };
-    const onStopped = (payload: { jobId: string; userId: string }) => {
-      if (payload.jobId !== jobId || payload.userId === currentUser?.id) return;
+    const onStopped = (payload: { jobId?: string; bookingId?: string; userId: string }) => {
+      if ((isBookingLocation ? payload.bookingId : payload.jobId) !== locationId || payload.userId === currentUser?.id) return;
       setOtherLocation(null);
     };
 
@@ -101,12 +111,16 @@ export const LiveLocationScreen: React.FC<Props> = ({ route, navigation }) => {
       socket.off('location:stopped', onStopped);
       watchRef.current?.remove();
       watchRef.current = null;
-      socket.emit('location:stop', { jobId });
+      socket.emit('location:stop', isBookingLocation ? { bookingId: locationId } : { jobId: locationId });
     };
-  }, [jobId, currentUser?.id]);
+  }, [accessToken, isBookingLocation, locationId, currentUser?.id]);
 
   const startSharing = useCallback(async () => {
     if (starting || sharing) return;
+    if (!locationId) {
+      Alert.alert('Location unavailable', 'This booking does not have a valid location session yet.');
+      return;
+    }
     setStarting(true);
     try {
       const permission = await Location.requestForegroundPermissionsAsync();
@@ -127,14 +141,20 @@ export const LiveLocationScreen: React.FC<Props> = ({ route, navigation }) => {
         400
       );
 
+      const socket = getSocket() || (accessToken ? connectSocket(accessToken) : null);
+      if (!socket) {
+        Alert.alert('Connection unavailable', 'Reconnect to the internet and try again.');
+        return;
+      }
+
       watchRef.current = await Location.watchPositionAsync(
         { accuracy: Location.Accuracy.Balanced, timeInterval: 8000, distanceInterval: 25 },
         (position) => {
           setMyLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude });
-          getSocket()?.emit(
+          socket.emit(
             'location:update',
             {
-              jobId,
+              ...(isBookingLocation ? { bookingId: locationId } : { jobId: locationId }),
               latitude: position.coords.latitude,
               longitude: position.coords.longitude,
               accuracy: position.coords.accuracy ?? undefined,
@@ -155,7 +175,7 @@ export const LiveLocationScreen: React.FC<Props> = ({ route, navigation }) => {
     } finally {
       setStarting(false);
     }
-  }, [starting, sharing, jobId, stopSharing]);
+  }, [accessToken, starting, sharing, isBookingLocation, locationId, stopSharing]);
 
   // Auto-start sharing as soon as this screen opens (both poster and worker land here only for
   // an active job's Call/Message/Location action), so each side sees the other's live position

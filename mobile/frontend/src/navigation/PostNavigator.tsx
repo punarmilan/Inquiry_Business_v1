@@ -1,16 +1,11 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { PostStackParamList } from './types';
-import { PostJobScreen } from '../screens/post/PostJobScreen';
-import { PostSuccessScreen } from '../screens/post/PostSuccessScreen';
-
+import type { PostStackParamList } from './types';
+import { PostEntryScreen } from '../screens/post/PostEntryScreen';
+import { BusinessSetupScreen } from '../screens/post/BusinessSetupScreen';
+import { OfferDesignEditorScreen } from '../screens/post/OfferDesignEditorScreen';
+import { PlansScreen } from '../screens/post/PlansScreen';
+import { CreateOfferScreen } from '../screens/post/CreateOfferScreen';
+import { OfferSubmittedScreen } from '../screens/post/OfferSubmittedScreen';
 const Stack = createNativeStackNavigator<PostStackParamList>();
-
-export const PostNavigator: React.FC = () => {
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="PostJob" component={PostJobScreen} />
-      <Stack.Screen name="PostSuccess" component={PostSuccessScreen} />
-    </Stack.Navigator>
-  );
-};
+export const PostNavigator = () => <Stack.Navigator screenOptions={{ headerShown: false }}><Stack.Screen name="PostEntry" component={PostEntryScreen} /><Stack.Screen name="BusinessSetup" component={BusinessSetupScreen} /><Stack.Screen name="Plans" component={PlansScreen} /><Stack.Screen name="OfferDesignEditor" component={OfferDesignEditorScreen} /><Stack.Screen name="CreateOffer" component={CreateOfferScreen} /><Stack.Screen name="OfferSubmitted" component={OfferSubmittedScreen} /></Stack.Navigator>;

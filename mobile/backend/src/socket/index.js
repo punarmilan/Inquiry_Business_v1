@@ -5,6 +5,11 @@ const notificationService = require('../services/notificationService');
 const Chat = require('../models/Chat');
 
 const locationRoom = (jobId) => `job:${jobId}:location`;
+const bookingLocationRoom = (bookingId) => `booking:${bookingId}:location`;
+
+const getLocationContext = ({ jobId, bookingId }) => bookingId
+  ? { id: bookingId, room: bookingLocationRoom(bookingId), kind: 'booking' }
+  : { id: jobId, room: locationRoom(jobId), kind: 'job' };
 
 const socketAuthMiddleware = async (socket, next) => {
   try {
@@ -59,7 +64,9 @@ const attachSocket = (io) => {
             body: `${socket.user.name || 'Someone'} sent you a message.`,
             data: {
               chatId: chat._id.toString(),
-              jobId: chat.job.toString(),
+              contextType: chat.contextType || 'job',
+              jobId: chat.job?.toString(),
+              bookingId: chat.booking?.toString(),
               otherUserId: socket.user._id.toString(),
               otherUserName: socket.user.name || 'User',
               otherUserAvatar: socket.user.photoUrl || undefined,
@@ -89,31 +96,34 @@ const attachSocket = (io) => {
 
     // Live location — foreground-only sharing, scoped to one job's room so it's only ever
     // visible to the poster/accepted-worker pair on that specific active job.
-    socket.on('location:join', async ({ jobId }, ack) => {
+    socket.on('location:join', async ({ jobId, bookingId }, ack) => {
       try {
-        await locationService.assertCanShareLocation(jobId, socket.user._id);
-        socket.join(locationRoom(jobId));
+        const context = getLocationContext({ jobId, bookingId });
+        if (!context.id) throw new Error('LOCATION_CONTEXT_REQUIRED');
+        if (context.kind === 'booking') await locationService.assertCanShareBookingLocation(context.id, socket.user._id);
+        else await locationService.assertCanShareLocation(context.id, socket.user._id);
+        socket.join(context.room);
         ack?.({ ok: true });
       } catch (error) {
         ack?.({ ok: false, error: error.code || error.message || 'LOCATION_JOIN_FAILED' });
       }
     });
 
-    socket.on('location:update', async ({ jobId, latitude, longitude, accuracy, heading, speed }, ack) => {
+    socket.on('location:update', async ({ jobId, bookingId, latitude, longitude, accuracy, heading, speed }, ack) => {
       try {
-        await locationService.assertCanShareLocation(jobId, socket.user._id);
-        await locationService.recordLocationUpdate({
-          jobId,
-          userId: socket.user._id,
-          latitude,
-          longitude,
-          accuracy,
-          heading,
-          speed,
-        });
+        const context = getLocationContext({ jobId, bookingId });
+        if (!context.id) throw new Error('LOCATION_CONTEXT_REQUIRED');
+        if (context.kind === 'booking') {
+          await locationService.assertCanShareBookingLocation(context.id, socket.user._id);
+          await locationService.recordBookingLocationUpdate({ bookingId: context.id, userId: socket.user._id, latitude, longitude, accuracy, heading, speed });
+        } else {
+          await locationService.assertCanShareLocation(context.id, socket.user._id);
+          await locationService.recordLocationUpdate({ jobId: context.id, userId: socket.user._id, latitude, longitude, accuracy, heading, speed });
+        }
         // userId/timestamp are server-set — never trust those off the payload.
-        socket.to(locationRoom(jobId)).emit('location:update', {
+        socket.to(context.room).emit('location:update', {
           jobId,
+          bookingId,
           userId: socket.user._id.toString(),
           latitude,
           longitude,
@@ -128,11 +138,18 @@ const attachSocket = (io) => {
       }
     });
 
-    socket.on('location:stop', async ({ jobId }, ack) => {
+    socket.on('location:stop', async ({ jobId, bookingId }, ack) => {
       try {
-        await locationService.stopSharing({ jobId, userId: socket.user._id });
-        socket.to(locationRoom(jobId)).emit('location:stopped', { jobId, userId: socket.user._id.toString() });
-        socket.leave(locationRoom(jobId));
+        const context = getLocationContext({ jobId, bookingId });
+        if (!context.id) throw new Error('LOCATION_CONTEXT_REQUIRED');
+        if (context.kind === 'booking') {
+          await locationService.assertCanShareBookingLocation(context.id, socket.user._id);
+          await locationService.stopBookingSharing({ bookingId: context.id, userId: socket.user._id });
+        } else {
+          await locationService.stopSharing({ jobId: context.id, userId: socket.user._id });
+        }
+        socket.to(context.room).emit('location:stopped', { jobId, bookingId, userId: socket.user._id.toString() });
+        socket.leave(context.room);
         ack?.({ ok: true });
       } catch (error) {
         ack?.({ ok: false, error: error.code || error.message || 'LOCATION_STOP_FAILED' });

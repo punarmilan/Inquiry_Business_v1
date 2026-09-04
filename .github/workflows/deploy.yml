@@ -46,9 +46,19 @@ jobs:
           context: ./website/frontend
           file: ./website/frontend/Dockerfile
           build-args: |
-            VITE_API_BASE_URL=https://api.smartdial.online
+            VITE_API_BASE_URL=https://web_api.inquiry.business
           push: true
           tags: demonicorpse23/kaamsaathi-website-frontend:latest
+
+      - name: Build and Push Admin Frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./website/admin-frontend
+          file: ./website/admin-frontend/Dockerfile
+          build-args: |
+            VITE_API_BASE_URL=https://web_api.inquiry.business
+          push: true
+          tags: demonicorpse23/kaamsaathi-admin-frontend:latest
 
   deploy-to-vps:
     name: Deploy to VPS

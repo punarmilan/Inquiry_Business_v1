@@ -51,7 +51,7 @@ services:
       - JWT_REFRESH_SECRET=${WEB_JWT_REFRESH_SECRET:-web-refresh-secret-kaamsaathi-prod-2026}
       - JWT_ACCESS_EXPIRES_IN=15m
       - JWT_REFRESH_EXPIRES_IN=7d
-      - CORS_ORIGIN=https://admin.smartdial.online
+      - CORS_ORIGIN=https://admin.inquiry.business,https://inquiry.business
     networks:
       - kaamsaathi-net
 
@@ -61,6 +61,15 @@ services:
     restart: always
     ports:
       - "5012:80"
+    networks:
+      - kaamsaathi-net
+
+  admin-frontend:
+    image: demonicorpse23/kaamsaathi-admin-frontend:latest
+    container_name: kaamsaathi-admin-frontend
+    restart: always
+    ports:
+      - "5013:80"
     networks:
       - kaamsaathi-net
 
@@ -74,6 +83,7 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - website-frontend
+      - admin-frontend
       - website-backend
       - mobile-backend
     networks:

@@ -51,7 +51,7 @@ const oauthRegisterSchema = Joi.object({
     provider: Joi.string().valid('google', 'facebook').required(),
     token: Joi.string().trim().required(),
     phone: phone.required(),
-    accountType: Joi.string().valid('worker', 'employer', 'both').required(),
+    accountType: Joi.string().valid('worker', 'employer', 'both'),
     termsAccepted: Joi.boolean().valid(true).required(),
   }).required(),
   query: Joi.object({}),

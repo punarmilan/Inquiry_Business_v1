@@ -1,7 +1,7 @@
 {
   "name": "kaamsaathi-web-backend",
   "version": "1.0.0",
-  "description": "Node.js + Express + MongoDB API for the KaamSaathi admin dashboard.",
+  "description": "Node.js + Express + MongoDB API for the AnyWork hyperlocal admin dashboard.",
   "main": "src/server.js",
   "scripts": {
     "prestart": "node ../../scripts/ensureMongo.js",
@@ -9,6 +9,8 @@
     "dev": "nodemon src/server.js",
     "check": "node --check src/server.js",
     "seed:admin": "node src/scripts/seedAdmin.js",
+    "seed:food-pack": "node src/scripts/seedFoodTemplatePack.js",
+    "seed:stickers": "node src/scripts/seedTemplateStickers.js",
     "seed:demo": "node src/scripts/seedDemoData.js"
   },
   "keywords": [

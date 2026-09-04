@@ -9,9 +9,12 @@ import { Avatar } from '../../components/Avatar';
 import { listThreads, BackendChat } from '../../services/api';
 import { getSocket } from '../../services/socket';
 import { useApp } from '../../context/AppContext';
-import { ChatStackParamList, ProfileStackParamList } from '../../navigation/types';
+import { OffersStackParamList, ServicesStackParamList, MoreStackParamList, ProfileStackParamList } from '../../navigation/types';
 
-type Props = NativeStackScreenProps<ChatStackParamList | ProfileStackParamList, 'ChatList'>;
+type Props = NativeStackScreenProps<
+  OffersStackParamList | ServicesStackParamList | MoreStackParamList | ProfileStackParamList,
+  'ChatList'
+>;
 
 type ChatTab = 'chats' | 'requests';
 
@@ -79,13 +82,20 @@ export const ChatListScreen: React.FC<Props> = ({ navigation }) => {
     const jobTitle = typeof item.job === 'object' ? item.job.title : '';
     const jobId = typeof item.job === 'object' ? item.job._id : item.job;
     const unread = typeof item.unreadCount === 'number' ? item.unreadCount : 0;
+    const openThread = (params: any) => {
+      if (navigation.getState().routeNames.includes('ChatThread')) {
+        (navigation as any).navigate('ChatThread', params);
+      } else {
+        (navigation.getParent() as any)?.navigate('ChatThread', params);
+      }
+    };
     return (
       <Pressable
         style={({ pressed }) => [styles.row, pressed && styles.pressed]}
         accessibilityRole="button"
         accessibilityLabel={other?.name}
         onPress={() =>
-          navigation.navigate('ChatThread', {
+          openThread({
             chatId: item._id,
             jobId,
             jobTitle,

@@ -1,0 +1,47 @@
+const express = require('express');
+const controller = require('../controllers/hyperlocalController');
+const validate = require('../middleware/validate');
+const { requireAdminAuth } = require('../middleware/auth');
+const schemas = require('../validators/hyperlocal.validator');
+
+const router = express.Router();
+router.get('/template-assets/:id', controller.getTemplateAsset);
+router.use(requireAdminAuth);
+
+router.get('/cities', controller.listCities);
+router.post('/cities', validate(schemas.cityCreate), controller.createCity);
+router.put('/cities/:id', validate(schemas.cityUpdate), controller.updateCity);
+router.get('/workers', validate(schemas.list), controller.listWorkers);
+router.get('/provider-applications', validate(schemas.list), controller.listProviderApplications);
+router.post('/provider-applications/:id/approve', validate(schemas.providerApplicationApprove), controller.approveProviderApplication);
+router.post('/provider-applications/:id/reject', validate(schemas.providerApplicationReject), controller.rejectProviderApplication);
+router.post('/workers', validate(schemas.workerCreate), controller.createWorker);
+router.put('/workers/:id', validate(schemas.workerUpdate), controller.updateWorker);
+router.get('/service-categories', controller.listServiceCategories);
+router.post('/service-categories', validate(schemas.categoryCreate), controller.createServiceCategory);
+router.put('/service-categories/:id', validate(schemas.categoryUpdate), controller.updateServiceCategory);
+router.get('/businesses', validate(schemas.list), controller.listBusinesses);
+router.patch('/businesses/:id/moderation', validate(schemas.businessModerate), controller.moderateBusiness);
+router.get('/offers', validate(schemas.list), controller.listOffers);
+router.patch('/offers/:id/moderation', validate(schemas.offerModerate), controller.moderateOffer);
+router.get('/offer-templates', controller.listOfferTemplates);
+router.post('/offer-templates', validate(schemas.templateCreate), controller.createOfferTemplate);
+router.put('/offer-templates/:id', validate(schemas.templateUpdate), controller.updateOfferTemplate);
+router.delete('/offer-templates/:id', controller.deleteOfferTemplate);
+router.get('/stickers', controller.listTemplateStickers);
+router.post('/stickers', validate(schemas.stickerCreate), controller.createTemplateSticker);
+router.put('/stickers/:id', validate(schemas.stickerUpdate), controller.updateTemplateSticker);
+router.delete('/stickers/:id', controller.deleteTemplateSticker);
+router.post('/template-assets', controller.uploadTemplateAsset);
+router.get('/plans', controller.listPlans);
+router.post('/plans', validate(schemas.planCreate), controller.createPlan);
+router.put('/plans/:id', validate(schemas.planUpdate), controller.updatePlan);
+router.get('/bookings', validate(schemas.list), controller.listBookings);
+router.patch('/bookings/:id/assign', validate(schemas.assignWorker), controller.assignWorker);
+router.patch('/bookings/:id/forward', validate(schemas.forwardBooking), controller.forwardBooking);
+router.patch('/bookings/:id/status', validate(schemas.bookingStatus), controller.updateBookingStatus);
+router.get('/commerce-payments', validate(schemas.list), controller.listPayments);
+router.post('/commerce-payments/:id/verify', validate(schemas.verifyPayment), controller.verifyPayment);
+router.post('/commerce-payments/:id/refund', validate(schemas.refundPayment), controller.refundPayment);
+
+module.exports = router;

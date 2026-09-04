@@ -1,0 +1,15 @@
+import React, { useCallback, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { ScreenContainer } from '../../components/ScreenContainer';
+import { OfferCard } from '../../components/OfferCard';
+import { listSavedOffers, toggleSavedOffer } from '../../services/api';
+import type { Offer } from '../../types/hyperlocal';
+import type { MoreStackParamList } from '../../navigation/types';
+import { useApp } from '../../context/AppContext';
+import { theme } from '../../theme';
+type Props = NativeStackScreenProps<MoreStackParamList, 'SavedOffers'>;
+export const SavedOffersScreen: React.FC<Props> = ({ navigation }) => { const { accessToken } = useApp(); const [offers, setOffers] = useState<Offer[]>([]); const [loading, setLoading] = useState(true); const load = useCallback(() => { if (!accessToken) return; setLoading(true); listSavedOffers(accessToken).then((r) => setOffers(r.data)).finally(() => setLoading(false)); }, [accessToken]); useFocusEffect(useCallback(() => { load(); }, [load])); return <ScreenContainer><View style={styles.top}><Pressable onPress={navigation.goBack} style={styles.back}><MaterialCommunityIcons name="arrow-left" size={24} /></Pressable><Text style={styles.title}>Saved Offers</Text></View><ScrollView contentContainerStyle={styles.content}>{loading ? <ActivityIndicator color={theme.colors.primary} /> : null}{offers.map((offer) => <OfferCard key={offer._id} offer={offer} onPress={() => navigation.navigate('OfferDetails', { offerId: offer._id })} onSave={() => accessToken && toggleSavedOffer(accessToken, offer._id).then(load)} />)}{!loading && !offers.length ? <Text style={styles.empty}>Your saved offers will appear here.</Text> : null}</ScrollView></ScreenContainer>; };
+const styles = StyleSheet.create({ top: { height: 58, flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.surface }, back: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center' }, title: { ...theme.typography.h3 }, content: { padding: 18, paddingBottom: 100, alignItems: 'center', gap: 14 }, empty: { ...theme.typography.body, color: theme.colors.textSecondary, marginTop: 40 } });

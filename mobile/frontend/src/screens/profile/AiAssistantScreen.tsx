@@ -128,7 +128,7 @@ export const AiAssistantScreen: React.FC<Props> = ({ navigation }) => {
                 <MaterialCommunityIcons name="robot-happy-outline" size={40} color={theme.colors.textMuted} />
                 <Text style={styles.emptyTitle}>Ask me anything</Text>
                 <Text style={styles.emptyBody}>
-                  I can help with jobs, applications, payments, and using AnyWork.
+                  I can help with jobs, applications, payments, and using InquiryExperts.
                 </Text>
               </View>
             }

@@ -10,11 +10,25 @@ import type {
   WalletProfile,
   WalletTransaction,
 } from '../types';
+import type {
+  Business,
+  City,
+  Offer,
+  OfferTemplate,
+  PaginatedResponse,
+  Plan,
+  ServiceBooking,
+  ServiceCategory,
+  ServiceProvider,
+  Subscription,
+} from '../types/hyperlocal';
+import type { OfferCardDesign } from '../config/offerCardDesigner';
+import type { OfferSticker } from '../config/offerStickers';
 
 const API_PORT = 5000;
 
 // Last resort only: used for production builds. Local dev should use the Expo host.
-const FALLBACK_API_BASE_URL = 'https://app.smartdial.online';
+const FALLBACK_API_BASE_URL = 'https://app_api.inquiry.business';
 
 const isTunnelHost = (host: string) =>
   host.endsWith('.exp.direct') || host.endsWith('.ngrok.io') || host.endsWith('.loca.lt');
@@ -62,7 +76,7 @@ export class ApiRequestError extends Error {
 }
 
 interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   accessToken?: string;
   query?: object;
@@ -200,6 +214,7 @@ export interface BackendUser {
   phone: string;
   photoUrl?: string;
   email?: string;
+  role?: 'user' | 'staff' | 'worker' | 'admin' | 'superadmin';
   accountType?: AccountType;
   dateOfBirth?: string;
   gender?: Gender;
@@ -655,6 +670,11 @@ export const getJobLocations = (accessToken: string, jobId: string) =>
     accessToken,
   });
 
+export const getServiceBookingLocations = (accessToken: string, bookingId: string) =>
+  request<{ success: true; data: JobLocationShare[] }>(`/services/bookings/${bookingId}/location`, {
+    accessToken,
+  });
+
 export const acceptApplicant = (accessToken: string, jobId: string, userId: string) =>
   request<{ success: true; job: BackendJob }>(`/jobs/${jobId}/applicants/${userId}/accept`, {
     method: 'POST',
@@ -795,6 +815,7 @@ export const getPlaceLocation = (accessToken: string, placeId: string, sessionTo
 
 export const REPORT_REASONS = [
   'Spam / Fake job',
+  'Spam / Fake offer',
   'Fraud / Scam',
   'Abusive behavior',
   'Unsafe behavior',
@@ -808,7 +829,7 @@ export type ReportReason = (typeof REPORT_REASONS)[number];
 
 export interface BackendReport {
   _id: string;
-  targetType: 'job' | 'user';
+  targetType: 'job' | 'user' | 'business' | 'offer' | 'service_booking';
   targetId: string;
   reporterId: string;
   reason: string;
@@ -819,7 +840,7 @@ export interface BackendReport {
 
 export const submitReport = (
   accessToken: string,
-  payload: { targetType: 'job' | 'user'; targetId: string; reason: ReportReason; description?: string }
+  payload: { targetType: 'job' | 'user' | 'business' | 'offer' | 'service_booking'; targetId: string; reason: ReportReason; description?: string }
 ) =>
   request<{ success: true; report: BackendReport }>('/reports', {
     method: 'POST',
@@ -831,7 +852,27 @@ export const submitReport = (
 
 export interface BackendNotification {
   _id: string;
-  type: 'application_accepted' | 'application_rejected' | 'new_application' | 'new_message';
+  type:
+    | 'application_accepted'
+    | 'application_rejected'
+    | 'new_application'
+    | 'new_message'
+    | 'nearby_featured_offer'
+    | 'offer_expiring'
+    | 'offer_approved'
+    | 'offer_rejected'
+    | 'business_approved'
+    | 'business_rejected'
+    | 'offer_milestone'
+    | 'plan_expiring'
+    | 'booking_confirmed'
+    | 'worker_assigned'
+    | 'worker_arriving'
+    | 'booking_completed'
+    | 'payment_update'
+    | 'provider_booking_request'
+    | 'provider_booking_closed'
+    | 'provider_booking_status';
   title: string;
   body: string;
   data: {
@@ -840,6 +881,10 @@ export interface BackendNotification {
     otherUserId?: string;
     otherUserName?: string;
     otherUserAvatar?: string;
+    offerId?: string;
+    businessId?: string;
+    bookingId?: string;
+    paymentId?: string;
   };
   read: boolean;
   createdAt: string;
@@ -862,3 +907,179 @@ export const markAllNotificationsRead = (accessToken: string) =>
     method: 'POST',
     accessToken,
   });
+
+// ---- Hyperlocal offers + company-managed services ----
+
+export type Coordinates = { latitude: number; longitude: number };
+
+export const listSupportedCities = (feature?: 'offers' | 'services') =>
+  request<{ success: true; data: City[] }>('/cities', { query: { feature } });
+
+export const getCityAvailability = (query: { cityId?: string; latitude?: number; longitude?: number }) =>
+  request<{
+    success: true;
+    city: City | null;
+    supported: boolean;
+    offersAvailable: boolean;
+    servicesAvailable: boolean;
+    comingSoon: boolean;
+    message: string;
+    availableCities: City[];
+  }>('/cities/availability', { query });
+
+export const listNearbyOffers = (query: Coordinates & {
+  cityId?: string;
+  radiusKm?: number;
+  category?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}) =>
+  request<{ success: true; radiusKm: number; comingSoon: boolean; availableCities: City[] } & PaginatedResponse<Offer>>(
+    '/offers/nearby',
+    { query }
+  );
+
+export const listOfferTemplates = (category?: string) =>
+  request<{ success: true; data: OfferTemplate[] }>('/offer-templates', { query: category ? { category } : undefined });
+
+export const getOfferTemplate = (templateId: string) =>
+  request<{ success: true; template: OfferTemplate }>(`/offer-templates/${templateId}`);
+
+export const listTemplateStickers = () =>
+  request<{ success: true; data: OfferSticker[] }>('/stickers');
+
+export const getOfferDetails = (offerId: string, coordinates?: Coordinates) =>
+  request<{ success: true; offer: Offer }>(`/offers/${offerId}`, { query: coordinates });
+
+export const listSavedOffers = (accessToken: string) =>
+  request<{ success: true; data: Offer[] }>('/offers/saved', { accessToken });
+
+export const toggleSavedOffer = (accessToken: string, offerId: string) =>
+  request<{ success: true; saved: boolean }>(`/offers/${offerId}/save`, { method: 'POST', accessToken });
+
+export const recordOfferEvent = (offerId: string, event: 'impression' | 'view' | 'business_profile_visit' | 'share' | 'call' | 'whatsapp' | 'directions') =>
+  request<void>(`/offers/${offerId}/analytics`, { method: 'POST', body: { event } });
+
+export const listMyOffers = (accessToken: string) =>
+  request<{ success: true; data: Offer[] }>('/offers/mine', { accessToken });
+
+export type OfferPayload = {
+  businessId: string; title: string; description: string; category: string; originalPrice: number; offerPrice: number;
+  discountPercentage: number; imageUrls: string[]; startsAt: string; expiresAt: string; address: string; locality?: string;
+  latitude: number; longitude: number; phone?: string; whatsapp?: string; terms?: string; cardDesign?: OfferCardDesign;
+};
+
+export const createOffer = (accessToken: string, payload: OfferPayload) =>
+  request<{ success: true; offer: Offer }>('/offers', { method: 'POST', accessToken, body: payload });
+
+export const updateOffer = (accessToken: string, offerId: string, payload: Omit<OfferPayload, 'businessId'>) =>
+  request<{ success: true; offer: Offer }>(`/offers/${offerId}`, { method: 'PUT', accessToken, body: payload });
+
+export const deleteOffer = (accessToken: string, offerId: string) =>
+  request<{ success: true; message: string }>(`/offers/${offerId}`, { method: 'DELETE', accessToken });
+
+export const listMyBusinesses = (accessToken: string) =>
+  request<{ success: true; data: Business[] }>('/businesses/mine', { accessToken });
+
+export const getBusinessDetails = (businessId: string) =>
+  request<{ success: true; business: Business; offers: Offer[] }>(`/businesses/${businessId}`);
+
+export const createBusiness = (accessToken: string, payload: {
+  name: string; cityId: string; category: string; description?: string; logoUrl?: string; coverImageUrl?: string;
+  address: string; locality?: string; latitude: number; longitude: number; phone: string; whatsapp?: string;
+  email?: string; website?: string;
+}) => request<{ success: true; business: Business }>('/businesses', { method: 'POST', accessToken, body: payload });
+
+export const updateBusiness = (accessToken: string, businessId: string, payload: {
+  name?: string; cityId?: string; category?: string; description?: string; logoUrl?: string; coverImageUrl?: string;
+  address?: string; locality?: string; latitude?: number; longitude?: number; phone?: string; whatsapp?: string;
+  email?: string; website?: string;
+}) => request<{ success: true; business: Business }>(`/businesses/${businessId}`, { method: 'PUT', accessToken, body: payload });
+
+export const listPlans = () => request<{ success: true; data: Plan[] }>('/plans');
+
+export const listMySubscriptions = (accessToken: string) =>
+  request<{ success: true; data: Subscription[] }>('/subscriptions/mine', { accessToken });
+
+export const createSubscriptionOrder = (accessToken: string, planId: string, businessId: string) =>
+  request<{ success: true; payment: { _id: string; orderId: string; amount: number; status: string }; paymentInstructions: { mode: string; message: string } }>(
+    '/payments/subscription-orders',
+    { method: 'POST', accessToken, body: { planId, businessId } }
+  );
+
+export const createServicePaymentOrder = (accessToken: string, bookingId: string) =>
+  request<{ success: true; payment: { _id: string; orderId: string; amount: number; status: string } }>(
+    '/payments/service-orders',
+    { method: 'POST', accessToken, body: { bookingId } }
+  );
+
+export const listServiceCategories = (cityId: string) =>
+  request<{ success: true; data: ServiceCategory[]; city?: City; availableAreas?: string[]; comingSoon: boolean; message?: string; availableCities?: City[] }>(
+    '/services/categories',
+    { query: { cityId } }
+  );
+
+export type ProviderApplicationPayload = {
+  name: string;
+  phone: string;
+  email?: string;
+  cityId: string;
+  categoryIds: string[];
+  experienceYears?: number;
+  serviceAreas?: string[];
+  message?: string;
+  termsAccepted: true;
+};
+
+export const createProviderApplication = (payload: ProviderApplicationPayload) =>
+  request<{ success: true; application: { _id: string; status: 'pending'; createdAt: string } }>(
+    '/provider-applications', { method: 'POST', body: payload }
+  );
+
+export const listServiceProviders = (cityId: string, categoryId?: string, locality = '') =>
+  request<{ success: true; data: ServiceProvider[] }>('/services/providers', {
+    query: { cityId, categoryId: categoryId || undefined, locality: locality || undefined },
+  });
+
+export const createServiceBooking = (accessToken: string, payload: {
+  cityId: string; categoryId: string; workerId?: string; address: string; locality?: string; latitude: number; longitude: number;
+  scheduleType: 'now' | 'later'; scheduledFor: string; problemDescription?: string;
+}) => request<{ success: true; booking: ServiceBooking }>('/services/bookings', { method: 'POST', accessToken, body: payload });
+
+export const listMyBookings = (accessToken: string, page = 1) =>
+  request<{ success: true } & PaginatedResponse<ServiceBooking>>('/services/bookings', { accessToken, query: { page, limit: 30 } });
+
+export const getServiceBooking = (accessToken: string, bookingId: string) =>
+  request<{ success: true; booking: ServiceBooking }>(`/services/bookings/${bookingId}`, { accessToken });
+
+export const cancelServiceBooking = (accessToken: string, bookingId: string, reason: string) =>
+  request<{ success: true; booking: ServiceBooking }>(`/services/bookings/${bookingId}/cancel`, { method: 'POST', accessToken, body: { reason } });
+
+export const rateServiceBooking = (accessToken: string, bookingId: string, stars: number, review = '') =>
+  request<{ success: true; booking: ServiceBooking }>(`/services/bookings/${bookingId}/rating`, { method: 'POST', accessToken, body: { stars, review } });
+
+export const openBookingChat = (accessToken: string, bookingId: string) =>
+  request<{ success: true; chat: BackendChat }>(`/services/bookings/${bookingId}/chat`, { method: 'POST', accessToken });
+
+export interface ProviderBooking extends ServiceBooking {
+  customer?: { _id: string; name?: string; phone: string; photoUrl?: string };
+  dispatchedProviders?: { provider: string; status: 'invited' | 'accepted' | 'rejected' | 'already_accepted' | 'expired'; note?: string; expiresAt?: string }[];
+}
+
+export const listProviderBookings = (accessToken: string, page = 1) =>
+  request<{ success: true; data: ProviderBooking[]; pagination: PaginatedResponse<ProviderBooking>['pagination']; provider: { _id: string; name: string; phone: string; availability: string; serviceAreas: string[]; city: { name: string; localities: string[] }; categories: { name: string }[] } }>(
+    '/services/provider/bookings', { accessToken, query: { page, limit: 50 } }
+  );
+
+export const respondToProviderBooking = (accessToken: string, bookingId: string, response: 'accepted' | 'rejected', note = '') =>
+  request<{ success: true; booking: ProviderBooking }>(`/services/provider/bookings/${bookingId}/respond`, { method: 'POST', accessToken, body: { response, note } });
+
+export const updateProviderBookingStatus = (accessToken: string, bookingId: string, status: 'in_progress' | 'completed' | 'cancelled', finalPrice?: number) =>
+  request<{ success: true; booking: ProviderBooking }>(`/services/provider/bookings/${bookingId}/status`, { method: 'POST', accessToken, body: { status, finalPrice } });
+
+export const updateProviderAvailability = (accessToken: string, availability: 'available' | 'offline') =>
+  request<{ success: true; provider: { availability: string } }>('/services/provider/availability', { method: 'PATCH', accessToken, body: { availability } });
+
+export const openProviderBookingChat = (accessToken: string, bookingId: string) =>
+  request<{ success: true; chat: BackendChat; customer?: { _id: string; name?: string; phone: string; photoUrl?: string } }>(`/services/provider/bookings/${bookingId}/chat`, { method: 'POST', accessToken });

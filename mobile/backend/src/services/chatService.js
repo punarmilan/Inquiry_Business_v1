@@ -26,6 +26,20 @@ const findOrCreateChat = async ({ jobId, posterId, applicantId }) => {
   return chat;
 };
 
+const findOrCreateBookingChat = async ({ bookingId, customerId, workerUserId }) =>
+  Chat.findOneAndUpdate(
+    { booking: bookingId, applicant: workerUserId },
+    {
+      $setOnInsert: {
+        booking: bookingId,
+        contextType: 'booking',
+        poster: customerId,
+        applicant: workerUserId,
+      },
+    },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+
 const postSystemMessage = async ({ chatId, senderId, text }) => {
   const chat = await Chat.findById(chatId);
   if (!chat) {
@@ -75,4 +89,12 @@ const markRead = async ({ chatId, userId }) => {
   return chat;
 };
 
-module.exports = { assertParticipant, participantRole, findOrCreateChat, postSystemMessage, postMessage, markRead };
+module.exports = {
+  assertParticipant,
+  participantRole,
+  findOrCreateChat,
+  findOrCreateBookingChat,
+  postSystemMessage,
+  postMessage,
+  markRead,
+};

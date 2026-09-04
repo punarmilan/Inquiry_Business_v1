@@ -46,10 +46,12 @@ const requireAuth = asyncHandler(async (req, _res, next) => {
 });
 
 const requireAdmin = (req, _res, next) => {
-  if (!req.user || req.user.role !== 'admin') {
+  if (!req.user || !['staff', 'admin', 'superadmin'].includes(req.user.role)) {
     return next(new ApiError(403, 'Admin access required', 'ADMIN_REQUIRED'));
   }
   return next();
 };
 
-module.exports = { requireAuth, requireAdmin, verifyAccessToken };
+const requireStaff = requireAdmin;
+
+module.exports = { requireAuth, requireAdmin, requireStaff, verifyAccessToken };

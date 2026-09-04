@@ -1,5 +1,7 @@
 const Job = require('../models/Job');
 const JobLocationShare = require('../models/JobLocationShare');
+const ServiceBooking = require('../models/ServiceBooking');
+const ServiceBookingLocationShare = require('../models/ServiceBookingLocationShare');
 const ApiError = require('../utils/ApiError');
 
 const jobParticipantRole = (job, userId) => {
@@ -38,4 +40,42 @@ const stopSharing = ({ jobId, userId }) =>
 
 const getSharesForJob = (jobId) => JobLocationShare.find({ job: jobId, isSharing: true });
 
-module.exports = { assertCanShareLocation, jobParticipantRole, recordLocationUpdate, stopSharing, getSharesForJob };
+const assertCanShareBookingLocation = async (bookingId, userId) => {
+  const booking = await ServiceBooking.findById(bookingId).populate('worker', 'user');
+  if (!booking) throw new ApiError(404, 'Service booking not found', 'BOOKING_NOT_FOUND');
+  if (!booking.worker || !['assigned', 'in_progress'].includes(booking.status)) {
+    throw new ApiError(422, 'Live location is available after the provider accepts the booking', 'LOCATION_BOOKING_NOT_ACTIVE');
+  }
+  const requesterId = userId.toString();
+  const role = booking.customer.toString() === requesterId
+    ? 'customer'
+    : booking.worker.user?.toString() === requesterId
+      ? 'provider'
+      : null;
+  if (!role) throw new ApiError(403, 'You are not part of this service booking', 'LOCATION_NOT_PARTICIPANT');
+  return { booking, role };
+};
+
+const recordBookingLocationUpdate = ({ bookingId, userId, latitude, longitude, accuracy, heading, speed }) =>
+  ServiceBookingLocationShare.findOneAndUpdate(
+    { booking: bookingId, user: userId },
+    { $set: { isSharing: true, latitude, longitude, accuracy, heading, speed } },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+
+const stopBookingSharing = ({ bookingId, userId }) =>
+  ServiceBookingLocationShare.findOneAndUpdate({ booking: bookingId, user: userId }, { $set: { isSharing: false } });
+
+const getSharesForBooking = (bookingId) => ServiceBookingLocationShare.find({ booking: bookingId, isSharing: true });
+
+module.exports = {
+  assertCanShareLocation,
+  jobParticipantRole,
+  recordLocationUpdate,
+  stopSharing,
+  getSharesForJob,
+  assertCanShareBookingLocation,
+  recordBookingLocationUpdate,
+  stopBookingSharing,
+  getSharesForBooking,
+};

@@ -11,7 +11,8 @@ const { issueTokenPair } = require('../utils/tokens');
 const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
-  const admin = await AdminUser.findOne({ email });
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const admin = await AdminUser.findOne({ email: normalizedEmail });
   if (!admin || !admin.isActive) {
     throw new ApiError(401, 'Invalid email or password', 'INVALID_CREDENTIALS');
   }

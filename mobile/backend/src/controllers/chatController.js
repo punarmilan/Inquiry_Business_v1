@@ -9,6 +9,7 @@ const { getPagination, paginatedResponse } = require('../utils/pagination');
 const populateThread = (query) =>
   query
     .populate('job', 'title status')
+    .populate('booking', 'bookingNumber status category')
     .populate('poster', 'name phone photoUrl')
     .populate('applicant', 'name phone photoUrl');
 
@@ -82,7 +83,9 @@ const sendMessage = asyncHandler(async (req, res) => {
       body: `${req.user.name || 'Someone'} sent you a message.`,
       data: {
         chatId: chat._id.toString(),
-        jobId: chat.job.toString(),
+        contextType: chat.contextType || 'job',
+        jobId: chat.job?.toString(),
+        bookingId: chat.booking?.toString(),
         otherUserId: req.user._id.toString(),
         otherUserName: req.user.name || 'User',
         otherUserAvatar: req.user.photoUrl || undefined,

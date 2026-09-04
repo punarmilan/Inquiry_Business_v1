@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useState, useMemo, useCallback, useEffect } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { translations, Language, TranslationKey } from '../i18n/translations';
 import { AccountType, CategoryMeta, EmployerProfile, Gender, KycProfile, User, WalletProfile, WorkerProfile } from '../types';
+import type { Business } from '../types/hyperlocal';
 import {
   BackendUser,
   BackendNotification,
@@ -21,8 +22,7 @@ import {
   requestAccountTypeChange as apiRequestAccountTypeChange,
   cancelAccountTypeChangeRequest as apiCancelAccountTypeChangeRequest,
   getProfile as apiGetProfile,
-  applyToJob as apiApplyToJob,
-  cancelAcceptedApplication as apiCancelAcceptedApplication,
+  listMyBusinesses as apiListMyBusinesses,
   addWalletMoney as apiAddWalletMoney,
   withdrawWalletMoney as apiWithdrawWalletMoney,
   listNotifications as apiListNotifications,
@@ -35,7 +35,6 @@ import {
 import { categories as fallbackCategories, categoryGroups as fallbackCategoryGroups } from '../data/categories';
 import { RemoteSettings, fetchRemoteSettings } from '../services/settings';
 import { connectSocket, disconnectSocket, getSocket } from '../services/socket';
-import { isKycComplete, isProfileComplete } from '../utils/profileCompletion';
 
 // expo-notifications throws just from being imported under plain Expo Go on Android
 // (SDK 53+) — its remote-push setup runs as a module-level side effect with no opt-out.
@@ -72,8 +71,6 @@ if (Notifications) {
   }
 }
 
-export type UserMode = 'worker' | 'employer';
-
 const TOKENS_STORAGE_KEY = 'kaamsaathi_tokens';
 
 type ProfilePayload = {
@@ -102,6 +99,7 @@ const toUser = (backendUser: BackendUser): User => ({
   phone: backendUser.phone,
   avatar: backendUser.photoUrl || undefined,
   email: backendUser.email || undefined,
+  role: backendUser.role,
   accountType: backendUser.accountType,
   dateOfBirth: backendUser.dateOfBirth || undefined,
   gender: backendUser.gender,
@@ -153,9 +151,6 @@ interface AppContextValue {
   setLanguage: (lang: Language) => void;
   t: (key: TranslationKey) => string;
 
-  mode: UserMode;
-  setMode: (mode: UserMode) => void;
-
   isAuthenticated: boolean;
   isBootstrapping: boolean;
   needsRegistration: boolean;
@@ -164,6 +159,10 @@ interface AppContextValue {
   authIdentifierValue: string;
   authIdentifierType: 'phone' | 'email';
   accessToken: string | null;
+  businesses: Business[];
+  businessAccessLoading: boolean;
+  hasApprovedBusiness: boolean;
+  refreshBusinesses: () => Promise<void>;
 
   loginWithPassword: (identifier: AuthIdentifier, password: string) => Promise<void>;
   loginWithOAuth: (provider: OAuthProvider, token: string) => Promise<void>;
@@ -178,13 +177,6 @@ interface AppContextValue {
   addWalletMoney: (amount: number) => Promise<void>;
   withdrawWalletMoney: (amount: number) => Promise<void>;
   logout: () => void;
-
-  bookmarkedJobIds: string[];
-  toggleBookmark: (jobId: string) => void;
-
-  appliedJobIds: string[];
-  applyToJob: (jobId: string) => Promise<void>;
-  cancelAcceptedJob: (jobId: string) => Promise<void>;
 
   remoteSettings: RemoteSettings;
   categories: CategoryMeta[];
@@ -208,7 +200,6 @@ const AppContext = createContext<AppContextValue | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [language, setLanguageState] = useState<Language>('en');
-  const [mode, setMode] = useState<UserMode>('worker');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   // True only until the stored-session restore attempt (below) finishes — RootNavigator
   // holds on a splash screen for this rather than flashing the login screen on every cold
@@ -219,9 +210,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [authIdentifierValue, setAuthIdentifierValue] = useState('');
   const [authIdentifierType, setAuthIdentifierType] = useState<'phone' | 'email'>('phone');
   const [tokens, setTokens] = useState<TokenPair | null>(null);
+  const [businesses, setBusinesses] = useState<Business[]>([]);
+  const [businessAccessLoading, setBusinessAccessLoading] = useState(false);
   const [pendingRegistrationProfile, setPendingRegistrationProfile] = useState<ProfilePayload | null>(null);
-  const [bookmarkedJobIds, setBookmarkedJobIds] = useState<string[]>([]);
-  const [appliedJobIds, setAppliedJobIds] = useState<string[]>([]);
   const [remoteSettings, setRemoteSettings] = useState<RemoteSettings>({});
   const [categories, setCategories] = useState<CategoryMeta[]>(fallbackCategories);
   const [announcementSeen, setAnnouncementSeen] = useState(true);
@@ -399,6 +390,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [tokens]);
 
+  const refreshBusinesses = useCallback(async () => {
+    if (!tokens) {
+      setBusinesses([]);
+      setBusinessAccessLoading(false);
+      return;
+    }
+
+    setBusinessAccessLoading(true);
+    try {
+      const res = await apiListMyBusinesses(tokens.accessToken);
+      setBusinesses(res.data);
+    } catch {
+      // Business access is best-effort. Keep the last known state so a
+      // temporary network problem does not unexpectedly remove the Post tab.
+    } finally {
+      setBusinessAccessLoading(false);
+    }
+  }, [tokens]);
+
+  useEffect(() => {
+    refreshBusinesses();
+  }, [refreshBusinesses]);
+
+  useEffect(() => {
+    if (!tokens) return undefined;
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refreshBusinesses();
+    });
+    return () => subscription.remove();
+  }, [tokens, refreshBusinesses]);
+
   const fetchNotifications = useCallback(async () => {
     if (!tokens) return;
     try {
@@ -457,6 +479,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const onNewNotification = (notification: BackendNotification) => {
       setNotifications((prev) => [notification, ...prev]);
       setUnreadNotificationCount((prev) => prev + 1);
+      if (notification.type === 'business_approved' || notification.type === 'business_rejected') {
+        refreshBusinesses();
+      }
       Notifications?.scheduleNotificationAsync({
         content: { title: notification.title, body: notification.body, data: notification.data },
         trigger: null,
@@ -467,7 +492,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => {
       socket.off('notification:new', onNewNotification);
     };
-  }, [tokens, fetchNotifications]);
+  }, [tokens, fetchNotifications, refreshBusinesses]);
 
   const addWalletMoney = useCallback(
     async (amount: number) => {
@@ -494,6 +519,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentUser(null);
     setAuthIdentifierValue('');
     setTokens(null);
+    setBusinesses([]);
+    setBusinessAccessLoading(false);
     setPendingRegistrationProfile(null);
     setAnnouncementSeen(true);
     setWelcome(null);
@@ -573,59 +600,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setWelcome(null);
   }, []);
 
-  const toggleBookmark = useCallback((jobId: string) => {
-    setBookmarkedJobIds((prev) =>
-      prev.includes(jobId) ? prev.filter((id) => id !== jobId) : [...prev, jobId]
-    );
-  }, []);
-
-  const applyToJob = useCallback(
-    async (jobId: string) => {
-      if (!tokens) throw new Error('Not authenticated');
-      if (currentUser?.accountType === 'employer') {
-        throw new Error('Employer accounts cannot apply to jobs.');
-      }
-      if (!isProfileComplete(currentUser)) {
-        throw new Error('Please complete your profile before accepting or applying to jobs.');
-      }
-      if (!isKycComplete(currentUser)) {
-        if (currentUser?.kyc?.status === 'submitted') {
-          throw new Error('Your KYC is under admin review. Please wait up to 24 hours.');
-        }
-        if (currentUser?.kyc?.status === 'rejected') {
-          throw new Error('Your KYC was rejected. Please update and submit KYC again.');
-        }
-        throw new Error('Please complete KYC before accepting or applying to jobs.');
-      }
-      const res = await apiApplyToJob(tokens.accessToken, jobId);
-      const myId = currentUser?.id;
-      const stillApplied = res.job.applicants.some((a) => a.userId._id === myId);
-      setAppliedJobIds((prev) => (stillApplied && !prev.includes(jobId) ? [...prev, jobId] : prev));
-    },
-    [tokens, currentUser]
-  );
-
-  const cancelAcceptedJob = useCallback(
-    async (jobId: string) => {
-      if (!tokens) throw new Error('Not authenticated');
-      await apiCancelAcceptedApplication(tokens.accessToken, jobId);
-      setAppliedJobIds((prev) => prev.filter((id) => id !== jobId));
-    },
-    [tokens]
-  );
-
   // Queued behind the welcome greeting so the two never stack on top of each other.
   const shouldShowAnnouncement =
     !announcementSeen && !welcome && !!remoteSettings['mobile.loginAnnouncement']?.enabled;
   const categoryGroups = fallbackCategoryGroups;
+  const hasApprovedBusiness = businesses.some(
+    (business) => business.isActive && business.verificationStatus === 'verified'
+  );
 
   const value = useMemo(
     () => ({
       language,
       setLanguage,
       t,
-      mode,
-      setMode,
       isAuthenticated,
       isBootstrapping,
       needsRegistration,
@@ -633,6 +620,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       authIdentifierValue,
       authIdentifierType,
       accessToken: tokens?.accessToken ?? null,
+      businesses,
+      businessAccessLoading,
+      hasApprovedBusiness,
+      refreshBusinesses,
       loginWithPassword,
       loginWithOAuth,
       registerWithOAuth,
@@ -646,11 +637,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addWalletMoney,
       withdrawWalletMoney,
       logout,
-      bookmarkedJobIds,
-      toggleBookmark,
-      appliedJobIds,
-      applyToJob,
-      cancelAcceptedJob,
       remoteSettings,
       categories,
       categoryGroups,
@@ -669,7 +655,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       language,
       setLanguage,
       t,
-      mode,
       isAuthenticated,
       isBootstrapping,
       needsRegistration,
@@ -677,6 +662,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       authIdentifierValue,
       authIdentifierType,
       tokens,
+      businesses,
+      businessAccessLoading,
+      hasApprovedBusiness,
+      refreshBusinesses,
       loginWithPassword,
       loginWithOAuth,
       registerWithOAuth,
@@ -690,11 +679,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addWalletMoney,
       withdrawWalletMoney,
       logout,
-      bookmarkedJobIds,
-      toggleBookmark,
-      appliedJobIds,
-      applyToJob,
-      cancelAcceptedJob,
       remoteSettings,
       categories,
       categoryGroups,

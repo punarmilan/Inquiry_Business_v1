@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, Text, StyleSheet, ActivityIndicator, ViewStyle, StyleProp } from 'react-native';
+import { Pressable, Text, StyleSheet, ActivityIndicator, View, ViewStyle, StyleProp } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { theme } from '../theme';
 
 interface ButtonProps {
@@ -25,6 +26,9 @@ export const Button: React.FC<ButtonProps> = ({
 }) => {
   const variantStyle = styles[variant];
   const textVariantStyle = textStyles[variant];
+  const gradientColors = variant === 'secondary'
+    ? [theme.colors.secondary, theme.colors.secondaryDark] as const
+    : [theme.colors.primaryBright, theme.colors.primaryDark] as const;
 
   return (
     <Pressable
@@ -41,6 +45,16 @@ export const Button: React.FC<ButtonProps> = ({
         style,
       ]}
     >
+      {(variant === 'primary' || variant === 'secondary') && (
+        <LinearGradient
+          colors={gradientColors}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          pointerEvents="none"
+          style={styles.gradient}
+        />
+      )}
+      {(variant === 'primary' || variant === 'secondary') && <View pointerEvents="none" style={styles.gloss} />}
       {loading ? (
         <ActivityIndicator color={variant === 'primary' ? theme.colors.textInverse : theme.colors.primary} />
       ) : (
@@ -64,17 +78,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: theme.spacing.xs,
+    position: 'relative',
+    overflow: 'hidden',
   },
   primary: {
     backgroundColor: theme.colors.primary,
     shadowColor: theme.colors.primary,
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.22,
-    shadowRadius: 10,
-    elevation: 3,
+    shadowOpacity: 0.36,
+    shadowRadius: 14,
+    elevation: 5,
   },
   secondary: {
     backgroundColor: theme.colors.secondary,
+    shadowColor: theme.colors.secondary,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 4,
   },
   outline: {
     backgroundColor: 'transparent',
@@ -96,6 +117,20 @@ const styles = StyleSheet.create({
   },
   text: {
     ...theme.typography.button,
+  },
+  gradient: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: theme.radius.lg,
+  },
+  gloss: {
+    position: 'absolute',
+    top: 0,
+    left: '7%',
+    right: '7%',
+    height: '42%',
+    borderBottomLeftRadius: 999,
+    borderBottomRightRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.16)',
   },
 });
 

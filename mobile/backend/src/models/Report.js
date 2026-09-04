@@ -8,7 +8,7 @@ const reportSchema = new mongoose.Schema(
   {
     targetType: {
       type: String,
-      enum: ['job', 'user'],
+      enum: ['job', 'user', 'business', 'offer', 'service_booking'],
       required: true,
     },
     targetId: {

@@ -1,194 +1,45 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import type { BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
+import { PlatformPressable } from '@react-navigation/elements';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { theme } from '../theme';
-import { MainTabParamList } from './types';
-import { HomeNavigator } from './HomeNavigator';
-import { SearchNavigator } from './SearchNavigator';
+import { OffersNavigator } from './OffersNavigator';
+import { ServicesNavigator } from './ServicesNavigator';
 import { PostNavigator } from './PostNavigator';
-import { ChatNavigator } from './ChatNavigator';
+import { MoreNavigator } from './MoreNavigator';
 import { ProfileNavigator } from './ProfileNavigator';
-import { ExploreNavigator } from './ExploreNavigator';
+import type { MainTabParamList } from './types';
+import { theme } from '../theme';
 import { useApp } from '../context/AppContext';
-
-// Note: screens that need the tab bar hidden while they're focused (Home's
-// nested "Search" step, Chat's message thread) set that themselves via
-// navigation.getParent()?.setOptions({ tabBarStyle }) — see SearchScreen.tsx
-// and ChatThreadScreen.tsx. That's more reliable here than deriving it from
-// getFocusedRouteNameFromRoute, since "Search" is also a route name inside
-// SearchTab's own stack.
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
-const icons: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> = {
-  HomeTab: 'home-variant',
-  SearchTab: 'magnify',
-  ChatTab: 'chat-processing',
-  ProfileTab: 'account-circle',
-  ExploreTab: 'compass-outline',
-};
-
-const labelKeys: Record<string, 'navHome' | 'navSearch' | 'navChat' | 'navProfile'> = {
-  HomeTab: 'navHome',
-  SearchTab: 'navSearch',
-  ChatTab: 'navChat',
-  ProfileTab: 'navProfile',
-};
-
-export const MainTabNavigator: React.FC = () => {
-  const insets = useSafeAreaInsets();
-  const { t, currentUser } = useApp();
-  // Backend defaults a fresh account to 'worker' until they explicitly change it, so mirror
-  // that here rather than showing every tab (which would let a not-yet-configured account post
-  // AND apply before they've picked a role).
-  const accountType = currentUser?.accountType ?? 'worker';
-  // Neither role gets a spare tab slot to dedicate to Explore, so it always takes over whichever
-  // capability that role doesn't have: Post for workers, Search for employers. 'both' has every
-  // capability, so Explore instead replaces the Chat tab entirely — Chat/ChatList/ChatThread are
-  // also registered inside ProfileStackParamList (see ProfileNavigator) so "Message" actions and
-  // the Profile "Messages" menu still work without this tab existing. (Earlier this used a
-  // tabBarButton:null hack to hide Chat while keeping it mounted, but a hidden tab still reserves
-  // its flex slot in the tab bar row, which visibly squeezed the other 5 icons — omitting the
-  // Tab.Screen entirely, like Search/Post do, is the only way to actually free the slot.)
-  const hideSearchTab = accountType === 'employer';
-  const hidePostTab = accountType === 'worker';
-  const hideChatTab = accountType === 'both';
-
-  const exploreTabOptions = {
-    tabBarLabel: t('navExplore'),
-    tabBarIcon: ({ color, size }: { color: string; size: number }) => (
-      <MaterialCommunityIcons name={icons.ExploreTab} size={size} color={color} />
-    ),
-  };
-
-  const baseTabBarStyle = {
-    position: 'absolute' as const,
-    left: 18,
-    right: 18,
-    bottom: Math.max(insets.bottom, 12),
-    height: 68,
-    paddingBottom: 8,
-    paddingTop: 9,
-    backgroundColor: theme.colors.surface,
-    borderTopWidth: 0,
-    borderRadius: 24,
-    shadowColor: theme.colors.shadow,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 1,
-    shadowRadius: 18,
-    elevation: 8,
-  };
-
-  return (
-    <Tab.Navigator
-      screenOptions={() => ({
-        headerShown: false,
-        tabBarActiveTintColor: theme.colors.primary,
-        tabBarInactiveTintColor: theme.colors.textMuted,
-        tabBarStyle: baseTabBarStyle,
-        tabBarLabelStyle: styles.tabLabel,
-      })}
-    >
-      <Tab.Screen
-        name="HomeTab"
-        component={HomeNavigator}
-        options={{
-          tabBarLabel: t('navHome'),
-          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name={icons.HomeTab} size={size} color={color} />,
-        }}
-      />
-      {hideSearchTab ? (
-        <Tab.Screen name="ExploreTab" component={ExploreNavigator} options={exploreTabOptions} />
-      ) : (
-        <Tab.Screen
-          name="SearchTab"
-          component={SearchNavigator}
-          options={{
-            tabBarLabel: t('navSearch'),
-            tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name={icons.SearchTab} size={size} color={color} />,
-          }}
-        />
-      )}
-      {hidePostTab ? (
-        <Tab.Screen name="ExploreTab" component={ExploreNavigator} options={exploreTabOptions} />
-      ) : (
-        <Tab.Screen
-          name="PostTab"
-          component={PostNavigator}
-          options={{
-            tabBarLabel: () => null,
-            tabBarIcon: ({ focused }) => <PostTabIcon focused={focused} label={t('navPost')} />,
-          }}
-        />
-      )}
-      {hideChatTab ? (
-        <Tab.Screen name="ExploreTab" component={ExploreNavigator} options={exploreTabOptions} />
-      ) : (
-        <Tab.Screen
-          name="ChatTab"
-          component={ChatNavigator}
-          options={{
-            tabBarLabel: t('navChat'),
-            tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name={icons.ChatTab} size={size} color={color} />,
-            tabBarBadge: undefined,
-          }}
-        />
-      )}
-      <Tab.Screen
-        name="ProfileTab"
-        component={ProfileNavigator}
-        options={{
-          tabBarLabel: t('navProfile'),
-          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name={icons.ProfileTab} size={size} color={color} />,
-        }}
-      />
-    </Tab.Navigator>
-  );
-};
-
-const PostTabIcon: React.FC<{ focused: boolean; label: string }> = ({ focused, label }) => (
-  <View style={styles.postIconWrap}>
-    <View style={[styles.postCircle, focused && styles.postCircleFocused]}>
-      <MaterialCommunityIcons name="plus" size={22} color={theme.colors.textInverse} />
-    </View>
-    <Text style={styles.postLabel}>{label}</Text>
-  </View>
+// Keep tab presses clean: navigation still works, but Android won't draw a
+// ripple circle over the bottom bar.
+const TabBarButton = (props: BottomTabBarButtonProps) => (
+  <PlatformPressable
+    {...props}
+    android_ripple={{
+      color: 'transparent',
+      radius: 0,
+      borderless: false,
+    }}
+  />
 );
 
-const styles = StyleSheet.create({
-  tabLabel: {
-    ...theme.typography.tiny,
-    fontWeight: '700',
-  },
-  postIconWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    top: Platform.OS === 'ios' ? 2 : 2,
-  },
-  postCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: theme.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: theme.colors.shadow,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 1,
-    shadowRadius: 6,
-    elevation: 4,
-    borderWidth: 3,
-    borderColor: theme.colors.surface,
-  },
-  postCircleFocused: {
-    backgroundColor: theme.colors.primaryDark,
-  },
-  postLabel: {
-    ...theme.typography.tiny,
-    fontWeight: '700',
-    color: theme.colors.textSecondary,
-    marginTop: 2,
-  },
-});
+export const MainTabNavigator: React.FC = () => {
+  const { hasApprovedBusiness } = useApp();
+  const insets = useSafeAreaInsets();
+  const tabBarStyle = { position: 'absolute' as const, left: 0, right: 0, bottom: 0, height: 70 + insets.bottom, paddingBottom: Math.max(insets.bottom, 8), paddingTop: 8, backgroundColor: theme.colors.surface, borderTopWidth: 0, borderWidth: 1, borderColor: 'rgba(255,255,255,0.92)', borderTopLeftRadius: 26, borderTopRightRadius: 26, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, shadowColor: theme.colors.shadowStrong, shadowOffset: { width: 0, height: -5 }, shadowOpacity: 1, shadowRadius: 18, elevation: 10 };
+  return <Tab.Navigator screenOptions={{ headerShown: false, tabBarActiveTintColor: theme.colors.primary, tabBarInactiveTintColor: '#8A9094', tabBarStyle, tabBarLabelStyle: styles.label, tabBarButton: (props) => <TabBarButton {...props} /> }}>
+    <Tab.Screen name="OffersTab" component={OffersNavigator} options={{ tabBarLabel: 'Offers', tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="tag-heart-outline" size={size} color={color} /> }} />
+    <Tab.Screen name="ServicesTab" component={ServicesNavigator} options={{ tabBarLabel: 'Services', tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="tools" size={size} color={color} /> }} />
+    {hasApprovedBusiness ? <Tab.Screen name="PostTab" component={PostNavigator} options={{ tabBarLabel: () => null, tabBarIcon: ({ focused }) => <View style={styles.postWrap}><View style={[styles.postCircle, focused && styles.postFocused]}><LinearGradient colors={[theme.colors.primaryBright, theme.colors.primaryDark]} start={{ x: 0.15, y: 0 }} end={{ x: 0.9, y: 1 }} style={styles.postGradient}><View pointerEvents="none" style={styles.postShine} /><MaterialCommunityIcons name="plus" size={25} color={theme.colors.textInverse} /></LinearGradient></View><Text style={styles.postLabel}>Post</Text></View> }} /> : null}
+    <Tab.Screen name="MoreTab" component={MoreNavigator} options={{ tabBarLabel: 'More', tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="dots-grid" size={size} color={color} /> }} />
+    <Tab.Screen name="ProfileTab" component={ProfileNavigator} options={{ tabBarLabel: 'Profile', tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="account-circle-outline" size={size} color={color} /> }} />
+  </Tab.Navigator>;
+};
+const styles = StyleSheet.create({ label: { ...theme.typography.tiny, fontWeight: '800' }, postWrap: { alignItems: 'center', justifyContent: 'center', top: Platform.OS === 'ios' ? 0 : 1 }, postCircle: { width: 52, height: 52, borderRadius: 26, backgroundColor: theme.colors.primary, borderWidth: 3, borderColor: theme.colors.surface, alignItems: 'center', justifyContent: 'center', elevation: 7, shadowColor: theme.colors.primaryGlow, shadowOpacity: 1, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, overflow: 'hidden' }, postFocused: { backgroundColor: theme.colors.primaryDark }, postGradient: { ...StyleSheet.absoluteFill, borderRadius: 26, alignItems: 'center', justifyContent: 'center' }, postShine: { position: 'absolute', top: 3, left: 8, right: 8, height: 14, borderRadius: 99, backgroundColor: 'rgba(255,255,255,0.22)' }, postLabel: { ...theme.typography.tiny, color: theme.colors.primary, fontWeight: '900', marginTop: 1 } });

@@ -5,7 +5,19 @@ const chatSchema = new mongoose.Schema(
     job: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Job',
-      required: true,
+      default: null,
+      index: true,
+    },
+    booking: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'ServiceBooking',
+      default: null,
+      index: true,
+    },
+    contextType: {
+      type: String,
+      enum: ['job', 'booking', 'business', 'support'],
+      default: 'job',
       index: true,
     },
     poster: {
@@ -53,7 +65,14 @@ const chatSchema = new mongoose.Schema(
 );
 
 // One private thread per (job, applicant) pair — the poster is implied by the job.
-chatSchema.index({ job: 1, applicant: 1 }, { unique: true });
+chatSchema.index(
+  { job: 1, applicant: 1 },
+  { unique: true, partialFilterExpression: { job: { $type: 'objectId' } } }
+);
+chatSchema.index(
+  { booking: 1, applicant: 1 },
+  { unique: true, partialFilterExpression: { booking: { $type: 'objectId' } } }
+);
 chatSchema.index({ poster: 1, lastMessageAt: -1 });
 chatSchema.index({ applicant: 1, lastMessageAt: -1 });
 

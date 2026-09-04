@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, Text, StyleSheet, StyleProp, ViewStyle } from 'react-native';
+import { Pressable, Text, StyleSheet, StyleProp, View, ViewStyle } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../theme';
 
@@ -26,11 +26,12 @@ export const Chip: React.FC<ChipProps> = ({ label, icon, trailingIcon, selected,
       style={({ pressed }) => [
         styles.chip,
         compact && styles.chipCompact,
-        selected && { backgroundColor: accent, borderColor: accent },
+        selected && { backgroundColor: accent, borderColor: accent, shadowColor: accent, shadowOpacity: 0.34, shadowRadius: 10, elevation: 4 },
         pressed && styles.pressed,
         style,
       ]}
     >
+      {selected && <View pointerEvents="none" style={styles.chipGloss} />}
       {icon && (
         <MaterialCommunityIcons
           name={icon}
@@ -70,6 +71,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 1,
     shadowRadius: 8,
     elevation: 1,
+    position: 'relative',
+    overflow: 'hidden',
   },
   chipCompact: {
     height: 36,
@@ -97,5 +100,15 @@ const styles = StyleSheet.create({
   },
   labelSelected: {
     color: theme.colors.textInverse,
+  },
+  chipGloss: {
+    position: 'absolute',
+    top: 0,
+    left: '10%',
+    right: '10%',
+    height: '42%',
+    borderBottomLeftRadius: theme.radius.pill,
+    borderBottomRightRadius: theme.radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.18)',
   },
 });

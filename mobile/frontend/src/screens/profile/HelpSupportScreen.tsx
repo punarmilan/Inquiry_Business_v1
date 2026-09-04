@@ -21,7 +21,7 @@ export const HelpSupportScreen: React.FC<Props> = ({ navigation }) => {
         <View style={styles.hero}>
           <MaterialCommunityIcons name="lifebuoy" size={34} color={theme.colors.primary} />
           <Text style={styles.heroTitle}>How can we help?</Text>
-          <Text style={styles.heroBody}>Get help with jobs, applications, account and payments.</Text>
+          <Text style={styles.heroBody}>Get help with offers, bookings, your account and payments.</Text>
         </View>
 
         <View style={styles.card}>

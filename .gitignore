@@ -35,6 +35,12 @@ yarn-error.*
 # local env files
 .env*.local
 
+# local development tools and generated logs
+platform-tools/
+platform-tools-latest-windows.zip
+build-apk.log
+.serena/
+
 # typescript
 *.tsbuildinfo
 

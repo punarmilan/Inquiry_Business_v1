@@ -29,6 +29,13 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
   const inputRef = useRef<TextInput>(null);
   const passwordInputRef = useRef<TextInput>(null);
   const emailInputRef = useRef<TextInput>(null);
+  const goBackFromLogin = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+    navigation.navigate('Onboarding', { force: true });
+  };
 
   const content = remoteSettings['mobile.authFlow.content']?.phoneEntry;
   const title =
@@ -164,14 +171,14 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   return (
-    <ScreenContainer backgroundColor="#FFFDF8">
+    <ScreenContainer backgroundColor={theme.colors.background}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <View style={styles.screen}>
           <LinearGradient
-            colors={['#FFD7BF', '#FFF2E8', '#FFFDF8']}
+            colors={[theme.colors.primaryLight, '#F8FCFC', theme.colors.background]}
             locations={[0, 0.45, 1]}
             style={styles.glow}
           />
@@ -180,7 +187,7 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={t('back')}
-              onPress={() => navigation.goBack()}
+              onPress={goBackFromLogin}
               style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
             >
               <MaterialCommunityIcons name="arrow-left" size={22} color={theme.colors.text} />
@@ -388,7 +395,7 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
                 ]}
               >
                 <LinearGradient
-                  colors={['#FF5A1A', '#FF8559']}
+                  colors={[theme.colors.primaryBright, theme.colors.primaryDark]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={styles.otpGradient}
@@ -412,6 +419,14 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
                   <Text style={styles.footerLink}>Register</Text>
                 </Pressable>
               </View>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => navigation.navigate('ProviderRegistration')}
+                style={styles.providerRegisterLink}
+              >
+                <MaterialCommunityIcons name="briefcase-plus-outline" size={16} color={theme.colors.primary} />
+                <Text style={styles.providerRegisterText}>Register as a service provider</Text>
+              </Pressable>
 
               <View style={styles.dividerRow}>
                 <View style={styles.dividerLine} />
@@ -709,7 +724,7 @@ const styles = StyleSheet.create({
   otpButton: {
     width: '100%',
     minHeight: 58,
-    borderRadius: theme.radius.sm,
+    borderRadius: theme.radius.lg,
     marginTop: theme.spacing.xl,
     overflow: 'hidden',
     shadowColor: theme.colors.primary,
@@ -725,7 +740,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   otpButtonText: {
-    ...theme.typography.tiny,
+    ...theme.typography.button,
     color: theme.colors.textInverse,
     fontWeight: '800',
   },
@@ -786,6 +801,12 @@ const styles = StyleSheet.create({
     ...theme.typography.tiny,
     color: theme.colors.primary,
     fontWeight: '800',
+  },
+  providerRegisterLink: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 12,
+  },
+  providerRegisterText: {
+    ...theme.typography.caption, color: theme.colors.primary, fontWeight: '800',
   },
   socialRow: {
     flexDirection: 'row',

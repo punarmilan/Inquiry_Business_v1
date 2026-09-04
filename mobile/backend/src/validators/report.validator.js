@@ -2,6 +2,7 @@ const { Joi, objectId } = require('./common');
 
 const REPORT_REASONS = [
   'Spam / Fake job',
+  'Spam / Fake offer',
   'Fraud / Scam',
   'Abusive behavior',
   'Unsafe behavior',
@@ -13,7 +14,7 @@ const REPORT_REASONS = [
 
 const createReportSchema = Joi.object({
   body: Joi.object({
-    targetType: Joi.string().valid('job', 'user').required(),
+    targetType: Joi.string().valid('job', 'user', 'business', 'offer', 'service_booking').required(),
     targetId: objectId.required(),
     reason: Joi.string()
       .valid(...REPORT_REASONS)

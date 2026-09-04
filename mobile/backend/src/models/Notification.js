@@ -10,7 +10,14 @@ const notificationSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['application_accepted', 'application_rejected', 'new_application', 'new_message'],
+      enum: [
+        'application_accepted', 'application_rejected', 'new_application', 'new_message',
+        'nearby_featured_offer', 'offer_expiring', 'offer_approved', 'offer_rejected',
+        'business_approved', 'business_rejected',
+        'offer_milestone', 'plan_expiring', 'booking_confirmed', 'worker_assigned',
+        'worker_arriving', 'booking_completed', 'payment_update',
+        'provider_booking_request', 'provider_booking_closed', 'provider_booking_status',
+      ],
       required: true,
     },
     title: {

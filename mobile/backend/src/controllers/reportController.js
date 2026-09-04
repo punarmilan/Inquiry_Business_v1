@@ -2,14 +2,17 @@ const mongoose = require('mongoose');
 const Report = require('../models/Report');
 const Job = require('../models/Job');
 const User = require('../models/User');
+const Business = require('../models/Business');
+const Offer = require('../models/Offer');
+const ServiceBooking = require('../models/ServiceBooking');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 
 const assertTargetExists = async (targetType, targetId) => {
-  const exists =
-    targetType === 'job' ? await Job.exists({ _id: targetId }) : await User.exists({ _id: targetId });
+  const models = { job: Job, user: User, business: Business, offer: Offer, service_booking: ServiceBooking };
+  const exists = await models[targetType].exists({ _id: targetId });
   if (!exists) {
-    throw new ApiError(404, `${targetType === 'job' ? 'Job' : 'User'} not found`, 'REPORT_TARGET_NOT_FOUND');
+    throw new ApiError(404, 'Report target not found', 'REPORT_TARGET_NOT_FOUND');
   }
 };
 

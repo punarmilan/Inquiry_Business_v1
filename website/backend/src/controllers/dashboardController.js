@@ -3,6 +3,13 @@ const Job = require('../models/Job');
 const Transaction = require('../models/Transaction');
 const Report = require('../models/Report');
 const Payout = require('../models/Payout');
+const City = require('../models/City');
+const Business = require('../models/Business');
+const Offer = require('../models/Offer');
+const Subscription = require('../models/Subscription');
+const ServiceBooking = require('../models/ServiceBooking');
+const Worker = require('../models/Worker');
+const Payment = require('../models/Payment');
 const asyncHandler = require('../utils/asyncHandler');
 
 const startOfToday = () => {
@@ -18,37 +25,34 @@ const startOfWeek = () => {
 };
 
 const getStats = asyncHandler(async (_req, res) => {
+  const now = new Date();
   const [
-    totalUsers,
-    activeJobs,
-    completedJobsToday,
-    newSignupsThisWeek,
-    revenueAgg,
-    pendingReports,
-    pendingPayouts,
+    totalUsers, activeCities, businesses, activeOffers, pendingOffers,
+    activeSubscriptions, serviceBookings, activeWorkers, revenueAgg,
   ] = await Promise.all([
     User.countDocuments(),
-    Job.countDocuments({ status: { $in: ['open', 'in-progress'] } }),
-    Job.countDocuments({ status: 'completed', updatedAt: { $gte: startOfToday() } }),
-    User.countDocuments({ createdAt: { $gte: startOfWeek() } }),
-    Transaction.aggregate([
-      { $match: { status: 'completed' } },
-      { $group: { _id: null, total: { $sum: '$platformCommission' } } },
-    ]),
-    Report.countDocuments({ status: 'pending' }),
-    Payout.countDocuments({ status: 'pending' }),
+    City.countDocuments({ isActive: true }),
+    Business.countDocuments({ isActive: true }),
+    Offer.countDocuments({ status: 'approved', isActive: true, startsAt: { $lte: now }, expiresAt: { $gte: now } }),
+    Offer.countDocuments({ status: 'pending_review' }),
+    Subscription.countDocuments({ status: 'active', startsAt: { $lte: now }, endsAt: { $gte: now } }),
+    ServiceBooking.countDocuments(),
+    Worker.countDocuments({ isActive: true }),
+    Payment.aggregate([{ $match: { status: 'verified' } }, { $group: { _id: null, total: { $sum: '$amount' } } }]),
   ]);
 
   res.json({
     success: true,
     stats: {
       totalUsers,
-      activeJobs,
-      completedJobsToday,
-      newSignupsThisWeek,
+      activeCities,
+      businesses,
+      activeOffers,
+      pendingOffers,
+      activeSubscriptions,
+      serviceBookings,
+      activeWorkers,
       totalRevenue: revenueAgg[0]?.total ?? 0,
-      pendingReports,
-      pendingPayouts,
     },
   });
 });

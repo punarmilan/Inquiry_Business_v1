@@ -2,7 +2,7 @@ require('dotenv').config({ path: __dirname + '/.env' });
 
 module.exports = {
   expo: {
-    name: 'AnyWork',
+    name: 'InquiryExperts',
     slug: 'kaamsaathi',
     version: '1.0.0',
     orientation: 'portrait',
@@ -14,9 +14,9 @@ module.exports = {
       bundleIdentifier: 'com.kaamsaathi.app',
       infoPlist: {
         NSLocationWhenInUseUsageDescription:
-          'AnyWork uses your location to show nearby jobs and let you set your work location.',
-        NSPhotoLibraryUsageDescription: 'AnyWork needs access to your photos so you can set a profile picture.',
-        NSCameraUsageDescription: 'AnyWork needs camera access so you can take a profile picture.',
+          'InquiryExperts uses your location to discover nearby offers and services.',
+        NSPhotoLibraryUsageDescription: 'InquiryExperts needs access to your photos so you can set a profile picture.',
+        NSCameraUsageDescription: 'InquiryExperts needs camera access so you can take a profile picture.',
         // Lets Linking.canOpenURL('tel:...') work correctly if it's ever used again —
         // without this, it rejects on iOS even for a perfectly callable number.
         LSApplicationQueriesSchemes: ['tel'],
@@ -55,13 +55,13 @@ module.exports = {
         'expo-location',
         {
           locationWhenInUsePermission:
-            'AnyWork uses your location to show nearby jobs and let you set your work location.',
+            'InquiryExperts uses your location to discover nearby offers and services.',
         },
       ],
       [
         'expo-image-picker',
         {
-          photosPermission: 'AnyWork needs access to your photos so you can set a profile picture.',
+          photosPermission: 'InquiryExperts needs access to your photos so you can set a profile picture.',
         },
       ],
       'expo-font',
@@ -98,7 +98,7 @@ module.exports = {
         {
           appID: process.env.FACEBOOK_APP_ID,
           clientToken: process.env.FACEBOOK_CLIENT_TOKEN || '',
-          displayName: 'AnyWork',
+          displayName: 'InquiryExperts',
           scheme: `fb${process.env.FACEBOOK_APP_ID}`,
           isAutoInitEnabled: true,
           advertiserIDCollectionEnabled: false,

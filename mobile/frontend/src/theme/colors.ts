@@ -1,20 +1,22 @@
-// Warm, trustworthy palette — terracotta/saffron primary with deep teal accent.
-// Avoids harsh corporate blue; feels approachable for daily-wage & student users alike.
+// AnyWork visual system: clean off-white surfaces, confident teal actions and a warm
+// orange accent for offers, prices and attention states.
 export const colors = {
-  // Primary — warm saffron/terracotta (trust + energy, evokes Indian marketplace warmth)
-  primary: '#F45B18',
-  primaryDark: '#D9430A',
-  primaryLight: '#FFF0E7',
+  // Primary teal — used for navigation, selected controls and main actions.
+  primary: '#118F91',
+  primaryBright: '#22B8B5',
+  primaryDark: '#0A6F71',
+  primaryLight: '#E2F6F5',
+  primaryGlow: 'rgba(17, 143, 145, 0.26)',
 
-  // Secondary — deep teal (grounded, trustworthy counterpoint)
+  // Secondary teal — used for service banners and trust panels.
   secondary: '#0F766E',
   secondaryDark: '#0B564F',
   secondaryLight: '#DFF3F1',
 
-  // Accent — golden yellow for pay badges / highlights
-  accent: '#F4A51C',
-  accentDark: '#C97700',
-  accentLight: '#FFF3CF',
+  // Accent orange — keeps prices, ratings and offer highlights warm and visible.
+  accent: '#F45B18',
+  accentDark: '#D9430A',
+  accentLight: '#FFF0E7',
 
   // Status
   success: '#2E9E5B',
@@ -25,23 +27,24 @@ export const colors = {
   verified: '#1D9BF0',
 
   // Neutrals
-  background: '#FFF7F1',
+  background: '#F8FAFB',
   surface: '#FFFFFF',
-  surfaceAlt: '#F7F7F7',
-  border: '#ECE6DE',
-  divider: '#EFEAE3',
+  surfaceAlt: '#F0F3F5',
+  border: '#DDE3E7',
+  divider: '#E5EAEC',
 
   // Promo banner gradient (home hero card)
-  bannerStart: '#FFD9B8',
-  bannerEnd: '#FFB877',
+  bannerStart: '#D9FAF7',
+  bannerEnd: '#9DE1DA',
 
   text: '#171717',
   textSecondary: '#5C5C5C',
   textMuted: '#9A9A9A',
   textInverse: '#FFFFFF',
 
-  overlay: 'rgba(35, 26, 20, 0.55)',
-  shadow: 'rgba(33, 24, 15, 0.12)',
+  overlay: 'rgba(17, 24, 26, 0.55)',
+  shadow: 'rgba(42, 109, 112, 0.18)',
+  shadowStrong: 'rgba(17, 112, 114, 0.28)',
 
   // Category tag colors
   categoryHomeRepair: '#F45B18',

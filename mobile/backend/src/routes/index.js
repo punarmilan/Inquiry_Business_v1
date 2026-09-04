@@ -11,6 +11,14 @@ const categoryRoutes = require('./categoryRoutes');
 const reportRoutes = require('./reportRoutes');
 const notificationRoutes = require('./notificationRoutes');
 const adRoutes = require('./adRoutes');
+const cityRoutes = require('./cityRoutes');
+const businessRoutes = require('./businessRoutes');
+const offerRoutes = require('./offerRoutes');
+const offerTemplateRoutes = require('./offerTemplateRoutes');
+const templateStickerRoutes = require('./templateStickerRoutes');
+const commerceRoutes = require('./commerceRoutes');
+const serviceRoutes = require('./serviceRoutes');
+const providerApplicationRoutes = require('./providerApplicationRoutes');
 
 const router = express.Router();
 
@@ -26,5 +34,13 @@ router.use('/categories', categoryRoutes);
 router.use('/reports', reportRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/ads', adRoutes);
+router.use('/cities', cityRoutes);
+router.use('/businesses', businessRoutes);
+router.use('/offers', offerRoutes);
+router.use('/offer-templates', offerTemplateRoutes);
+router.use('/stickers', templateStickerRoutes);
+router.use('/', commerceRoutes);
+router.use('/services', serviceRoutes);
+router.use('/provider-applications', providerApplicationRoutes);
 
 module.exports = router;

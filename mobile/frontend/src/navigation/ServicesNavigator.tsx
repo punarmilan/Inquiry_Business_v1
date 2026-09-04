@@ -1,0 +1,13 @@
+import React from 'react';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import type { ServicesStackParamList } from './types';
+import { ServicesHomeScreen } from '../screens/services/ServicesHomeScreen';
+import { BookServiceScreen } from '../screens/services/BookServiceScreen';
+import { MyBookingsScreen } from '../screens/services/MyBookingsScreen';
+import { BookingDetailsScreen } from '../screens/services/BookingDetailsScreen';
+import { NotificationsScreen } from '../screens/profile/NotificationsScreen';
+import { ChatListScreen } from '../screens/profile/ChatListScreen';
+import { ChatThreadScreen } from '../screens/profile/ChatThreadScreen';
+import { LiveLocationScreen } from '../screens/job/LiveLocationScreen';
+const Stack = createNativeStackNavigator<ServicesStackParamList>();
+export const ServicesNavigator = () => <Stack.Navigator screenOptions={{ headerShown: false }}><Stack.Screen name="ServicesHome" component={ServicesHomeScreen} /><Stack.Screen name="BookService" component={BookServiceScreen} /><Stack.Screen name="MyBookings" component={MyBookingsScreen} /><Stack.Screen name="BookingDetails" component={BookingDetailsScreen} /><Stack.Screen name="Notifications" component={NotificationsScreen as React.ComponentType<any>} /><Stack.Screen name="ChatList" component={ChatListScreen as React.ComponentType<any>} /><Stack.Screen name="ChatThread" component={ChatThreadScreen as React.ComponentType<any>} /><Stack.Screen name="LiveLocation" component={LiveLocationScreen as React.ComponentType<any>} /></Stack.Navigator>;

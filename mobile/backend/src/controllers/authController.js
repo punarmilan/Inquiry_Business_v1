@@ -94,7 +94,8 @@ const loginWithPassword = asyncHandler(async (req, res) => {
   const { field, value } = resolveIdentifier(req.body);
   const { password } = req.body;
 
-  const user = await User.findOne({ [field]: value });
+  const identifierValues = field === 'phone' && value.startsWith('+91') ? [value, value.slice(3)] : [value];
+  const user = await User.findOne({ [field]: identifierValues.length === 1 ? value : { $in: identifierValues } });
   if (!user || !user.name) {
     throw new ApiError(404, 'No account found. Please register first.', 'USER_NOT_REGISTERED');
   }
@@ -167,7 +168,6 @@ const oauthRegister = asyncHandler(async (req, res) => {
   const { provider, token } = req.body;
   const profile = await verifyOauthProfile(provider, token);
   const normalizedPhone = normalizePhone(req.body.phone);
-  const { accountType } = req.body;
 
   const existingEmailUser = await User.findOne({ email: profile.email });
   if (existingEmailUser && existingEmailUser.name) {
@@ -184,7 +184,8 @@ const oauthRegister = asyncHandler(async (req, res) => {
   }
   user.name = profile.name || profile.email.split('@')[0];
   user.email = profile.email;
-  user.accountType = accountType;
+  user.accountType = 'employer';
+  user.role = 'user';
   user.isActive = true;
   user.termsAccepted = true;
   user.termsAcceptedAt = new Date();

@@ -8,14 +8,19 @@ import { ScreenContainer } from '../../components/ScreenContainer';
 import { IconButton } from '../../components/IconButton';
 import { useApp } from '../../context/AppContext';
 import type { BackendNotification } from '../../services/api';
-import type { HomeStackParamList } from '../../navigation/types';
+import type { OffersStackParamList, ServicesStackParamList, MoreStackParamList } from '../../navigation/types';
 
-type Props = NativeStackScreenProps<HomeStackParamList, 'Notifications'>;
+type Props = NativeStackScreenProps<
+  OffersStackParamList | ServicesStackParamList | MoreStackParamList,
+  'Notifications'
+>;
 
 const iconFor = (type: BackendNotification['type']) => {
   if (type === 'application_accepted') return 'check-decagram-outline';
   if (type === 'new_application') return 'account-arrow-right-outline';
   if (type === 'new_message') return 'message-text-outline';
+  if (type === 'business_approved') return 'storefront-check-outline';
+  if (type === 'business_rejected') return 'storefront-remove-outline';
   return 'close-circle-outline';
 };
 
@@ -57,8 +62,15 @@ export const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
       });
       return;
     }
-    if (notification.data?.jobId) {
-      navigation.navigate('JobDetail', { jobId: notification.data.jobId });
+    // OfferDetails/BookingDetails aren't present in every stack this screen is mounted
+    // under (e.g. Services lacks OfferDetails, Offers lacks BookingDetails) — soft-typed
+    // the same way MyBookingsScreen/OfferCard already are when reused across tabs.
+    if (notification.data?.offerId) {
+      (navigation as any).navigate('OfferDetails', { offerId: notification.data.offerId });
+      return;
+    }
+    if (notification.data?.bookingId) {
+      (navigation as any).navigate('BookingDetails', { bookingId: notification.data.bookingId });
     }
   };
 

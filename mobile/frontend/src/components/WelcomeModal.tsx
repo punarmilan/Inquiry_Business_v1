@@ -60,8 +60,8 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ visible, name, isNew
 
           <Text style={styles.body}>
             {isNewUser
-              ? 'Your account is ready. Browse jobs near you or post your own work in minutes.'
-              : 'Good to see you again. Fresh jobs around you are waiting.'}
+              ? 'Your account is ready. Discover nearby offers or book a trusted local service in minutes.'
+              : 'Good to see you again. Fresh offers near you are waiting.'}
           </Text>
 
           <Pressable

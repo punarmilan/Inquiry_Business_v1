@@ -5,16 +5,29 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { RootStackParamList } from './types';
 import { AuthNavigator } from './AuthNavigator';
 import { MainTabNavigator } from './MainTabNavigator';
+import { ProviderNavigator } from './ProviderNavigator';
 import { useApp } from '../context/AppContext';
 import { theme } from '../theme';
 import { GlobalLoadingHost } from '../components/GlobalLoadingHost';
 import { LogoLoader } from '../components/LogoLoader';
+import { WelcomeModal } from '../components/WelcomeModal';
+import { AnnouncementModal } from '../components/AnnouncementModal';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const ROUTE_LOADING_MS = 430;
 
 export const RootNavigator: React.FC = () => {
-  const { isAuthenticated, isBootstrapping } = useApp();
+  const {
+    isAuthenticated,
+    isBootstrapping,
+    currentUser,
+    welcome,
+    dismissWelcome,
+    shouldShowAnnouncement,
+    dismissAnnouncement,
+    remoteSettings,
+  } = useApp();
+  const announcement = remoteSettings['mobile.loginAnnouncement'];
   const [isRouteLoading, setIsRouteLoading] = useState(false);
   const routeLoadingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -53,13 +66,24 @@ export const RootNavigator: React.FC = () => {
       <NavigationContainer onStateChange={handleNavigationChange}>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           {isAuthenticated ? (
-            <Stack.Screen name="Main" component={MainTabNavigator} />
+            currentUser?.role === 'worker' ? <Stack.Screen name="Provider" component={ProviderNavigator} /> : <Stack.Screen name="Main" component={MainTabNavigator} />
           ) : (
             <Stack.Screen name="Auth" component={AuthNavigator} />
           )}
         </Stack.Navigator>
       </NavigationContainer>
       <GlobalLoadingHost active={isRouteLoading} />
+      {isAuthenticated && welcome ? (
+        <WelcomeModal
+          visible
+          name={welcome.name}
+          isNewUser={welcome.isNewUser}
+          onClose={dismissWelcome}
+        />
+      ) : null}
+      {isAuthenticated && !welcome && shouldShowAnnouncement && announcement ? (
+        <AnnouncementModal visible announcement={announcement} onClose={dismissAnnouncement} />
+      ) : null}
     </View>
   );
 };
