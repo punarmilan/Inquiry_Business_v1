@@ -15,6 +15,19 @@ The gate checks:
 - public website and admin console build successfully;
 - admin lint rules pass.
 
+## Release flow
+
+Pushing to `main` or `master` runs the quality gate only. It does not publish images or restart the VPS.
+
+To release a tested commit:
+
+1. Open **Actions → CI/CD Pipeline - KaamSaathi**.
+2. Click **Run workflow** and select the target branch.
+3. Tick `Confirm: build images and deploy to production VPS`.
+4. Approve the `production` environment review when GitHub pauses the workflow.
+
+Configure at least one required reviewer under **Settings → Environments → production**. Without a required reviewer, the manual checkbox is still required but GitHub will not pause for a second approval.
+
 ## Review checklist
 
 - Is the change inside one feature boundary?
