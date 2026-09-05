@@ -46,7 +46,7 @@ const offerModerate = Joi.object({
   }),
 });
 const templateField = Joi.object({
-  key: Joi.string().trim().valid('title', 'description', 'category', 'originalPrice', 'offerPrice', 'imageUrls', 'startsAt', 'expiresAt', 'terms', 'phone', 'whatsapp', 'discount', 'discountPercentage', 'timing', 'buttonText', 'businessName', 'businessLogo', 'subtitle').required(),
+  key: Joi.string().trim().pattern(/^[a-zA-Z][a-zA-Z0-9_.-]{0,59}$/).required(),
   label: Joi.string().trim().min(2).max(80).required(),
   type: Joi.string().valid('text', 'image', 'number', 'color', 'date', 'select').required(),
   editable: Joi.boolean().required(),
@@ -58,17 +58,19 @@ const templateField = Joi.object({
 });
 const templateElement = Joi.object({
   id: Joi.string().trim().min(1).max(80).required(),
-  type: Joi.string().valid('text', 'image', 'shape', 'button', 'badge', 'icon', 'divider', 'group').required(),
+  type: Joi.string().valid('text', 'image', 'shape', 'rectangle', 'circle', 'line', 'button', 'badge', 'icon', 'divider', 'group').required(),
   key: Joi.string().trim().max(80),
   field: Joi.string().trim().max(80),
   text: Joi.string().allow('').max(5000),
-  content: Joi.string().allow('').max(5000),
+  content: Joi.alternatives().try(Joi.string().allow('').max(5000), Joi.object().unknown(true)),
   imageUrl: Joi.string().trim().allow('').max(7_000_000),
   src: Joi.string().trim().allow('').max(7_000_000),
-  x: Joi.number().min(0).max(10000).required(),
-  y: Joi.number().min(0).max(10000).required(),
-  width: Joi.number().positive().max(10000).required(),
-  height: Joi.number().positive().max(10000).required(),
+  position: Joi.object({ x: Joi.number().min(0).max(10000).required(), y: Joi.number().min(0).max(10000).required() }),
+  size: Joi.object({ width: Joi.number().positive().max(10000).required(), height: Joi.number().positive().max(10000).required() }),
+  x: Joi.number().min(0).max(10000),
+  y: Joi.number().min(0).max(10000),
+  width: Joi.number().positive().max(10000),
+  height: Joi.number().positive().max(10000),
   zIndex: Joi.number().integer().min(-100).max(1000),
   visible: Joi.boolean(),
   locked: Joi.boolean(),
@@ -94,6 +96,11 @@ const templateElement = Joi.object({
   resizeMode: Joi.string().valid('cover', 'contain', 'stretch'),
   editable: Joi.boolean(),
   style: Joi.object().unknown(true),
+}).custom((value, helpers) => {
+  const hasFlatGeometry = [value.x, value.y, value.width, value.height].every((item) => typeof item === 'number');
+  const hasNestedGeometry = value.position && value.size && typeof value.position.x === 'number' && typeof value.position.y === 'number' && typeof value.size.width === 'number' && typeof value.size.height === 'number';
+  if (!hasFlatGeometry && !hasNestedGeometry) return helpers.error('any.custom', { message: 'Elements need x/y/width/height or position/size geometry.' });
+  return value;
 }).unknown(true);
 const templateCanvas = Joi.object({
   width: Joi.number().positive().max(10000).required(),
@@ -103,6 +110,18 @@ const templateCanvas = Joi.object({
   background: Joi.object().unknown(true),
   overlay: Joi.object().unknown(true),
   elements: Joi.array().items(templateElement).max(100).required(),
+}).custom((value, helpers) => {
+  const ids = new Set();
+  for (const element of value.elements) {
+    if (ids.has(element.id)) return helpers.error('any.custom', { message: `Duplicate element id: ${element.id}.` });
+    ids.add(element.id);
+    const x = typeof element.x === 'number' ? element.x : element.position.x;
+    const y = typeof element.y === 'number' ? element.y : element.position.y;
+    const width = typeof element.width === 'number' ? element.width : element.size.width;
+    const height = typeof element.height === 'number' ? element.height : element.size.height;
+    if (x + width > value.width || y + height > value.height) return helpers.error('any.custom', { message: `Element ${element.id} is outside the canvas bounds.` });
+  }
+  return value;
 }).unknown(true);
 const templatePayload = Joi.object({
   name: Joi.string().trim().min(2).max(100).required(),

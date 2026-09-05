@@ -24,6 +24,43 @@ const { getPagination, paginatedResponse } = require('../utils/pagination');
 const notifyUser = ({ userId, type, title, body, data }) =>
   Notification.create({ user: userId, type, title, body, data }).catch(() => {});
 
+const isTemplateObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+const numberOr = (value, fallback) => typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+const normalizeTemplatePayload = (payload) => {
+  if (!isTemplateObject(payload?.canvas) || !Array.isArray(payload.canvas.elements)) return payload;
+  const canvas = payload.canvas;
+  const width = numberOr(canvas.width, 1080);
+  const height = numberOr(canvas.height, 1350);
+  return {
+    ...payload,
+    canvas: {
+      ...canvas,
+      elements: canvas.elements.map((element, index) => {
+        if (!isTemplateObject(element)) return element;
+        const position = isTemplateObject(element.position) ? element.position : {};
+        const size = isTemplateObject(element.size) ? element.size : {};
+        const content = isTemplateObject(element.content) ? element.content : {};
+        const x = numberOr(element.x, numberOr(position.x, 0));
+        const y = numberOr(element.y, numberOr(position.y, 0));
+        const elementWidth = numberOr(element.width, numberOr(size.width, width * 0.8));
+        const elementHeight = numberOr(element.height, numberOr(size.height, 80));
+        const field = typeof element.field === 'string' ? element.field : typeof element.key === 'string' ? element.key : typeof content.field === 'string' ? content.field : undefined;
+        const imageUrl = typeof element.imageUrl === 'string' ? element.imageUrl : typeof element.src === 'string' ? element.src : typeof content.src === 'string' ? content.src : undefined;
+        const text = typeof element.content === 'string' ? element.content : typeof element.text === 'string' ? element.text : typeof content.text === 'string' ? content.text : undefined;
+        return {
+          ...element,
+          id: typeof element.id === 'string' && element.id ? element.id : `layer-${index + 1}`,
+          x, y, width: elementWidth, height: elementHeight,
+          position: { x, y }, size: { width: elementWidth, height: elementHeight },
+          ...(field ? { field, key: field } : {}),
+          ...(imageUrl ? { imageUrl, src: imageUrl } : {}),
+          ...(text !== undefined ? { text } : {}),
+        };
+      }),
+    },
+  };
+};
+
 const paginated = async ({ model, filter = {}, query, populate = [], sort = { createdAt: -1 } }) => {
   const { page, limit, skip } = getPagination(query);
   let cursor = model.find(filter).sort(sort).skip(skip).limit(limit);
@@ -258,7 +295,7 @@ const listOfferTemplates = asyncHandler(async (_req, res) => {
 const createOfferTemplate = asyncHandler(async (req, res) => {
   const duplicate = await OfferTemplate.exists({ slug: req.body.slug });
   if (duplicate) throw new ApiError(409, 'A template with this slug already exists', 'TEMPLATE_SLUG_EXISTS');
-  const template = await OfferTemplate.create({ ...req.body, createdBy: req.admin._id, updatedBy: req.admin._id });
+  const template = await OfferTemplate.create({ ...normalizeTemplatePayload(req.body), createdBy: req.admin._id, updatedBy: req.admin._id });
   res.status(201).json({ success: true, template });
 });
 const updateOfferTemplate = asyncHandler(async (req, res) => {
@@ -267,7 +304,7 @@ const updateOfferTemplate = asyncHandler(async (req, res) => {
   if (req.body.slug && req.body.slug !== template.slug && await OfferTemplate.exists({ slug: req.body.slug, _id: { $ne: template._id } })) {
     throw new ApiError(409, 'A template with this slug already exists', 'TEMPLATE_SLUG_EXISTS');
   }
-  Object.assign(template, req.body);
+  Object.assign(template, normalizeTemplatePayload(req.body));
   template.version = (template.version || 1) + 1;
   template.updatedBy = req.admin._id;
   await template.save();

@@ -22,13 +22,15 @@ export type OfferCardLayout = 'right' | 'left' | 'bottom' | 'center';
 
 export type OfferTemplateElement = {
   id: string;
-  type: 'text' | 'image' | 'shape' | 'button' | 'badge' | 'icon' | 'divider' | 'group';
+  type: 'text' | 'image' | 'shape' | 'rectangle' | 'circle' | 'line' | 'button' | 'badge' | 'icon' | 'divider' | 'group';
   key?: string;
   field?: string;
   text?: string;
   content?: string;
   imageUrl?: string;
   src?: string;
+  position?: { x: number; y: number };
+  size?: { width: number; height: number };
   x: number;
   y: number;
   width: number;
@@ -65,7 +67,7 @@ export type OfferTemplateCanvas = {
   height: number;
   backgroundColor?: string;
   backgroundImageUrl?: string;
-  background?: { type?: 'solid' | 'gradient' | 'image' | 'texture'; color?: string; from?: string; to?: string; direction?: string; imageUrl?: string; opacity?: number; overlayColor?: string; overlayOpacity?: number };
+  background?: { type?: 'solid' | 'gradient' | 'linear-gradient' | 'image' | 'texture'; color?: string; from?: string; to?: string; direction?: string; angle?: number; colors?: string[]; imageUrl?: string; opacity?: number; overlayColor?: string; overlayOpacity?: number };
   overlay?: { color?: string; opacity?: number };
   elements: OfferTemplateElement[];
 };
@@ -97,6 +99,47 @@ export type OfferCardTemplate = {
   allowAvatarChange?: boolean;
   version?: number;
   source?: 'admin' | 'system';
+};
+
+const isObject = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+const finite = (value: unknown, fallback: number) => typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+
+/** Accepts canonical v2 JSON and legacy API templates at the mobile boundary. */
+export const normalizeOfferTemplateCanvas = (canvas?: OfferTemplateCanvas): OfferTemplateCanvas | undefined => {
+  if (!canvas) return undefined;
+  const rawCanvas = canvas as unknown as Record<string, unknown>;
+  const width = Math.max(1, finite(rawCanvas.width, 1080));
+  const height = Math.max(1, finite(rawCanvas.height, 1350));
+  const rawElements = Array.isArray(rawCanvas.elements) ? rawCanvas.elements : [];
+  const elements = rawElements.map((raw, index) => {
+    const source = isObject(raw) ? raw : {};
+    const position = isObject(source.position) ? source.position : {};
+    const size = isObject(source.size) ? source.size : {};
+    const content = isObject(source.content) ? source.content : {};
+    const x = Math.max(0, finite(source.x, finite(position.x, 0)));
+    const y = Math.max(0, finite(source.y, finite(position.y, 0)));
+    const elementWidth = Math.max(1, finite(source.width, finite(size.width, width * 0.8)));
+    const elementHeight = Math.max(1, finite(source.height, finite(size.height, 80)));
+    const field = typeof source.field === 'string' ? source.field : typeof source.key === 'string' ? source.key : typeof content.field === 'string' ? content.field : undefined;
+    const imageUrl = typeof source.imageUrl === 'string' ? source.imageUrl : typeof source.src === 'string' ? source.src : typeof content.src === 'string' ? content.src : undefined;
+    const text = typeof source.content === 'string' ? source.content : typeof source.text === 'string' ? source.text : typeof content.text === 'string' ? content.text : '';
+    return {
+      ...(source as unknown as OfferTemplateElement),
+      id: typeof source.id === 'string' && source.id ? source.id : `layer-${index + 1}`,
+      type: (typeof source.type === 'string' ? source.type : 'text') as OfferTemplateElement['type'],
+      ...(field ? { field, key: field } : {}),
+      ...(imageUrl ? { imageUrl, src: imageUrl } : {}),
+      content: text,
+      text,
+      x,
+      y,
+      width: elementWidth,
+      height: elementHeight,
+      position: { x, y },
+      size: { width: elementWidth, height: elementHeight },
+    };
+  });
+  return { ...(canvas as OfferTemplateCanvas), width, height, elements };
 };
 
 export type OfferAvatar = {
@@ -227,7 +270,7 @@ export const toOfferCardTemplate = (template: {
   layout: template.layout,
   description: template.description,
   previewUrl: template.previewUrl,
-  canvas: template.canvas,
+  canvas: normalizeOfferTemplateCanvas(template.canvas),
   editableFields: template.editableFields,
   allowColorChange: template.allowColorChange,
   allowLayoutChange: template.allowLayoutChange,

@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 2,
+  "name": "Weekend service offer",
+  "slug": "weekend-service-offer",
+  "category": "Services",
+  "description": "A reusable poster with live offer fields.",
+  "primaryColor": "#0F7D7F",
+  "secondaryColor": "#084F51",
+  "layout": "center",
+  "avatarId": "avatar-01",
+  "editableFields": [
+    {
+      "key": "headline",
+      "label": "Headline",
+      "type": "text",
+      "editable": true,
+      "required": true,
+      "optional": false,
+      "maxLength": 80,
+      "defaultValue": "Trusted local service"
+    }
+  ],
+  "allowColorChange": true,
+  "allowLayoutChange": true,
+  "allowAvatarChange": true,
+  "isActive": true,
+  "sortOrder": 0,
+  "canvas": {
+    "width": 1080,
+    "height": 1350,
+    "background": {
+      "type": "linear-gradient",
+      "angle": 135,
+      "colors": ["#0F7D7F", "#084F51"]
+    },
+    "elements": [
+      {
+        "id": "headline",
+        "type": "text",
+        "position": { "x": 90, "y": 180 },
+        "size": { "width": 900, "height": 180 },
+        "rotation": 0,
+        "zIndex": 2,
+        "opacity": 1,
+        "visible": true,
+        "locked": false,
+        "editable": true,
+        "style": {
+          "fontFamily": "Inter",
+          "fontSize": 72,
+          "fontWeight": "900",
+          "color": "#FFFFFF",
+          "textAlign": "center",
+          "textAlignVertical": "center"
+        },
+        "content": { "text": "{{headline}}" }
+      },
+      {
+        "id": "offer-image",
+        "type": "image",
+        "position": { "x": 120, "y": 430 },
+        "size": { "width": 840, "height": 500 },
+        "rotation": 0,
+        "zIndex": 1,
+        "opacity": 1,
+        "visible": true,
+        "locked": false,
+        "editable": true,
+        "style": { "objectFit": "cover", "borderRadius": 28 },
+        "content": { "field": "imageUrls", "src": "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=1000&q=80" }
+      },
+      {
+        "id": "cta",
+        "type": "button",
+        "position": { "x": 300, "y": 1060 },
+        "size": { "width": 480, "height": 90 },
+        "rotation": 0,
+        "zIndex": 3,
+        "opacity": 1,
+        "visible": true,
+        "locked": false,
+        "editable": true,
+        "style": {
+          "fontFamily": "Inter",
+          "fontSize": 30,
+          "fontWeight": "800",
+          "color": "#0F7D7F",
+          "backgroundColor": "#FFFFFF",
+          "borderRadius": 45,
+          "textAlign": "center",
+          "textAlignVertical": "center"
+        },
+        "content": { "text": "BOOK NOW", "field": "buttonText" }
+      }
+    ]
+  }
+}

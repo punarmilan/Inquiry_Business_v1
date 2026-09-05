@@ -91,13 +91,15 @@ export type OfferTemplateField = {
 
 export type OfferTemplateElement = {
   id: string;
-  type: 'text' | 'image' | 'shape' | 'button' | 'badge' | 'icon' | 'divider' | 'group';
+  type: 'text' | 'image' | 'shape' | 'rectangle' | 'circle' | 'line' | 'button' | 'badge' | 'icon' | 'divider' | 'group';
   key?: string;
   field?: string;
   text?: string;
   content?: string;
   imageUrl?: string;
   src?: string;
+  position?: { x: number; y: number };
+  size?: { width: number; height: number };
   x: number;
   y: number;
   width: number;
@@ -134,7 +136,7 @@ export type OfferTemplateCanvas = {
   height: number;
   backgroundColor?: string;
   backgroundImageUrl?: string;
-  background?: { type?: 'solid' | 'gradient' | 'image' | 'texture'; color?: string; from?: string; to?: string; direction?: string; imageUrl?: string; opacity?: number; overlayColor?: string; overlayOpacity?: number };
+  background?: { type?: 'solid' | 'gradient' | 'linear-gradient' | 'image' | 'texture'; color?: string; from?: string; to?: string; direction?: string; angle?: number; colors?: string[]; imageUrl?: string; opacity?: number; overlayColor?: string; overlayOpacity?: number };
   overlay?: { color?: string; opacity?: number };
   elements: OfferTemplateElement[];
 };

@@ -11,6 +11,7 @@ import { useCreateOfferTemplate, useDeleteOfferTemplate, useOfferTemplatesList, 
 import type { OfferTemplateRecord, TemplateElementRecord, TemplateFieldRecord } from '@/api/hyperlocal';
 import PRESET_TEMPLATES from '@/data/offer-template-presets.json';
 import FOOD_TEMPLATE_PACK from '@/data/food-offer-template-pack.json';
+import TEMPLATE_V2_EXAMPLE from '@/data/template-schema-v2.example.json';
 import { Copy, Plus } from 'lucide-react';
 
 const FIELD_OPTIONS: Array<{ key: string; label: string; type: TemplateFieldRecord['type']; defaultMax: number }> = [
@@ -77,25 +78,35 @@ const normalizeFieldKey = (value: string) => {
     terms_and_conditions: 'terms',
   };
   const direct = ['title', 'description', 'category', 'originalPrice', 'offerPrice', 'imageUrls', 'startsAt', 'expiresAt', 'terms', 'phone', 'whatsapp', 'discount', 'discountPercentage', 'timing', 'buttonText', 'businessName', 'businessLogo', 'subtitle'];
-  return (direct.includes(value) ? value : aliases[key]) as TemplateFieldRecord['key'] | undefined;
+  if (direct.includes(value)) return value as TemplateFieldRecord['key'];
+  if (aliases[key]) return aliases[key];
+  return /^[a-z][a-z0-9_.-]{0,59}$/i.test(value) ? value : undefined;
 };
 
 const TemplateCardPreview = ({ template }: { template: OfferTemplateRecord }) => {
   const canvas = template.canvas;
   if (!canvas) return <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, ${template.primaryColor}, ${template.secondaryColor})` }} />;
   const background = canvas.background;
-  const backgroundStyle: React.CSSProperties = background?.type === 'gradient'
-    ? { backgroundImage: `linear-gradient(${background.direction || 'to bottom'}, ${background.from || template.primaryColor}, ${background.to || template.secondaryColor})` }
+  const gradientColors = background?.colors?.length && background.colors.length >= 2 ? background.colors : [background?.from || template.primaryColor, background?.to || template.secondaryColor];
+  const backgroundStyle: React.CSSProperties = background?.type === 'gradient' || background?.type === 'linear-gradient'
+    ? { backgroundImage: `linear-gradient(${background.angle !== undefined ? `${background.angle}deg` : background.direction || 'to bottom'}, ${gradientColors.join(', ')})` }
     : { backgroundColor: canvas.backgroundColor || background?.color || template.primaryColor };
   return <div className="absolute inset-0 overflow-hidden" style={{ ...backgroundStyle }}>
     {(canvas.backgroundImageUrl || background?.imageUrl) && <img src={canvas.backgroundImageUrl || background?.imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />}
     {canvas.elements.slice().sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)).map((element: TemplateElementRecord) => {
-      const field = element.field || element.key;
-      const content = element.content || element.text || (field ? field : '');
-      const style: React.CSSProperties = { position: 'absolute', left: `${element.x / canvas.width * 100}%`, top: `${element.y / canvas.height * 100}%`, width: `${element.width / canvas.width * 100}%`, height: `${element.height / canvas.height * 100}%`, zIndex: element.zIndex || 1, opacity: element.visible === false ? 0 : element.opacity ?? 1, transform: `rotate(${element.rotation || 0}deg)`, borderRadius: element.borderRadius || 0, overflow: 'hidden' };
-      if (element.type === 'image' && (element.imageUrl || element.src)) return <img key={element.id} src={element.imageUrl || element.src} alt="" className="object-contain" style={style} />;
-      if (element.type === 'shape') return <div key={element.id} style={{ ...style, backgroundColor: element.backgroundColor || element.color || '#FFFFFF' }} />;
-      if (element.type === 'divider') return <div key={element.id} style={{ ...style, backgroundColor: element.backgroundColor || element.color || '#111827' }} />;
+      const rawContent = (element as unknown as Record<string, unknown>).content;
+      const contentObject = isJsonObject(rawContent) ? rawContent : {};
+      const field = element.field || element.key || (typeof contentObject.field === 'string' ? contentObject.field : undefined);
+      const content = typeof rawContent === 'string' ? rawContent : typeof contentObject.text === 'string' ? contentObject.text : element.text || (field ? field : '');
+      const rawImageUrl = typeof contentObject.src === 'string' ? contentObject.src : typeof contentObject.imageUrl === 'string' ? contentObject.imageUrl : undefined;
+      const x = element.position?.x ?? element.x;
+      const y = element.position?.y ?? element.y;
+      const width = element.size?.width ?? element.width;
+      const height = element.size?.height ?? element.height;
+      const style: React.CSSProperties = { position: 'absolute', left: `${x / canvas.width * 100}%`, top: `${y / canvas.height * 100}%`, width: `${width / canvas.width * 100}%`, height: `${height / canvas.height * 100}%`, zIndex: element.zIndex || 1, opacity: element.visible === false ? 0 : element.opacity ?? 1, transform: `rotate(${element.rotation || 0}deg)`, borderRadius: element.type === 'circle' ? '9999px' : element.borderRadius || 0, overflow: 'hidden' };
+      if (element.type === 'image' && (element.imageUrl || element.src || rawImageUrl)) return <img key={element.id} src={element.imageUrl || element.src || rawImageUrl} alt="" className="object-contain" style={style} />;
+      if (element.type === 'shape' || element.type === 'rectangle' || element.type === 'circle') return <div key={element.id} style={{ ...style, backgroundColor: element.backgroundColor || element.color || '#FFFFFF' }} />;
+      if (element.type === 'divider' || element.type === 'line') return <div key={element.id} style={{ ...style, backgroundColor: element.backgroundColor || element.color || '#111827' }} />;
       return <div key={element.id} style={{ ...style, display: 'flex', alignItems: 'center', justifyContent: element.textAlign === 'left' ? 'flex-start' : element.textAlign === 'right' ? 'flex-end' : 'center', backgroundColor: ['button', 'badge'].includes(element.type) ? element.backgroundColor || '#FFC400' : element.backgroundColor === 'transparent' ? undefined : element.backgroundColor, color: element.color || '#FFFFFF', fontFamily: element.fontFamily, fontSize: `${Math.max(7, (element.fontSize || 42) * 0.11)}px`, fontWeight: element.fontWeight as React.CSSProperties['fontWeight'], textAlign: element.textAlign, whiteSpace: 'nowrap' }}>{content}</div>;
     })}
   </div>;
@@ -113,8 +124,8 @@ const normalizeTemplateImport = (value: unknown, index: number) => {
   const rawElements = Array.isArray(rawElementsValue) ? rawElementsValue : isJsonObject(rawElementsValue) ? Object.values(rawElementsValue) : [];
   const name = readString(source, ['name', 'templateName', 'template_name', 'title'], readString(design, ['name', 'templateName', 'template_name', 'title'], `JSON template ${index + 1}`));
   const dimensions = isJsonObject(source.dimensions) ? source.dimensions : isJsonObject(design.dimensions) ? design.dimensions : {};
-  const canvasWidth = readNumber(rawCanvas, ['width', 'canvasWidth', 'canvas_width'], readNumber(dimensions, ['width', 'canvasWidth', 'canvas_width'], readNumber(source, ['canvasWidth', 'canvas_width', 'width'], 450)));
-  const canvasHeight = readNumber(rawCanvas, ['height', 'canvasHeight', 'canvas_height'], readNumber(dimensions, ['height', 'canvasHeight', 'canvas_height'], readNumber(source, ['canvasHeight', 'canvas_height', 'height'], 800)));
+  const canvasWidth = Math.min(10000, Math.max(1, readNumber(rawCanvas, ['width', 'canvasWidth', 'canvas_width'], readNumber(dimensions, ['width', 'canvasWidth', 'canvas_width'], readNumber(source, ['canvasWidth', 'canvas_width', 'width'], 1080)))));
+  const canvasHeight = Math.min(10000, Math.max(1, readNumber(rawCanvas, ['height', 'canvasHeight', 'canvas_height'], readNumber(dimensions, ['height', 'canvasHeight', 'canvas_height'], readNumber(source, ['canvasHeight', 'canvas_height', 'height'], 1350)))));
   const primaryColor = validColor(source.primaryColor || source.primary_color || colors.primary || source.accentColor || colors.accent, '#4F9FE8');
   const secondaryColor = validColor(source.secondaryColor || source.secondary_color || colors.secondary, '#2167BD');
   const canvas = rawElements.length || rawCanvas.backgroundImageUrl || rawCanvas.background_image_url || source.backgroundImageUrl || source.background_image_url || source.backgroundImage
@@ -131,22 +142,27 @@ const normalizeTemplateImport = (value: unknown, index: number) => {
         const frame = isJsonObject(entry.frame) ? entry.frame : {};
         const size = isJsonObject(entry.size) ? entry.size : {};
         const typeValue = readString(entry, ['type', 'kind', 'elementType', 'shape', 'assetType'], 'text').toLowerCase();
-        const type = typeValue.includes('image') || typeValue.includes('photo') || typeValue.includes('picture') ? 'image' : typeValue.includes('shape') || typeValue.includes('rect') || typeValue.includes('circle') || typeValue.includes('background') ? 'shape' : typeValue.includes('button') || typeValue.includes('cta') ? 'button' : typeValue.includes('badge') || typeValue.includes('sticker') ? 'badge' : typeValue.includes('icon') ? 'icon' : typeValue.includes('divider') || typeValue.includes('line') ? 'divider' : typeValue.includes('group') ? 'group' : 'text';
+        const type = typeValue === 'rectangle' || typeValue === 'rect' ? 'rectangle' : typeValue === 'circle' || typeValue === 'ellipse' ? 'circle' : typeValue === 'line' ? 'line' : typeValue.includes('image') || typeValue.includes('photo') || typeValue.includes('picture') ? 'image' : typeValue.includes('shape') || typeValue.includes('background') ? 'shape' : typeValue.includes('button') || typeValue.includes('cta') ? 'button' : typeValue.includes('badge') || typeValue.includes('sticker') ? 'badge' : typeValue.includes('icon') ? 'icon' : typeValue.includes('divider') || typeValue.includes('separator') ? 'divider' : typeValue.includes('group') ? 'group' : 'text';
         const x = readNumber(entry, ['x', 'left'], readNumber(position, ['x', 'left'], readNumber(frame, ['x', 'left'], 0)));
         const y = readNumber(entry, ['y', 'top'], readNumber(position, ['y', 'top'], readNumber(frame, ['y', 'top'], 0)));
         const width = readNumber(entry, ['width', 'w'], readNumber(size, ['width', 'w'], readNumber(frame, ['width', 'w'], canvasWidth * 0.8)));
         const height = readNumber(entry, ['height', 'h'], readNumber(size, ['height', 'h'], readNumber(frame, ['height', 'h'], 80)));
+        const safeX = Math.min(Math.max(0, x), Math.max(0, canvasWidth - 1));
+        const safeY = Math.min(Math.max(0, y), Math.max(0, canvasHeight - 1));
+        const safeWidth = Math.max(1, Math.min(width, canvasWidth - safeX));
+        const safeHeight = Math.max(1, Math.min(height, canvasHeight - safeY));
         const normalized = {
           ...entry,
           id: readString(entry, ['id', 'key', 'name'], `layer-${elementIndex + 1}`),
           type,
-          key: readString(entry, ['key', 'field', 'binding', 'bind'], ''),
-          field: readString(entry, ['field', 'key', 'binding', 'bind'], ''),
-          text: readString(entry, ['text', 'content', 'value', 'label'], ''),
-          content: readString(entry, ['content', 'text', 'value', 'label'], ''),
-          imageUrl: readString(entry, ['imageUrl', 'image', 'src', 'url'], ''),
-          src: readString(entry, ['src', 'imageUrl', 'image', 'url'], ''),
-          x: Math.max(0, x), y: Math.max(0, y), width: Math.max(1, width), height: Math.max(1, height),
+          key: readString(entry, ['key', 'field', 'binding', 'bind'], readString(isJsonObject(entry.content) ? entry.content : {}, ['field', 'key', 'binding', 'bind'], '')),
+          field: readString(entry, ['field', 'key', 'binding', 'bind'], readString(isJsonObject(entry.content) ? entry.content : {}, ['field', 'key', 'binding', 'bind'], '')),
+          text: readString(entry, ['text', 'value', 'label'], readString(isJsonObject(entry.content) ? entry.content : {}, ['text', 'value', 'label'], '')),
+          content: readString(entry, ['text', 'value', 'label'], readString(isJsonObject(entry.content) ? entry.content : {}, ['text', 'value', 'label'], '')),
+          imageUrl: readString(entry, ['imageUrl', 'image', 'src', 'url'], readString(isJsonObject(entry.content) ? entry.content : {}, ['imageUrl', 'src', 'image', 'url'], '')),
+          src: readString(entry, ['src', 'imageUrl', 'image', 'url'], readString(isJsonObject(entry.content) ? entry.content : {}, ['src', 'imageUrl', 'image', 'url'], '')),
+          x: safeX, y: safeY, width: safeWidth, height: safeHeight,
+          position: { x: safeX, y: safeY }, size: { width: safeWidth, height: safeHeight },
           zIndex: isFiniteNumber(entry.zIndex) ? Math.round(entry.zIndex) : elementIndex,
           color: readString(entry, ['color', 'textColor'], readString(style, ['color', 'textColor'])),
           backgroundColor: readString(entry, ['backgroundColor', 'fill', 'background'], readString(style, ['backgroundColor', 'fill', 'background'])),
@@ -188,11 +204,22 @@ const normalizeTemplateImport = (value: unknown, index: number) => {
     }
     : undefined;
   const layout = validLayout(source.layout || design.layout) || (canvasHeight > canvasWidth ? 'center' : 'right');
-  const rawFields = Array.isArray(source.editableFields) ? source.editableFields : Array.isArray(source.fields) ? source.fields : [];
+  const elementFields = canvas?.elements.flatMap((element) => {
+    if (!isJsonObject(element)) return [];
+    const content = isJsonObject(element.content) ? element.content : {};
+    const field = readString(element, ['field', 'key', 'binding', 'bind'], readString(content, ['field', 'key', 'binding', 'bind']));
+    const text = typeof element.content === 'string' ? element.content : readString(content, ['text', 'value', 'label']);
+    const tokens = [...text.matchAll(/\{\{\s*([a-zA-Z][a-zA-Z0-9_.-]{0,59})\s*\}\}/g)].map((match) => match[1]);
+    return [field, ...tokens].filter(Boolean);
+  }) || [];
+  const rawFields = [...(Array.isArray(source.editableFields) ? source.editableFields : Array.isArray(source.fields) ? source.fields : []), ...elementFields.map((key) => ({ key }))];
+  const seenFieldKeys = new Set<string>();
   const editableFields = rawFields.map((entry, fieldIndex) => {
     if (!isJsonObject(entry)) throw new Error(`Template “${name}”: field ${fieldIndex + 1} must be an object.`);
     const key = normalizeFieldKey(readString(entry, ['key', 'name', 'id'], ''));
     if (!key) return null;
+    if (seenFieldKeys.has(key)) return null;
+    seenFieldKeys.add(key);
     const type = readEnum(entry, ['type'], ['text', 'image', 'number', 'color', 'date', 'select'], 'text');
     const required = typeof entry.required === 'boolean' ? entry.required : false;
     return {
@@ -250,9 +277,11 @@ const assertPublishableJsonTemplate = (value: unknown, index: number) => {
   if (!Array.isArray(canvas.elements)) throw new Error(`Template ${label}: canvas.elements must be an array.`);
   canvas.elements.forEach((element, elementIndex) => {
     if (!isJsonObject(element)) throw new Error(`Template ${label}: element ${elementIndex + 1} must be an object.`);
-    if (!['text', 'image', 'shape', 'button', 'badge', 'icon', 'divider', 'group'].includes(String(element.type))) throw new Error(`Template ${label}: element ${elementIndex + 1} has an unsupported type.`);
-    for (const key of ['x', 'y', 'width', 'height']) {
-      if (typeof element[key] !== 'number') throw new Error(`Template ${label}: element ${elementIndex + 1} needs a numeric ${key}.`);
+    if (!['text', 'image', 'shape', 'rectangle', 'circle', 'line', 'button', 'badge', 'icon', 'divider', 'group'].includes(String(element.type))) throw new Error(`Template ${label}: element ${elementIndex + 1} has an unsupported type.`);
+    const position = isJsonObject(element.position) ? element.position : element;
+    const size = isJsonObject(element.size) ? element.size : element;
+    for (const [key, valueToCheck] of [['x', position.x], ['y', position.y], ['width', size.width], ['height', size.height]] as const) {
+      if (typeof valueToCheck !== 'number' || !Number.isFinite(valueToCheck)) throw new Error(`Template ${label}: element ${elementIndex + 1} needs a numeric ${key}.`);
     }
   });
 
@@ -325,7 +354,13 @@ export const OfferTemplatesPage = () => {
   const importJsonTemplates = async () => {
     try {
       const parsed = JSON.parse(jsonInput) as unknown;
-      const entries = Array.isArray(parsed) ? parsed : [parsed];
+      const entries = Array.isArray(parsed)
+        ? parsed
+        : isJsonObject(parsed) && Array.isArray(parsed.templates)
+          ? parsed.templates
+          : isJsonObject(parsed) && isJsonObject(parsed.template)
+            ? [parsed.template]
+            : [parsed];
       if (!entries.length || entries.some((entry) => !entry || typeof entry !== 'object')) throw new Error('JSON must contain a template object or an array of objects.');
       const normalizedEntries = entries.map(normalizeTemplateImport);
       normalizedEntries.forEach(assertPublishableJsonTemplate);
@@ -355,6 +390,7 @@ export const OfferTemplatesPage = () => {
           <textarea className="min-h-44 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs" value={jsonInput} onChange={(e) => setJsonInput(e.target.value)} placeholder={'[\n  { "name": "Weekend food deal", "slug": "weekend-food-deal", ... }\n]'} />
           <p className="text-xs text-muted-foreground"><code>canvas.elements</code> supports text, image, shape, button, badge, icon, divider and group layers. Set <code>editable: true</code> for mobile editing; use <code>field</code> or <code>key</code> to bind live offer data.</p>
           <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => setJsonInput(JSON.stringify(TEMPLATE_V2_EXAMPLE, null, 2))}>Load v2 example</Button>
             <Button variant="outline" onClick={() => setJsonInput(JSON.stringify(FOOD_TEMPLATE_PACK, null, 2))}>Load 10 Food pack</Button>
             <Button variant="outline" onClick={() => setJsonInput(JSON.stringify(PRESET_TEMPLATES, null, 2))}>Load legacy starters</Button>
             <Button onClick={importJsonTemplates} disabled={importing || !jsonInput.trim()}>{importing ? 'Publishing…' : 'Convert JSON & publish'}</Button>

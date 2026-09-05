@@ -115,7 +115,7 @@ const makeCanvasFromDesign = (design: OfferCardDesign): OfferTemplateCanvas => (
 });
 
 const isTextElement = (element: OfferTemplateElement) =>
-  !['image', 'shape', 'divider', 'group'].includes(element.type) && !element.id.startsWith('sticker-');
+  !['image', 'shape', 'rectangle', 'circle', 'line', 'divider', 'group'].includes(element.type) && !element.id.startsWith('sticker-');
 
 type EditableTextKey = string;
 type TextOffset = { x: number; y: number };
@@ -148,6 +148,10 @@ const CANVAS_MAX_WIDTH = 365;
 const MOVE_HINT_RESERVED_HEIGHT = 32;
 const TEMPLATE_THUMB_WIDTH = 86;
 const TEMPLATE_THUMB_HEIGHT = 62;
+const gradientStops = (colors: string[] | undefined, first: string, second: string): [string, string, ...string[]] => {
+  const stops = colors?.filter(Boolean) || [];
+  return [stops[0] || first, stops[1] || second, ...stops.slice(2)];
+};
 
 const EditableCanvasText: React.FC<{
   kind: EditableTextKey;
@@ -244,7 +248,7 @@ const TemplateThumbnail: React.FC<{ template: OfferCardTemplate }> = ({ template
       borderStyle: element.borderStyle || 'solid',
     } as const;
     if (element.type === 'image') return (element.imageUrl || element.src) ? <Image key={element.id} source={{ uri: element.imageUrl || element.src }} style={frame} resizeMode={element.resizeMode === 'stretch' ? 'stretch' : element.resizeMode || 'contain'} /> : null;
-    if (element.type === 'shape' || element.type === 'divider' || element.type === 'group') return <View key={element.id} style={[frame, { backgroundColor: element.backgroundColor || element.color || 'transparent' }]} />;
+    if (element.type === 'shape' || element.type === 'rectangle' || element.type === 'circle' || element.type === 'divider' || element.type === 'line' || element.type === 'group') return <View key={element.id} style={[frame, { backgroundColor: element.backgroundColor || element.color || 'transparent', borderRadius: element.type === 'circle' ? 9999 : frame.borderRadius }]} />;
     const fontSize = Math.max(1, (element.fontSize || 42) * scale);
     return <Text key={element.id} numberOfLines={element.numberOfLines} style={[frame, styles.posterText, {
       backgroundColor: element.backgroundColor || (element.type === 'button' || element.type === 'badge' ? '#FFC400' : undefined),
@@ -265,7 +269,7 @@ const TemplateThumbnail: React.FC<{ template: OfferCardTemplate }> = ({ template
   return (
     <View style={[styles.templateThumb, styles.templateCanvasThumb]}>
       <View style={{ width: poster.width * scale, height: poster.height * scale, overflow: 'hidden', backgroundColor: poster.backgroundColor || template.primaryColor }}>
-        {poster.background?.type === 'gradient' ? <LinearGradient colors={[poster.background.from || template.primaryColor, poster.background.to || template.secondaryColor]} style={StyleSheet.absoluteFill} /> : null}
+        {poster.background?.type === 'gradient' || poster.background?.type === 'linear-gradient' ? <LinearGradient colors={gradientStops(poster.background.colors, poster.background.from || template.primaryColor, poster.background.to || template.secondaryColor)} style={StyleSheet.absoluteFill} /> : null}
         {(poster.backgroundImageUrl || poster.background?.imageUrl) ? <Image source={{ uri: poster.backgroundImageUrl || poster.background?.imageUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" /> : null}
         {poster.overlay?.color ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: poster.overlay.color, opacity: poster.overlay.opacity ?? 0.25 }]} /> : null}
         {poster.elements.slice().sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)).map(renderElement)}
@@ -346,31 +350,37 @@ const CanvasPreview: React.FC<{
     setStageSize((current) => current.width === nextSize.width && current.height === nextSize.height ? current : nextSize);
   }, []);
   const positionFor = (element: OfferTemplateElement, canvas: OfferTemplateCanvas) => ({
+    ...(() => {
+      const x = element.position?.x ?? element.x;
+      const y = element.position?.y ?? element.y;
+      const width = element.size?.width ?? element.width;
+      const height = element.size?.height ?? element.height;
+      return { left: (x / canvas.width * 100) + '%', top: (y / canvas.height * 100) + '%', width: (width / canvas.width * 100) + '%', height: (height / canvas.height * 100) + '%' };
+    })(),
     position: 'absolute' as const,
-    left: (element.x / canvas.width * 100) + '%',
-    top: (element.y / canvas.height * 100) + '%',
-    width: (element.width / canvas.width * 100) + '%',
-    height: (element.height / canvas.height * 100) + '%',
     zIndex: element.zIndex ?? 2,
     opacity: element.opacity ?? 1,
     transform: element.rotation ? [{ rotate: `${element.rotation}deg` }] : undefined,
   } as any);
   const textFor = (element: OfferTemplateElement) => {
     const field = element.field || element.key;
+    const customValues = Object.fromEntries(Object.entries(design.customizations || {}).map(([key, value]) => [key, String(value)]));
+    const values: Record<string, string> = { ...customValues, title, description, category, businessName: business?.name || '', imageUrls: imageUrl || '' };
     // Poster layers keep their starter copy in `content`, while edits are
     // stored in `posterTextValues`/`text`. Prefer the edited value so a
     // controlled TextInput does not snap back to the starter copy.
-    if (textValues[element.id] !== undefined) return textValues[element.id];
-    if (field === 'title') return title || element.text || element.content || '';
-    if (field === 'description') return description || element.text || element.content || '';
-    if (field === 'category') return category || element.text || element.content || '';
-    if (field === 'discount' || field === 'discountPercentage') return element.content || element.text || '50% OFF';
-    if (field === 'offerPrice') return element.content || element.text || '₹149';
-    if (field === 'originalPrice') return element.content || element.text || '₹299';
-    if (field === 'buttonText') return element.content || element.text || 'ORDER NOW';
-    if (field === 'timing') return element.content || element.text || '09:00 AM - 09:00 PM';
-    if (field === 'businessName') return business?.name || element.content || element.text || '';
-    return element.content || element.text || '';
+    let raw = textValues[element.id];
+    if (raw === undefined && field === 'title') raw = title || element.text || element.content || '';
+    if (raw === undefined && field === 'description') raw = description || element.text || element.content || '';
+    if (raw === undefined && field === 'category') raw = category || element.text || element.content || '';
+    if (raw === undefined && (field === 'discount' || field === 'discountPercentage')) raw = element.content || element.text || '50% OFF';
+    if (raw === undefined && field === 'offerPrice') raw = element.content || element.text || '₹149';
+    if (raw === undefined && field === 'originalPrice') raw = element.content || element.text || '₹299';
+    if (raw === undefined && field === 'buttonText') raw = element.content || element.text || 'ORDER NOW';
+    if (raw === undefined && field === 'timing') raw = element.content || element.text || '09:00 AM - 09:00 PM';
+    if (raw === undefined && field === 'businessName') raw = business?.name || element.content || element.text || '';
+    if (raw === undefined) raw = element.content || element.text || '';
+    return raw.replace(/\{\{\s*([a-zA-Z][a-zA-Z0-9_.-]{0,59})\s*\}\}/g, (token, key: string) => values[key] ?? token);
   };
   const imageFor = (element: OfferTemplateElement) => {
     const field = element.field || element.key || '';
@@ -396,7 +406,7 @@ const CanvasPreview: React.FC<{
       if ((design.templateId === 'custom' && element.editable !== false) || isSticker) return <MovablePosterElement key={element.id} style={layer} baseTransform={element.rotation ? [{ rotate: `${element.rotation}deg` }] : []} onSelect={isSticker ? () => onSelectSticker(element.id) : undefined} onCommit={(delta) => onMoveElement(element.id, { x: delta.x / Math.max(posterScale, 0.01), y: delta.y / Math.max(posterScale, 0.01) })}>{imageNode}</MovablePosterElement>;
       return elementImage ? <Image key={element.id} source={{ uri: elementImage }} style={[layer, borderStyle]} resizeMode={element.resizeMode || 'contain'} /> : <View key={element.id} style={[layer, borderStyle, { backgroundColor: element.backgroundColor || 'transparent' }]} />;
     }
-    if (element.type === 'shape' || element.type === 'divider' || element.type === 'group') return <View key={element.id} style={[layer, borderStyle, { backgroundColor: element.backgroundColor || styleValue('backgroundColor', element.color || 'transparent') }]} />;
+    if (element.type === 'shape' || element.type === 'rectangle' || element.type === 'circle' || element.type === 'divider' || element.type === 'line' || element.type === 'group') return <View key={element.id} style={[layer, borderStyle, { backgroundColor: element.backgroundColor || styleValue('backgroundColor', element.color || 'transparent'), borderRadius: element.type === 'circle' ? 9999 : borderStyle.borderRadius }]} />;
     const boundField = element.field || element.key;
     const editableKind = element.editable === false ? null : (boundField === 'title' || boundField === 'description' || boundField === 'category' ? boundField : `poster:${element.id}`);
     const scaledFontSize = Math.max(1, (element.fontSize || 42) * posterScale);
@@ -441,7 +451,7 @@ const CanvasPreview: React.FC<{
       <View style={[styles.canvasPaper, previewFrameSize || styles.canvasPaperMeasuring]}>
         {poster ? (
           <View onLayout={(event) => setCanvasWidth(event.nativeEvent.layout.width)} style={[styles.canvasCard, { backgroundColor: poster.backgroundColor || design.primaryColor }]}>
-            {poster.background?.type === 'gradient' ? <LinearGradient colors={[poster.background.from || design.primaryColor, poster.background.to || design.secondaryColor]} style={styles.canvasImage} /> : null}
+            {poster.background?.type === 'gradient' || poster.background?.type === 'linear-gradient' ? <LinearGradient colors={gradientStops(poster.background.colors, poster.background.from || design.primaryColor, poster.background.to || design.secondaryColor)} style={styles.canvasImage} /> : null}
             {(poster.backgroundImageUrl || poster.background?.imageUrl) ? <Image source={{ uri: poster.backgroundImageUrl || poster.background?.imageUrl }} style={[styles.canvasImage, { opacity: poster.background?.opacity ?? 1 }]} resizeMode="cover" /> : null}
             {poster.overlay?.color ? <View pointerEvents="none" style={[styles.canvasImage, { backgroundColor: poster.overlay.color, opacity: poster.overlay.opacity ?? 0.25 }]} /> : null}
             {poster.elements.slice().sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)).map(renderPosterElement)}
