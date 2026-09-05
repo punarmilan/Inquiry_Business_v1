@@ -7,6 +7,7 @@ export const TEMPLATE_ELEMENT_TYPES: TemplateElementType[] = [
 ];
 
 type JsonRecord = Record<string, unknown>;
+export type DynamicFields = Record<string, unknown>;
 
 const isRecord = (value: unknown): value is JsonRecord => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
@@ -28,8 +29,6 @@ const getElementType = (value: unknown): TemplateElementType => {
   return TEMPLATE_ELEMENT_TYPES.includes(normalized as TemplateElementType) ? normalized as TemplateElementType : 'text';
 };
 
-const textFallback = (type: TemplateElementType) => type === 'button' ? 'BUTTON' : type === 'badge' ? '50% OFF' : type === 'icon' ? '★' : '';
-
 const finiteOr = (source: JsonRecord, keys: string[], fallback: number) => {
   for (const key of keys) if (isFiniteNumber(source[key])) return source[key];
   return fallback;
@@ -38,6 +37,44 @@ const finiteOr = (source: JsonRecord, keys: string[], fallback: number) => {
 const stringOr = (source: JsonRecord, keys: string[], fallback = '') => {
   for (const key of keys) if (typeof source[key] === 'string' && source[key].trim()) return source[key] as string;
   return fallback;
+};
+
+const dynamicToken = /\{\{\s*([\w.-]+)\s*\}\}/g;
+
+/** Returns the first dynamic binding found in a value, including mixed text. */
+export const getDynamicFieldName = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const match = dynamicToken.exec(value);
+  dynamicToken.lastIndex = 0;
+  return match?.[1];
+};
+
+const hasOwn = (source: DynamicFields, key: string) => Object.prototype.hasOwnProperty.call(source, key);
+
+/** Resolves exact and embedded {{tokens}} without mutating the template definition. */
+export const resolveDynamicValue = (value: unknown, dynamicFields: DynamicFields): string => {
+  if (value === null || value === undefined) return '';
+  if (Array.isArray(value)) return value.map((item) => resolveDynamicValue(item, dynamicFields)).filter(Boolean).join(', ');
+  if (typeof value !== 'string') return String(value);
+  return value.replace(dynamicToken, (token, path: string) => {
+    const result = path.split('.').reduce<unknown>((current, key) => isRecord(current) ? current[key] : undefined, dynamicFields);
+    return result === undefined || result === null ? token : resolveDynamicValue(result, dynamicFields);
+  });
+};
+
+/** Applies an explicit element binding when legacy JSON stores static starter copy. */
+export const resolveTemplateElementValue = (value: unknown, field: string | undefined, dynamicFields: DynamicFields): string => {
+  const embeddedField = getDynamicFieldName(value);
+  const boundValue = field ? dynamicFields[field] : undefined;
+  if (field && !embeddedField && hasOwn(dynamicFields, field) && boundValue !== undefined && boundValue !== null && boundValue !== '') {
+    return resolveDynamicValue(`{{${field}}}`, dynamicFields);
+  }
+  return resolveDynamicValue(value, dynamicFields);
+};
+
+export const cloneDynamicFields = (value: unknown): DynamicFields => {
+  if (!isRecord(value)) return {};
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, Array.isArray(item) ? [...item] : item]));
 };
 
 /**
@@ -64,9 +101,10 @@ export const normalizeTemplateElement = (
   const height = clamp(Math.max(1, finiteOr(source, ['height', 'h'], finiteOr(size, ['height', 'h'], finiteOr(frame, ['height', 'h'], type === 'divider' || type === 'line' ? 8 : type === 'badge' ? 180 : 120)))), 1, canvasHeight);
   const content = typeof source.content === 'string'
     ? source.content
-    : stringOr(contentObject, ['text', 'value', 'label'], stringOr(source, ['text', 'value', 'label'], textFallback(type)));
-  const field = stringOr(source, ['field', 'key', 'binding', 'bind'], stringOr(contentObject, ['field', 'key', 'binding', 'bind']));
+    : stringOr(contentObject, ['text', 'value', 'label'], stringOr(source, ['text', 'value', 'label'], ''));
   const imageUrl = stringOr(source, ['imageUrl', 'src', 'image', 'url'], stringOr(contentObject, ['imageUrl', 'src', 'image', 'url']));
+  const explicitField = stringOr(source, ['field', 'key', 'binding', 'bind'], stringOr(contentObject, ['field', 'key', 'binding', 'bind']));
+  const field = explicitField || getDynamicFieldName(type === 'image' ? imageUrl : content) || getDynamicFieldName(type === 'image' ? content : imageUrl);
   const fontStyle = stringOr(source, ['fontStyle'], stringOr(style, ['fontStyle'], 'normal')) === 'italic' ? 'italic' : 'normal';
   const textAlign = stringOr(source, ['textAlign', 'align'], stringOr(style, ['textAlign', 'align'], 'center'));
   const textTransform = stringOr(source, ['textTransform', 'transformText'], stringOr(style, ['textTransform', 'transformText'], 'none'));
@@ -193,23 +231,18 @@ export const toCanonicalBackground = (
   return clean({ ...source, type: source.type || 'solid', color: source.color || fallbackPrimary });
 };
 
-export const resolveTemplateValue = (value: unknown, values: Record<string, unknown>): string => {
-  if (value === null || value === undefined) return '';
-  if (Array.isArray(value)) return value.map((item) => resolveTemplateValue(item, values)).filter(Boolean).join(', ');
-  if (typeof value !== 'string') return String(value);
-  return value.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (token, path: string) => {
-    const result = path.split('.').reduce<unknown>((current, key) => isRecord(current) ? current[key] : undefined, values);
-    return result === undefined || result === null ? token : resolveTemplateValue(result, values);
-  });
-};
+// Backwards-compatible name for callers outside the builder.
+export const resolveTemplateValue = resolveDynamicValue;
 
 export const collectTemplateBindings = (elements: TemplateElementRecord[]) => {
   const bindings = new Set<string>();
   elements.forEach((element) => {
     const field = element.field || element.key;
     if (field) bindings.add(field);
-    const content = element.content ?? element.text ?? '';
-    for (const match of content.matchAll(/\{\{\s*([\w.-]+)\s*\}\}/g)) bindings.add(match[1]);
+    [element.content, element.text, element.imageUrl, element.src].forEach((value) => {
+      if (typeof value !== 'string') return;
+      for (const match of value.matchAll(/\{\{\s*([\w.-]+)\s*\}\}/g)) bindings.add(match[1]);
+    });
   });
   return [...bindings];
 };

@@ -8,6 +8,11 @@
   "secondaryColor": "#084F51",
   "layout": "center",
   "avatarId": "avatar-01",
+  "dynamicFields": {
+    "headline": "Trusted local service",
+    "imageUrls": "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=1000&q=80",
+    "buttonText": "BOOK NOW"
+  },
   "editableFields": [
     {
       "key": "headline",

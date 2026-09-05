@@ -18,6 +18,7 @@ export type TemplateCanvasRecord = { width: number; height: number; backgroundCo
 export interface OfferTemplateRecord {
   _id: string; name: string; slug: string; category: string; description?: string; previewUrl?: string; metadata?: unknown;
   canvas?: TemplateCanvasRecord;
+  dynamicFields?: Record<string, unknown>;
   primaryColor: string; secondaryColor: string; layout: 'right' | 'left' | 'bottom' | 'center'; avatarId: string;
   editableFields: TemplateFieldRecord[]; allowColorChange: boolean; allowLayoutChange: boolean; allowAvatarChange: boolean;
   version: number; isActive: boolean; sortOrder: number; createdAt?: string; updatedAt?: string;

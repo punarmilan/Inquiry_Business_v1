@@ -130,6 +130,10 @@ const templatePayload = Joi.object({
   description: Joi.string().trim().allow('').max(500),
   previewUrl: Joi.string().trim().allow('').max(7_000_000),
   canvas: templateCanvas,
+  dynamicFields: Joi.object().pattern(
+    Joi.string().trim().pattern(/^[a-zA-Z][a-zA-Z0-9_.-]{0,59}$/),
+    Joi.alternatives().try(Joi.string().allow('').max(7_000_000), Joi.number(), Joi.boolean(), Joi.array().items(Joi.any()).max(100), Joi.valid(null))
+  ).max(100),
   metadata: Joi.any(),
   primaryColor: Joi.string().trim().pattern(/^#[0-9a-fA-F]{6}$/).required(),
   secondaryColor: Joi.string().trim().pattern(/^#[0-9a-fA-F]{6}$/).required(),

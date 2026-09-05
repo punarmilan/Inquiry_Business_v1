@@ -25,6 +25,7 @@ const offerTemplateSchema = new mongoose.Schema(
     // Optional Canva-style poster definition. Kept as Mixed so admins can
     // add new element properties without a mobile/backend migration.
     canvas: { type: mongoose.Schema.Types.Mixed, default: null },
+    dynamicFields: { type: mongoose.Schema.Types.Mixed, default: () => ({}) },
     metadata: { type: mongoose.Schema.Types.Mixed, default: null },
     primaryColor: { type: String, trim: true, match: /^#[0-9a-fA-F]{6}$/, default: '#4F9FE8' },
     secondaryColor: { type: String, trim: true, match: /^#[0-9a-fA-F]{6}$/, default: '#2167BD' },

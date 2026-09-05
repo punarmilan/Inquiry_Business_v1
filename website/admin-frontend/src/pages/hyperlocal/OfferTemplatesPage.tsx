@@ -12,6 +12,7 @@ import type { OfferTemplateRecord, TemplateElementRecord, TemplateFieldRecord } 
 import PRESET_TEMPLATES from '@/data/offer-template-presets.json';
 import FOOD_TEMPLATE_PACK from '@/data/food-offer-template-pack.json';
 import TEMPLATE_V2_EXAMPLE from '@/data/template-schema-v2.example.json';
+import { getDynamicFieldName, resolveTemplateElementValue } from '@/utils/templateSchema';
 import { Copy, Plus } from 'lucide-react';
 
 const FIELD_OPTIONS: Array<{ key: string; label: string; type: TemplateFieldRecord['type']; defaultMax: number }> = [
@@ -86,6 +87,7 @@ const normalizeFieldKey = (value: string) => {
 const TemplateCardPreview = ({ template }: { template: OfferTemplateRecord }) => {
   const canvas = template.canvas;
   if (!canvas) return <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, ${template.primaryColor}, ${template.secondaryColor})` }} />;
+  const dynamicFields = { ...(template.editableFields || []).reduce<Record<string, unknown>>((values, field) => { if (field.defaultValue !== undefined) values[field.key] = field.defaultValue; return values; }, {}), ...(template.dynamicFields || {}) };
   const background = canvas.background;
   const gradientColors = background?.colors?.length && background.colors.length >= 2 ? background.colors : [background?.from || template.primaryColor, background?.to || template.secondaryColor];
   const backgroundStyle: React.CSSProperties = background?.type === 'gradient' || background?.type === 'linear-gradient'
@@ -96,18 +98,22 @@ const TemplateCardPreview = ({ template }: { template: OfferTemplateRecord }) =>
     {canvas.elements.slice().sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)).map((element: TemplateElementRecord) => {
       const rawContent = (element as unknown as Record<string, unknown>).content;
       const contentObject = isJsonObject(rawContent) ? rawContent : {};
-      const field = element.field || element.key || (typeof contentObject.field === 'string' ? contentObject.field : undefined);
-      const content = typeof rawContent === 'string' ? rawContent : typeof contentObject.text === 'string' ? contentObject.text : element.text || (field ? field : '');
-      const rawImageUrl = typeof contentObject.src === 'string' ? contentObject.src : typeof contentObject.imageUrl === 'string' ? contentObject.imageUrl : undefined;
+       const field = element.field || element.key || (typeof contentObject.field === 'string' ? contentObject.field : undefined);
+       const content = typeof rawContent === 'string' ? rawContent : typeof contentObject.text === 'string' ? contentObject.text : element.text || '';
+       const rawImageUrl = typeof contentObject.src === 'string' ? contentObject.src : typeof contentObject.imageUrl === 'string' ? contentObject.imageUrl : undefined;
+       const resolvedContent = resolveTemplateElementValue(content, field, dynamicFields);
+       const resolvedImageUrl = resolveTemplateElementValue(element.imageUrl || element.src || rawImageUrl || '', field, dynamicFields);
       const x = element.position?.x ?? element.x;
       const y = element.position?.y ?? element.y;
       const width = element.size?.width ?? element.width;
       const height = element.size?.height ?? element.height;
       const style: React.CSSProperties = { position: 'absolute', left: `${x / canvas.width * 100}%`, top: `${y / canvas.height * 100}%`, width: `${width / canvas.width * 100}%`, height: `${height / canvas.height * 100}%`, zIndex: element.zIndex || 1, opacity: element.visible === false ? 0 : element.opacity ?? 1, transform: `rotate(${element.rotation || 0}deg)`, borderRadius: element.type === 'circle' ? '9999px' : element.borderRadius || 0, overflow: 'hidden' };
-      if (element.type === 'image' && (element.imageUrl || element.src || rawImageUrl)) return <img key={element.id} src={element.imageUrl || element.src || rawImageUrl} alt="" className="object-contain" style={style} />;
+       if (element.type === 'image') return resolvedImageUrl && !/\{\{\s*[\w.-]+\s*\}\}/.test(resolvedImageUrl)
+         ? <img key={element.id} src={resolvedImageUrl} alt="" className="object-contain" style={style} onError={(event) => { event.currentTarget.style.display = 'none'; }} />
+         : <div key={element.id} style={{ ...style, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#E5E7EB', color: '#64748B', fontSize: 10 }}>Add image</div>;
       if (element.type === 'shape' || element.type === 'rectangle' || element.type === 'circle') return <div key={element.id} style={{ ...style, backgroundColor: element.backgroundColor || element.color || '#FFFFFF' }} />;
       if (element.type === 'divider' || element.type === 'line') return <div key={element.id} style={{ ...style, backgroundColor: element.backgroundColor || element.color || '#111827' }} />;
-      return <div key={element.id} style={{ ...style, display: 'flex', alignItems: 'center', justifyContent: element.textAlign === 'left' ? 'flex-start' : element.textAlign === 'right' ? 'flex-end' : 'center', backgroundColor: ['button', 'badge'].includes(element.type) ? element.backgroundColor || '#FFC400' : element.backgroundColor === 'transparent' ? undefined : element.backgroundColor, color: element.color || '#FFFFFF', fontFamily: element.fontFamily, fontSize: `${Math.max(7, (element.fontSize || 42) * 0.11)}px`, fontWeight: element.fontWeight as React.CSSProperties['fontWeight'], textAlign: element.textAlign, whiteSpace: 'nowrap' }}>{content}</div>;
+       return <div key={element.id} style={{ ...style, display: 'flex', alignItems: 'center', justifyContent: element.textAlign === 'left' ? 'flex-start' : element.textAlign === 'right' ? 'flex-end' : 'center', backgroundColor: ['button', 'badge'].includes(element.type) ? element.backgroundColor || '#FFC400' : element.backgroundColor === 'transparent' ? undefined : element.backgroundColor, color: element.color || '#FFFFFF', fontFamily: element.fontFamily, fontSize: `${Math.max(7, (element.fontSize || 42) * 0.11)}px`, fontWeight: element.fontWeight as React.CSSProperties['fontWeight'], lineHeight: element.lineHeight || 1.1, textAlign: element.textAlign, textTransform: element.textTransform, whiteSpace: 'pre-wrap' }}>{resolvedContent}</div>;
     })}
   </div>;
 };
@@ -119,6 +125,13 @@ const normalizeTemplateImport = (value: unknown, index: number) => {
   const poster = isJsonObject(source.poster) ? source.poster : {};
   const visual = isJsonObject(source.visual) ? source.visual : {};
   const colors = isJsonObject(source.colors) ? source.colors : (isJsonObject(design.colors) ? design.colors : {});
+  const dynamicFields = isJsonObject(source.dynamicFields) ? { ...source.dynamicFields } : isJsonObject(design.dynamicFields) ? { ...design.dynamicFields } : {};
+  const sourceFieldEntries = Array.isArray(source.editableFields) ? source.editableFields : Array.isArray(source.fields) ? source.fields : [];
+  sourceFieldEntries.forEach((entry) => {
+    if (!isJsonObject(entry)) return;
+    const key = readString(entry, ['key', 'name', 'id']);
+    if (key && dynamicFields[key] === undefined && entry.defaultValue !== undefined) dynamicFields[key] = entry.defaultValue;
+  });
   const rawCanvas = isJsonObject(source.canvas) ? source.canvas : isJsonObject(design.canvas) ? design.canvas : isJsonObject(poster.canvas) ? poster.canvas : isJsonObject(visual.canvas) ? visual.canvas : {};
   const rawElementsValue = rawCanvas.elements ?? rawCanvas.layers ?? design.elements ?? design.layers ?? poster.elements ?? source.elements ?? source.layers;
   const rawElements = Array.isArray(rawElementsValue) ? rawElementsValue : isJsonObject(rawElementsValue) ? Object.values(rawElementsValue) : [];
@@ -151,16 +164,20 @@ const normalizeTemplateImport = (value: unknown, index: number) => {
         const safeY = Math.min(Math.max(0, y), Math.max(0, canvasHeight - 1));
         const safeWidth = Math.max(1, Math.min(width, canvasWidth - safeX));
         const safeHeight = Math.max(1, Math.min(height, canvasHeight - safeY));
+        const contentObject = isJsonObject(entry.content) ? entry.content : {};
+        const contentValue = typeof entry.content === 'string' ? entry.content : readString(contentObject, ['text', 'value', 'label']);
+        const imageValue = readString(entry, ['imageUrl', 'image', 'src', 'url'], readString(contentObject, ['imageUrl', 'src', 'image', 'url'], ''));
+        const binding = readString(entry, ['field', 'key', 'binding', 'bind'], readString(contentObject, ['field', 'key', 'binding', 'bind'], getDynamicFieldName(type === 'image' ? imageValue : contentValue) || getDynamicFieldName(type === 'image' ? contentValue : imageValue) || ''));
         const normalized = {
           ...entry,
           id: readString(entry, ['id', 'key', 'name'], `layer-${elementIndex + 1}`),
           type,
-          key: readString(entry, ['key', 'field', 'binding', 'bind'], readString(isJsonObject(entry.content) ? entry.content : {}, ['field', 'key', 'binding', 'bind'], '')),
-          field: readString(entry, ['field', 'key', 'binding', 'bind'], readString(isJsonObject(entry.content) ? entry.content : {}, ['field', 'key', 'binding', 'bind'], '')),
-          text: readString(entry, ['text', 'value', 'label'], readString(isJsonObject(entry.content) ? entry.content : {}, ['text', 'value', 'label'], '')),
-          content: readString(entry, ['text', 'value', 'label'], readString(isJsonObject(entry.content) ? entry.content : {}, ['text', 'value', 'label'], '')),
-          imageUrl: readString(entry, ['imageUrl', 'image', 'src', 'url'], readString(isJsonObject(entry.content) ? entry.content : {}, ['imageUrl', 'src', 'image', 'url'], '')),
-          src: readString(entry, ['src', 'imageUrl', 'image', 'url'], readString(isJsonObject(entry.content) ? entry.content : {}, ['src', 'imageUrl', 'image', 'url'], '')),
+          key: binding,
+          field: binding,
+          text: contentValue,
+          content: contentValue,
+          imageUrl: imageValue,
+          src: imageValue,
           x: safeX, y: safeY, width: safeWidth, height: safeHeight,
           position: { x: safeX, y: safeY }, size: { width: safeWidth, height: safeHeight },
           zIndex: isFiniteNumber(entry.zIndex) ? Math.round(entry.zIndex) : elementIndex,
@@ -209,10 +226,15 @@ const normalizeTemplateImport = (value: unknown, index: number) => {
     const content = isJsonObject(element.content) ? element.content : {};
     const field = readString(element, ['field', 'key', 'binding', 'bind'], readString(content, ['field', 'key', 'binding', 'bind']));
     const text = typeof element.content === 'string' ? element.content : readString(content, ['text', 'value', 'label']);
-    const tokens = [...text.matchAll(/\{\{\s*([a-zA-Z][a-zA-Z0-9_.-]{0,59})\s*\}\}/g)].map((match) => match[1]);
+    const image = typeof element.src === 'string' ? element.src : readString(content, ['src', 'imageUrl', 'image', 'url']);
+    const tokens = [text, image].flatMap((value) => [...value.matchAll(/\{\{\s*([a-zA-Z][a-zA-Z0-9_.-]{0,59})\s*\}\}/g)].map((match) => match[1]));
     return [field, ...tokens].filter(Boolean);
   }) || [];
-  const rawFields = [...(Array.isArray(source.editableFields) ? source.editableFields : Array.isArray(source.fields) ? source.fields : []), ...elementFields.map((key) => ({ key }))];
+  const rawFields = [
+    ...(Array.isArray(source.editableFields) ? source.editableFields : Array.isArray(source.fields) ? source.fields : []),
+    ...Object.entries(dynamicFields).map(([key, value]) => ({ key, defaultValue: value === null || value === undefined ? '' : String(value) })),
+    ...elementFields.map((key) => ({ key })),
+  ];
   const seenFieldKeys = new Set<string>();
   const editableFields = rawFields.map((entry, fieldIndex) => {
     if (!isJsonObject(entry)) throw new Error(`Template “${name}”: field ${fieldIndex + 1} must be an object.`);
@@ -253,6 +275,7 @@ const normalizeTemplateImport = (value: unknown, index: number) => {
     secondaryColor,
     layout,
     avatarId: readString(source, ['avatarId', 'avatar'], 'avatar-01'),
+    dynamicFields,
     editableFields,
     allowColorChange: typeof source.allowColorChange === 'boolean' ? source.allowColorChange : true,
     allowLayoutChange: typeof source.allowLayoutChange === 'boolean' ? source.allowLayoutChange : true,

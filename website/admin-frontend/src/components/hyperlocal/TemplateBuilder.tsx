@@ -40,8 +40,11 @@ import type {
 } from '@/api/hyperlocal';
 import {
   collectTemplateBindings,
+  cloneDynamicFields,
+  getDynamicFieldName,
   normalizeTemplateElement,
-  resolveTemplateValue,
+  resolveDynamicValue,
+  resolveTemplateElementValue,
   toApiTemplateElement,
   toCanonicalBackground,
   toCanonicalTemplateElement,
@@ -72,6 +75,7 @@ type BuilderDocument = {
   isActive: boolean;
   sortOrder: number;
   metadata?: unknown;
+  dynamicFields: Record<string, unknown>;
   editableFields: TemplateFieldRecord[];
   canvas: {
     width: number;
@@ -111,6 +115,10 @@ const FONT_OPTIONS = ['Inter', 'Arial', 'Roboto', 'Montserrat', 'Poppins', 'Anto
 const DYNAMIC_FIELDS = [
   { value: '', label: 'Static content' },
   { value: 'title', label: 'Offer title' },
+  { value: 'name', label: 'Name' },
+  { value: 'age', label: 'Age' },
+  { value: 'date', label: 'Date' },
+  { value: 'message', label: 'Message' },
   { value: 'description', label: 'Description' },
   { value: 'category', label: 'Category' },
   { value: 'originalPrice', label: 'Original price' },
@@ -124,14 +132,10 @@ const DYNAMIC_FIELDS = [
   { value: 'buttonText', label: 'Button text' },
   { value: 'businessName', label: 'Business name' },
   { value: 'businessLogo', label: 'Business logo' },
+  { value: 'brandName', label: 'Brand name' },
+  { value: 'personImage', label: 'Person image' },
   { value: 'subtitle', label: 'Subtitle' },
 ];
-const PREVIEW_VALUES: Record<string, string> = {
-  title: 'DELICIOUS BURGER', description: 'Fresh, hot and made for sharing', category: 'FOOD', originalPrice: '₹299', offerPrice: '₹149',
-  discount: '50% OFF', startsAt: 'Today', expiresAt: 'This weekend', timing: '09:00 AM - 09:00 PM', terms: 'Terms apply', buttonText: 'ORDER NOW',
-  businessName: 'AnyWork Kitchen', subtitle: 'SPECIAL MENU',
-};
-
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 const slugify = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'new-template';
 const colorValue = (value: string, fallback: string) => /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
@@ -140,64 +144,169 @@ const normalizeElement = (raw: unknown, index: number, width = CANVAS_WIDTH, hei
 const fromTemplate = (template?: OfferTemplateRecord | null): BuilderDocument => {
   const sourceCanvas = template?.canvas;
   const sourceBackground = sourceCanvas?.background;
-  const width = sourceCanvas?.width || CANVAS_WIDTH;
-  const height = sourceCanvas?.height || CANVAS_HEIGHT;
+  const width = CANVAS_WIDTH;
+  const height = CANVAS_HEIGHT;
   const elements = sourceCanvas?.elements?.map((element, index) => normalizeElement(element, index, width, height)) || [];
   const backgroundColor = sourceCanvas?.backgroundColor || sourceBackground?.color || template?.primaryColor || '#F5E9D5';
+  const dynamicFields = cloneDynamicFields(template?.dynamicFields);
+  (template?.editableFields || []).forEach((field) => {
+    if (dynamicFields[field.key] === undefined && field.defaultValue !== undefined) dynamicFields[field.key] = field.defaultValue;
+  });
   return {
     name: template?.name || 'New promotional template', slug: template?.slug || 'new-promotional-template', category: template?.category || 'Food',
     description: template?.description || '', previewUrl: template?.previewUrl || '', primaryColor: template?.primaryColor || '#F97316', secondaryColor: template?.secondaryColor || '#B91C1C',
     layout: template?.layout || 'center', avatarId: template?.avatarId || 'avatar-01', allowColorChange: template?.allowColorChange ?? true,
     allowLayoutChange: template?.allowLayoutChange ?? true, allowAvatarChange: template?.allowAvatarChange ?? true, isActive: template?.isActive ?? true,
-    sortOrder: template?.sortOrder || 0, metadata: template?.metadata, editableFields: template?.editableFields || [],
+    sortOrder: template?.sortOrder || 0, metadata: template?.metadata, dynamicFields,
+    editableFields: template?.editableFields?.map((field) => ({ ...field, options: field.options ? [...field.options] : undefined })) || [],
     canvas: { width, height, backgroundColor, backgroundImageUrl: sourceCanvas?.backgroundImageUrl || sourceBackground?.imageUrl, background: sourceBackground || { type: 'solid', color: backgroundColor }, overlay: sourceCanvas?.overlay, elements },
   };
 };
 
 const toPayload = (document: BuilderDocument) => {
-  const usedFields = new Set(collectTemplateBindings(document.canvas.elements));
+  const usedFields = new Set([...collectTemplateBindings(document.canvas.elements), ...Object.keys(document.dynamicFields)]);
   const existing = new Map(document.editableFields.map((field) => [field.key, field]));
-  const editableFields = [...usedFields].map((key) => existing.get(key) || ({ key, label: DYNAMIC_FIELDS.find((item) => item.value === key)?.label || key, type: /image|logo/i.test(key) ? 'image' : /price|discount/i.test(key) ? 'number' : 'text', editable: true, required: false, optional: true, maxLength: 5000, defaultValue: '' } as TemplateFieldRecord));
+  const editableFields = [...usedFields].map((key) => existing.get(key) || ({ key, label: DYNAMIC_FIELDS.find((item) => item.value === key)?.label || key, type: /image|logo/i.test(key) ? 'image' : /age|price|discount/i.test(key) ? 'number' : 'text', editable: true, required: false, optional: true, maxLength: 5000, defaultValue: '' } as TemplateFieldRecord));
   const elements = document.canvas.elements.map(toApiTemplateElement);
-  const width = Math.max(1, Math.min(10000, Math.round(document.canvas.width)));
-  const height = Math.max(1, Math.min(10000, Math.round(document.canvas.height)));
+  const width = CANVAS_WIDTH;
+  const height = CANVAS_HEIGHT;
   return {
     name: document.name.trim(), slug: slugify(document.slug), category: document.category.trim() || 'General', description: document.description.trim(), previewUrl: document.previewUrl.trim(),
     primaryColor: colorValue(document.primaryColor, '#4F9FE8'), secondaryColor: colorValue(document.secondaryColor, '#2167BD'), layout: document.layout, avatarId: document.avatarId.trim() || 'avatar-01',
-    editableFields, allowColorChange: document.allowColorChange, allowLayoutChange: document.allowLayoutChange, allowAvatarChange: document.allowAvatarChange, isActive: document.isActive, sortOrder: document.sortOrder,
+    editableFields, dynamicFields: cloneDynamicFields(document.dynamicFields), allowColorChange: document.allowColorChange, allowLayoutChange: document.allowLayoutChange, allowAvatarChange: document.allowAvatarChange, isActive: document.isActive, sortOrder: document.sortOrder,
     ...(document.metadata !== undefined ? { metadata: document.metadata } : {}),
     canvas: { ...document.canvas, schemaVersion: TEMPLATE_SCHEMA_VERSION, width, height, elements },
   } satisfies Record<string, unknown>;
 };
 
-const previewText = (element: TemplateElementRecord) => {
+const previewText = (element: TemplateElementRecord, dynamicFields: Record<string, unknown>) => {
   const field = element.field || element.key;
-  const content = element.content || element.text || (element.type === 'button' ? 'BUTTON' : element.type === 'badge' ? '50% OFF' : element.type === 'icon' ? '★' : '');
-  return resolveTemplateValue(field && PREVIEW_VALUES[field] ? PREVIEW_VALUES[field] : content, PREVIEW_VALUES);
+  const content = element.content ?? element.text ?? '';
+  return resolveTemplateElementValue(content, field, dynamicFields);
+};
+
+const elementBindingValue = (element: TemplateElementRecord) => element.type === 'image'
+  ? element.imageUrl || element.src || ''
+  : element.content ?? element.text ?? '';
+
+const hasUnresolvedToken = (value: string) => /\{\{\s*[\w.-]+\s*\}\}/.test(value);
+
+const TemplateImage = ({ src, className, style }: { src: string; className?: string; style?: React.CSSProperties }) => {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [src]);
+  if (!src || failed || hasUnresolvedToken(src)) {
+    return <div className={`flex items-center justify-center bg-slate-200 text-xs text-slate-500 ${className || ''}`} style={style}><ImageIcon className="mr-1 h-4 w-4" /> Add image</div>;
+  }
+  return <img src={src} alt="" draggable={false} className={className} style={style} onError={() => setFailed(true)} />;
 };
 
 export const TemplateBuilder = ({ template, saving, onClose, onSave, onUploadAsset }: TemplateBuilderProps) => {
+  const templateIdentity = template ? `${template._id || template.slug || 'new'}:${template.version || 0}:${template.updatedAt || ''}` : 'new';
   const [document, setDocument] = useState<BuilderDocument>(() => fromTemplate(template));
   const [selectedId, setSelectedId] = useState<string | null>(() => fromTemplate(template).canvas.elements[0]?.id || null);
   const [past, setPast] = useState<BuilderDocument[]>([]);
   const [future, setFuture] = useState<BuilderDocument[]>([]);
-  const [zoom, setZoom] = useState(0.52);
+  const [zoom, setZoom] = useState<number | null>(null);
   const [grid, setGrid] = useState(true);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [importing, setImporting] = useState(false);
   const documentRef = useRef(document);
   const canvasRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const interactionRef = useRef<Interaction | null>(null);
   useEffect(() => { documentRef.current = document; }, [document]);
+  useEffect(() => {
+    const next = fromTemplate(template);
+    documentRef.current = next;
+    setDocument(next);
+    setSelectedId(next.canvas.elements[0]?.id || null);
+    setPast([]);
+    setFuture([]);
+    setPreviewOpen(false);
+  }, [template, templateIdentity]);
+
+  const [fitScale, setFitScale] = useState(0.52);
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const updateFitScale = () => {
+      const availableWidth = Math.max(1, viewport.clientWidth - 40);
+      const availableHeight = Math.max(1, viewport.clientHeight - 40);
+      setFitScale(Math.min(availableWidth / CANVAS_WIDTH, availableHeight / CANVAS_HEIGHT));
+    };
+    const observer = new ResizeObserver(updateFitScale);
+    observer.observe(viewport);
+    updateFitScale();
+    return () => observer.disconnect();
+  }, []);
+  const displayScale = zoom ?? fitScale;
 
   const selected = useMemo(() => document.canvas.elements.find((element) => element.id === selectedId) || null, [document.canvas.elements, selectedId]);
+  const dynamicFieldOptions = useMemo(() => {
+    const keys = new Set([
+      ...DYNAMIC_FIELDS.map((field) => field.value).filter(Boolean),
+      ...Object.keys(document.dynamicFields),
+      ...collectTemplateBindings(document.canvas.elements),
+    ]);
+    return [{ value: '', label: 'Static content' }, ...[...keys].map((value) => ({ value, label: DYNAMIC_FIELDS.find((field) => field.value === value)?.label || value }))];
+  }, [document.canvas.elements, document.dynamicFields]);
+  const selectedBinding = selected
+    ? selected.field || selected.key || getDynamicFieldName(elementBindingValue(selected)) || ''
+    : '';
   const pushHistory = () => { setPast((items) => [...items.slice(-49), documentRef.current]); setFuture([]); };
   const replaceDocument = (next: BuilderDocument, history = true) => { if (history) pushHistory(); documentRef.current = next; setDocument(next); };
-  const updateDocument = (patch: Partial<BuilderDocument>) => replaceDocument({ ...documentRef.current, ...patch });
+  const updateDocument = (patch: Partial<BuilderDocument>) => replaceDocument({
+    ...documentRef.current,
+    ...patch,
+    ...(patch.canvas ? { canvas: { ...documentRef.current.canvas, ...patch.canvas, width: CANVAS_WIDTH, height: CANVAS_HEIGHT } } : {}),
+  });
   const updateElement = (id: string, patch: Partial<TemplateElementRecord>, history = true) => {
-    const next = { ...documentRef.current, canvas: { ...documentRef.current.canvas, elements: documentRef.current.canvas.elements.map((element) => {
+    const hasBindingPatch = Object.prototype.hasOwnProperty.call(patch, 'field') || Object.prototype.hasOwnProperty.call(patch, 'key');
+    const nextFields = cloneDynamicFields(documentRef.current.dynamicFields);
+    const next = { ...documentRef.current, dynamicFields: nextFields, canvas: { ...documentRef.current.canvas, elements: documentRef.current.canvas.elements.map((element) => {
       if (element.id !== id) return element;
       const nextElement = { ...element, ...patch };
+      if (hasBindingPatch) {
+        const nextField = patch.field || patch.key || '';
+        const currentValue = elementBindingValue(element);
+        let nextValue = currentValue;
+        if (nextField) {
+          let replaced = false;
+          nextValue = currentValue.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (token, field: string) => {
+            if (!replaced && (!element.field && !element.key ? true : field === (element.field || element.key))) {
+              replaced = true;
+              return `{{${nextField}}}`;
+            }
+            return token;
+          });
+          if (!replaced) nextValue = `{{${nextField}}}`;
+          if (nextFields[nextField] === undefined) {
+            const resolvedCurrent = resolveDynamicValue(currentValue, documentRef.current.dynamicFields);
+            if (resolvedCurrent && !hasUnresolvedToken(resolvedCurrent)) nextFields[nextField] = resolvedCurrent;
+          }
+        } else {
+          nextValue = resolveTemplateElementValue(currentValue, element.field || element.key, documentRef.current.dynamicFields);
+        }
+        if (element.type === 'image') {
+          nextElement.imageUrl = nextValue;
+          nextElement.src = nextValue;
+        } else {
+          nextElement.content = nextValue;
+          nextElement.text = nextValue;
+        }
+        nextElement.field = nextField || undefined;
+        nextElement.key = nextField || undefined;
+      } else if (patch.content !== undefined || patch.text !== undefined || patch.imageUrl !== undefined || patch.src !== undefined) {
+        const nextValue = elementBindingValue(nextElement);
+        const inferredField = getDynamicFieldName(nextValue);
+        if (inferredField) {
+          nextElement.field = inferredField;
+          nextElement.key = inferredField;
+        } else {
+          delete nextElement.field;
+          delete nextElement.key;
+        }
+      }
       const x = patch.x ?? element.x;
       const y = patch.y ?? element.y;
       const width = patch.width ?? element.width;
@@ -239,11 +348,12 @@ export const TemplateBuilder = ({ template, saving, onClose, onSave, onUploadAss
     pushHistory();
     const move = (moveEvent: PointerEvent) => {
       const interaction = interactionRef.current; const canvas = canvasRef.current; if (!interaction || !canvas) return;
-      const rect = canvas.getBoundingClientRect(); const dx = (moveEvent.clientX - interaction.startX) / rect.width * documentRef.current.canvas.width; const dy = (moveEvent.clientY - interaction.startY) / rect.height * documentRef.current.canvas.height;
+      const dx = (moveEvent.clientX - interaction.startX) / displayScale;
+      const dy = (moveEvent.clientY - interaction.startY) / displayScale;
       const current = documentRef.current.canvas.elements.find((item) => item.id === interaction.id); if (!current) return;
       const patch = interaction.mode === 'move'
-        ? { x: Math.max(0, Math.min(documentRef.current.canvas.width - current.width, interaction.element.x + dx)), y: Math.max(0, Math.min(documentRef.current.canvas.height - current.height, interaction.element.y + dy)) }
-        : { width: Math.max(24, Math.min(documentRef.current.canvas.width - current.x, interaction.element.width + dx)), height: Math.max(16, Math.min(documentRef.current.canvas.height - current.y, interaction.element.height + dy)) };
+        ? { x: Math.max(0, Math.min(CANVAS_WIDTH - current.width, interaction.element.x + dx)), y: Math.max(0, Math.min(CANVAS_HEIGHT - current.height, interaction.element.y + dy)) }
+        : { width: Math.max(24, Math.min(CANVAS_WIDTH - current.x, interaction.element.width + dx)), height: Math.max(16, Math.min(CANVAS_HEIGHT - current.y, interaction.element.height + dy)) };
       updateElement(interaction.id, patch, false);
     };
     const end = () => { interactionRef.current = null; window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end); };
@@ -309,6 +419,7 @@ export const TemplateBuilder = ({ template, saving, onClose, onSave, onUploadAss
       allowAvatarChange: current.allowAvatarChange,
       isActive: current.isActive,
       sortOrder: current.sortOrder,
+      dynamicFields: cloneDynamicFields(current.dynamicFields),
       ...(current.metadata !== undefined ? { metadata: current.metadata } : {}),
       canvas: {
         width: Math.round(current.canvas.width),
@@ -337,19 +448,35 @@ export const TemplateBuilder = ({ template, saving, onClose, onSave, onUploadAss
   const sortedElements = [...document.canvas.elements].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
   const renderElement = (element: TemplateElementRecord, preview = false) => {
     const selectedState = !preview && selectedId === element.id;
+    const horizontalAlignment: React.CSSProperties['justifyContent'] = element.textAlign === 'left' ? 'flex-start' : element.textAlign === 'right' ? 'flex-end' : 'center';
+    const verticalAlignment: React.CSSProperties['alignItems'] = element.textAlignVertical === 'top' ? 'flex-start' : element.textAlignVertical === 'bottom' ? 'flex-end' : 'center';
     const style: React.CSSProperties = {
-      position: 'absolute', left: `${(element.x / document.canvas.width) * 100}%`, top: `${(element.y / document.canvas.height) * 100}%`, width: `${(element.width / document.canvas.width) * 100}%`, height: `${(element.height / document.canvas.height) * 100}%`,
-      zIndex: element.zIndex || 1, opacity: element.visible === false ? 0 : element.opacity ?? 1, transform: `rotate(${element.rotation || 0}deg)`, transformOrigin: 'center', borderRadius: element.borderRadius || 0, borderWidth: element.borderWidth || 0, borderColor: element.borderColor || 'transparent', borderStyle: 'solid', boxSizing: 'border-box',
+      position: 'absolute', left: element.x, top: element.y, width: element.width, height: element.height,
+      zIndex: element.zIndex || 1, opacity: element.visible === false ? 0 : element.opacity ?? 1, transform: `rotate(${element.rotation || 0}deg)`, transformOrigin: '50% 50%', borderRadius: element.borderRadius || 0, borderWidth: element.borderWidth || 0, borderColor: element.borderColor || 'transparent', borderStyle: element.borderStyle || 'solid', boxSizing: 'border-box', overflow: 'hidden',
     };
     const common = { onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => { if (!preview) { setSelectedId(element.id); beginInteraction(event.nativeEvent, element, 'move'); } }, onClick: (event: React.MouseEvent) => { if (!preview) { event.stopPropagation(); setSelectedId(element.id); } } };
-    const imageUrl = element.imageUrl || element.src;
+    const field = element.field || element.key;
+    const imageUrl = resolveTemplateElementValue(element.imageUrl || element.src || '', field, document.dynamicFields);
     let content: React.ReactNode;
-    if (element.type === 'image') content = imageUrl ? <img src={imageUrl} alt="" draggable={false} className="h-full w-full" style={{ objectFit: element.resizeMode === 'stretch' ? 'fill' : element.resizeMode || 'contain', borderRadius: element.borderRadius || 0 }} /> : <div className="flex h-full w-full items-center justify-center bg-slate-200 text-xs text-slate-500"><ImageIcon className="mr-1 h-4 w-4" /> Add image</div>;
+    if (element.type === 'image') content = <TemplateImage src={imageUrl} className="h-full w-full" style={{ objectFit: element.resizeMode === 'stretch' ? 'fill' : element.resizeMode || 'contain', borderRadius: element.borderRadius || 0 }} />;
     else if (element.type === 'shape' || element.type === 'rectangle' || element.type === 'circle') content = <div className="h-full w-full" style={{ backgroundColor: element.backgroundColor || element.color || '#E5E7EB', borderRadius: element.type === 'circle' ? '9999px' : undefined }} />;
     else if (element.type === 'divider' || element.type === 'line') content = <div className="h-full w-full" style={{ backgroundColor: element.backgroundColor || element.color || '#111827' }} />;
-    else if (element.type === 'icon') content = <div className="flex h-full w-full items-center justify-center" style={{ color: element.color || '#111827', fontSize: element.fontSize || 48 }}>{previewText(element)}</div>;
-    else content = <div className="flex h-full w-full items-center justify-center whitespace-pre-wrap break-words p-1" style={{ color: element.color || '#111827', backgroundColor: element.backgroundColor === 'transparent' ? undefined : element.backgroundColor, fontFamily: element.fontFamily, fontSize: element.fontSize, fontWeight: element.fontWeight as React.CSSProperties['fontWeight'], fontStyle: element.fontStyle, letterSpacing: element.letterSpacing, lineHeight: element.lineHeight || 1.1, textAlign: element.textAlign, textTransform: element.textTransform, textShadow: (element.style?.textShadow as string | undefined) }}>{previewText(element)}</div>;
+    else if (element.type === 'icon') content = <div className="flex h-full w-full min-w-0 min-h-0 items-center justify-center overflow-hidden whitespace-pre-wrap break-words" style={{ color: element.color || '#111827', fontSize: element.fontSize || 48 }}>{previewText(element, document.dynamicFields)}</div>;
+    else content = <div className="flex h-full w-full min-w-0 min-h-0 overflow-hidden whitespace-pre-wrap break-words p-1" style={{ alignItems: verticalAlignment, justifyContent: horizontalAlignment, color: element.color || '#111827', backgroundColor: element.backgroundColor === 'transparent' ? undefined : element.backgroundColor, fontFamily: element.fontFamily, fontSize: element.fontSize, fontWeight: element.fontWeight as React.CSSProperties['fontWeight'], fontStyle: element.fontStyle, letterSpacing: element.letterSpacing, lineHeight: element.lineHeight || 1.1, textAlign: element.textAlign, textTransform: element.textTransform, textShadow: (element.style?.textShadow as string | undefined), overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{previewText(element, document.dynamicFields)}</div>;
     return <div key={element.id} {...common} style={{ ...style, cursor: preview ? 'default' : element.locked ? 'not-allowed' : 'move', outline: selectedState ? '2px solid #f97316' : element.type === 'group' ? '1px dashed rgba(100,116,139,.6)' : undefined, outlineOffset: 2, display: element.visible === false ? 'none' : undefined }}>{content}{selectedState && <><div className="pointer-events-none absolute inset-0 border border-dashed border-primary" /><div className="absolute -bottom-2 -right-2 h-4 w-4 cursor-se-resize rounded-sm border-2 border-primary bg-white" onPointerDown={(event) => beginInteraction(event.nativeEvent, element, 'resize')} /><div className="absolute -top-7 left-1/2 -translate-x-1/2 rounded bg-slate-900 px-1.5 py-0.5 text-[10px] text-white">{element.id}</div></>}</div>;
+  };
+
+  const renderCanvasSurface = (scale: number, preview = false) => {
+    const canvasStyle = !preview && grid && background.type !== 'gradient' && background.type !== 'linear-gradient'
+      ? { ...backgroundStyle, backgroundImage: `${backgroundStyle.backgroundColor ? `linear-gradient(${backgroundStyle.backgroundColor},${backgroundStyle.backgroundColor}),` : ''}repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(15,23,42,.08) 40px), repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(15,23,42,.08) 40px)` }
+      : backgroundStyle;
+    return <div style={{ width: CANVAS_WIDTH * scale, height: CANVAS_HEIGHT * scale, flex: '0 0 auto' }}>
+      <div ref={preview ? undefined : canvasRef} role={preview ? undefined : 'application'} aria-label={preview ? undefined : 'Template canvas'} className="relative overflow-hidden shadow-2xl" style={{ ...canvasStyle, width: CANVAS_WIDTH, height: CANVAS_HEIGHT, transform: `scale(${scale})`, transformOrigin: 'top left' }} onPointerDown={preview ? undefined : () => setSelectedId(null)}>
+        {(background.type === 'image' || document.canvas.backgroundImageUrl) && document.canvas.backgroundImageUrl ? <img src={document.canvas.backgroundImageUrl} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover" style={{ opacity: background.opacity ?? 1 }} /> : null}
+        {document.canvas.overlay?.color ? <div className="pointer-events-none absolute inset-0" style={{ backgroundColor: document.canvas.overlay.color, opacity: document.canvas.overlay.opacity ?? .25 }} /> : null}
+        {sortedElements.map((element) => renderElement(element, preview))}
+      </div>
+    </div>;
   };
 
   return <div className="space-y-3">
@@ -364,11 +491,11 @@ export const TemplateBuilder = ({ template, saving, onClose, onSave, onUploadAss
       <Button size="sm" onClick={save} disabled={saving || importing}><Save className="h-4 w-4" /> {saving ? 'Saving…' : 'Save & publish'}</Button>
     </div>
     <div className="grid min-h-[720px] gap-3 xl:grid-cols-[154px_minmax(440px,1fr)_290px]">
-      <aside className="rounded-xl border bg-card p-2 shadow-sm"><p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Add layer</p><div className="grid grid-cols-2 gap-1.5">{ELEMENT_TYPES.map(({ type, label, icon: Icon }) => <button key={type} type="button" onClick={() => addElement(type)} className="flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg border bg-background px-1 text-[11px] font-medium hover:border-primary hover:bg-accent"><Icon className="h-5 w-5 text-secondary" /><span>{label}</span></button>)}</div><div className="mt-3 space-y-2 border-t pt-3"><p className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Canvas</p><label className="flex items-center justify-between px-2 text-xs"><span>Grid</span><input type="checkbox" checked={grid} onChange={(event) => setGrid(event.target.checked)} /></label><div className="flex items-center gap-1 px-1"><Button variant="outline" size="icon" onClick={() => setZoom((value) => Math.max(.3, Number((value - .08).toFixed(2))))}><Minus className="h-4 w-4" /></Button><span className="flex-1 text-center text-xs">{Math.round(zoom * 100)}%</span><Button variant="outline" size="icon" onClick={() => setZoom((value) => Math.min(1, Number((value + .08).toFixed(2))))}><Plus className="h-4 w-4" /></Button></div></div></aside>
-      <section className="flex min-h-[720px] flex-col rounded-xl border bg-slate-100/70 p-3 shadow-sm"><div className="flex items-center justify-between pb-2 text-xs text-muted-foreground"><span className="flex items-center gap-1"><Move className="h-3.5 w-3.5" /> Drag layers · resize from corner</span><span>Logical canvas · {document.canvas.width} × {document.canvas.height}</span></div><div className="flex flex-1 items-start justify-center overflow-auto rounded-lg bg-slate-200/70 p-5"><div style={{ width: `${document.canvas.width * zoom}px`, height: `${document.canvas.height * zoom}px`, minWidth: `${document.canvas.width * zoom}px`, minHeight: `${document.canvas.height * zoom}px` }}><div ref={canvasRef} role="application" aria-label="Template canvas" className="relative h-full w-full overflow-hidden shadow-2xl" style={{ ...backgroundStyle, backgroundImage: background.type === 'gradient' || background.type === 'linear-gradient' ? backgroundStyle.backgroundImage : grid ? `${backgroundStyle.backgroundColor ? `linear-gradient(${backgroundStyle.backgroundColor},${backgroundStyle.backgroundColor}),` : ''}repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(15,23,42,.08) 40px), repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(15,23,42,.08) 40px)` : undefined }} onPointerDown={() => setSelectedId(null)}>{(background.type === 'image' || document.canvas.backgroundImageUrl) && document.canvas.backgroundImageUrl ? <img src={document.canvas.backgroundImageUrl} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover" style={{ opacity: background.opacity ?? 1 }} /> : null}{document.canvas.overlay?.color ? <div className="pointer-events-none absolute inset-0" style={{ backgroundColor: document.canvas.overlay.color, opacity: document.canvas.overlay.opacity ?? .25 }} /> : null}{sortedElements.map((element) => renderElement(element))}</div></div></div></section>
-      <aside className="flex min-h-[720px] flex-col gap-3 rounded-xl border bg-card p-3 shadow-sm"><div className="flex items-center justify-between"><h2 className="text-sm font-semibold">Properties</h2>{selected && <Button variant="ghost" size="icon" onClick={removeSelected} title="Delete selected"><Trash2 className="h-4 w-4 text-destructive" /></Button>}</div>{selected ? <div className="space-y-3 overflow-y-auto pr-1"><div className="grid grid-cols-2 gap-2"><label className="text-xs font-medium">Layer name<Input value={selected.id} onChange={(event) => updateElement(selected.id, { id: event.target.value.replace(/\s+/g, '-').toLowerCase() || selected.id })} className="mt-1 h-8 text-xs" /></label><label className="text-xs font-medium">Type<select value={selected.type} onChange={(event) => updateElement(selected.id, { type: event.target.value as TemplateElementType })} className="mt-1 h-8 w-full rounded-md border bg-background px-2 text-xs">{ELEMENT_TYPES.map((item) => <option key={item.type} value={item.type}>{item.label}</option>)}</select></label></div><label className="block text-xs font-medium">Dynamic field<select value={selected.field || selected.key || ''} onChange={(event) => updateElement(selected.id, { field: event.target.value || undefined, key: event.target.value || undefined })} className="mt-1 h-8 w-full rounded-md border bg-background px-2 text-xs">{DYNAMIC_FIELDS.map((field) => <option key={field.value} value={field.value}>{field.label}</option>)}</select></label>{selected.type !== 'image' && selected.type !== 'shape' && selected.type !== 'divider' && <label className="block text-xs font-medium">Content<textarea value={selected.content || selected.text || ''} onChange={(event) => updateElement(selected.id, { content: event.target.value, text: event.target.value })} className="mt-1 min-h-16 w-full resize-y rounded-md border bg-background px-2 py-1.5 text-xs" /></label>}{selected.type === 'image' && <><label className="block text-xs font-medium">Image URL<input value={selected.imageUrl || selected.src || ''} onChange={(event) => updateElement(selected.id, { imageUrl: event.target.value, src: event.target.value })} className="mt-1 h-8 w-full rounded-md border bg-background px-2 text-xs" placeholder="https://…" /></label><label className="flex h-8 cursor-pointer items-center justify-center gap-2 rounded-md border text-xs font-medium hover:bg-accent"><Upload className="h-3.5 w-3.5" /> Upload image<input type="file" accept="image/*" className="hidden" onChange={(event) => uploadImage(event, selected.id)} /></label></>}{(selected.type === 'text' || selected.type === 'button' || selected.type === 'badge' || selected.type === 'icon') && <div className="grid grid-cols-2 gap-2"><label className="text-xs font-medium">Font<select value={selected.fontFamily || 'Inter'} onChange={(event) => updateElement(selected.id, { fontFamily: event.target.value })} className="mt-1 h-8 w-full rounded-md border bg-background px-1 text-xs">{FONT_OPTIONS.map((font) => <option key={font}>{font}</option>)}</select></label><label className="text-xs font-medium">Size<input type="number" min="1" max="500" value={selected.fontSize || 42} onChange={(event) => updateElement(selected.id, { fontSize: Number(event.target.value) || 1 })} className="mt-1 h-8 w-full rounded-md border bg-background px-2 text-xs" /></label></div>}<div className="grid grid-cols-2 gap-2"><label className="text-xs font-medium">Text color<input type="color" value={colorValue(selected.color || '#111827', '#111827')} onChange={(event) => updateElement(selected.id, { color: event.target.value })} className="mt-1 h-8 w-full rounded border bg-background p-1" /></label><label className="text-xs font-medium">Fill color<input type="color" value={colorValue(selected.backgroundColor || '#FFFFFF', '#FFFFFF')} onChange={(event) => updateElement(selected.id, { backgroundColor: event.target.value })} className="mt-1 h-8 w-full rounded border bg-background p-1" /></label></div><div className="grid grid-cols-4 gap-2"><label className="text-xs font-medium">X<input type="number" value={Math.round(selected.x)} onChange={(event) => updateElement(selected.id, { x: Math.max(0, Number(event.target.value) || 0) })} className="mt-1 h-8 w-full rounded border bg-background px-1 text-xs" /></label><label className="text-xs font-medium">Y<input type="number" value={Math.round(selected.y)} onChange={(event) => updateElement(selected.id, { y: Math.max(0, Number(event.target.value) || 0) })} className="mt-1 h-8 w-full rounded border bg-background px-1 text-xs" /></label><label className="text-xs font-medium">W<input type="number" value={Math.round(selected.width)} onChange={(event) => updateElement(selected.id, { width: Math.max(1, Number(event.target.value) || 1) })} className="mt-1 h-8 w-full rounded border bg-background px-1 text-xs" /></label><label className="text-xs font-medium">H<input type="number" value={Math.round(selected.height)} onChange={(event) => updateElement(selected.id, { height: Math.max(1, Number(event.target.value) || 1) })} className="mt-1 h-8 w-full rounded border bg-background px-1 text-xs" /></label></div><div className="grid grid-cols-3 gap-2"><label className="text-xs font-medium">Rotate<input type="number" value={Math.round(selected.rotation || 0)} onChange={(event) => updateElement(selected.id, { rotation: Number(event.target.value) || 0 })} className="mt-1 h-8 w-full rounded border bg-background px-1 text-xs" /></label><label className="text-xs font-medium">Radius<input type="number" value={Math.round(selected.borderRadius || 0)} onChange={(event) => updateElement(selected.id, { borderRadius: Math.max(0, Number(event.target.value) || 0) })} className="mt-1 h-8 w-full rounded border bg-background px-1 text-xs" /></label><label className="text-xs font-medium">Opacity<input type="number" min="0" max="1" step=".05" value={selected.opacity ?? 1} onChange={(event) => updateElement(selected.id, { opacity: Math.min(1, Math.max(0, Number(event.target.value) || 0)) })} className="mt-1 h-8 w-full rounded border bg-background px-1 text-xs" /></label></div><div className="grid grid-cols-2 gap-2"><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={selected.visible !== false} onChange={(event) => updateElement(selected.id, { visible: event.target.checked })} /> Visible</label><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={selected.locked === true} onChange={(event) => updateElement(selected.id, { locked: event.target.checked })} /> <Lock className="h-3.5 w-3.5" /> Locked</label><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={selected.editable !== false} onChange={(event) => updateElement(selected.id, { editable: event.target.checked })} /> Editable</label></div><div className="flex flex-wrap gap-1 border-t pt-3"><Button variant="outline" size="sm" onClick={duplicateSelected}><Copy className="h-3.5 w-3.5" /> Duplicate</Button><Button variant="outline" size="icon" onClick={() => orderSelected('front')} title="Bring to front"><BringToFront className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => orderSelected('back')} title="Send to back"><SendToBack className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => orderSelected('forward')} title="Bring forward"><ArrowUp className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => orderSelected('backward')} title="Send backward"><ArrowDown className="h-4 w-4" /></Button></div></div> : <div className="flex flex-1 flex-col items-center justify-center text-center text-sm text-muted-foreground"><Pencil className="mb-2 h-7 w-7" /><p>Select a layer to edit its properties.</p></div>}</aside>
+      <aside className="rounded-xl border bg-card p-2 shadow-sm"><p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Add layer</p><div className="grid grid-cols-2 gap-1.5">{ELEMENT_TYPES.map(({ type, label, icon: Icon }) => <button key={type} type="button" onClick={() => addElement(type)} className="flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg border bg-background px-1 text-[11px] font-medium hover:border-primary hover:bg-accent"><Icon className="h-5 w-5 text-secondary" /><span>{label}</span></button>)}</div><div className="mt-3 space-y-2 border-t pt-3"><p className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Canvas</p><label className="flex items-center justify-between px-2 text-xs"><span>Grid</span><input type="checkbox" checked={grid} onChange={(event) => setGrid(event.target.checked)} /></label><div className="flex items-center gap-1 px-1"><Button variant="outline" size="icon" onClick={() => setZoom((value) => Math.max(.25, Number(((value ?? displayScale) - .08).toFixed(2))))}><Minus className="h-4 w-4" /></Button><span className="flex-1 text-center text-xs">{Math.round(displayScale * 100)}%</span><Button variant="outline" size="icon" onClick={() => setZoom((value) => Math.min(1.25, Number(((value ?? displayScale) + .08).toFixed(2))))}><Plus className="h-4 w-4" /></Button></div></div></aside>
+      <section className="flex min-h-[720px] flex-col rounded-xl border bg-slate-100/70 p-3 shadow-sm"><div className="flex items-center justify-between pb-2 text-xs text-muted-foreground"><span className="flex items-center gap-1"><Move className="h-3.5 w-3.5" /> Drag layers · resize from corner</span><span>Logical canvas · {CANVAS_WIDTH} × {CANVAS_HEIGHT}</span></div><div ref={viewportRef} className="flex flex-1 items-start justify-start overflow-auto rounded-lg bg-slate-200/70 p-5">{renderCanvasSurface(displayScale)}</div></section>
+      <aside className="flex min-h-[720px] flex-col gap-3 rounded-xl border bg-card p-3 shadow-sm"><div className="flex items-center justify-between"><h2 className="text-sm font-semibold">Properties</h2>{selected && <Button variant="ghost" size="icon" onClick={removeSelected} title="Delete selected"><Trash2 className="h-4 w-4 text-destructive" /></Button>}</div>{selected ? <div className="space-y-3 overflow-y-auto pr-1"><div className="grid grid-cols-2 gap-2"><label className="text-xs font-medium">Layer name<Input value={selected.id} onChange={(event) => updateElement(selected.id, { id: event.target.value.replace(/\s+/g, '-').toLowerCase() || selected.id })} className="mt-1 h-8 text-xs" /></label><label className="text-xs font-medium">Type<select value={selected.type} onChange={(event) => updateElement(selected.id, { type: event.target.value as TemplateElementType })} className="mt-1 h-8 w-full rounded-md border bg-background px-2 text-xs">{ELEMENT_TYPES.map((item) => <option key={item.type} value={item.type}>{item.label}</option>)}</select></label></div><label className="block text-xs font-medium">Dynamic field<select value={selectedBinding} onChange={(event) => updateElement(selected.id, { field: event.target.value || undefined, key: event.target.value || undefined })} className="mt-1 h-8 w-full rounded-md border bg-background px-2 text-xs">{dynamicFieldOptions.map((field) => <option key={field.value} value={field.value}>{field.label}</option>)}</select></label>{selected.type !== 'image' && selected.type !== 'shape' && selected.type !== 'divider' && <label className="block text-xs font-medium">Content<textarea value={selected.content || selected.text || ''} onChange={(event) => updateElement(selected.id, { content: event.target.value, text: event.target.value })} className="mt-1 min-h-16 w-full resize-y rounded-md border bg-background px-2 py-1.5 text-xs" /></label>}{selected.type === 'image' && <><label className="block text-xs font-medium">Image URL<input value={selected.imageUrl || selected.src || ''} onChange={(event) => updateElement(selected.id, { imageUrl: event.target.value, src: event.target.value })} className="mt-1 h-8 w-full rounded-md border bg-background px-2 text-xs" placeholder="https://…" /></label><label className="flex h-8 cursor-pointer items-center justify-center gap-2 rounded-md border text-xs font-medium hover:bg-accent"><Upload className="h-3.5 w-3.5" /> Upload image<input type="file" accept="image/*" className="hidden" onChange={(event) => uploadImage(event, selected.id)} /></label></>}{(selected.type === 'text' || selected.type === 'button' || selected.type === 'badge' || selected.type === 'icon') && <div className="grid grid-cols-2 gap-2"><label className="text-xs font-medium">Font<select value={selected.fontFamily || 'Inter'} onChange={(event) => updateElement(selected.id, { fontFamily: event.target.value })} className="mt-1 h-8 w-full rounded-md border bg-background px-1 text-xs">{FONT_OPTIONS.map((font) => <option key={font}>{font}</option>)}</select></label><label className="text-xs font-medium">Size<input type="number" min="1" max="500" value={selected.fontSize || 42} onChange={(event) => updateElement(selected.id, { fontSize: Number(event.target.value) || 1 })} className="mt-1 h-8 w-full rounded-md border bg-background px-2 text-xs" /></label></div>}<div className="grid grid-cols-2 gap-2"><label className="text-xs font-medium">Text color<input type="color" value={colorValue(selected.color || '#111827', '#111827')} onChange={(event) => updateElement(selected.id, { color: event.target.value })} className="mt-1 h-8 w-full rounded border bg-background p-1" /></label><label className="text-xs font-medium">Fill color<input type="color" value={colorValue(selected.backgroundColor || '#FFFFFF', '#FFFFFF')} onChange={(event) => updateElement(selected.id, { backgroundColor: event.target.value })} className="mt-1 h-8 w-full rounded border bg-background p-1" /></label></div><div className="grid grid-cols-4 gap-2"><label className="text-xs font-medium">X<input type="number" value={Math.round(selected.x)} onChange={(event) => updateElement(selected.id, { x: Math.max(0, Number(event.target.value) || 0) })} className="mt-1 h-8 w-full rounded border bg-background px-1 text-xs" /></label><label className="text-xs font-medium">Y<input type="number" value={Math.round(selected.y)} onChange={(event) => updateElement(selected.id, { y: Math.max(0, Number(event.target.value) || 0) })} className="mt-1 h-8 w-full rounded border bg-background px-1 text-xs" /></label><label className="text-xs font-medium">W<input type="number" value={Math.round(selected.width)} onChange={(event) => updateElement(selected.id, { width: Math.max(1, Number(event.target.value) || 1) })} className="mt-1 h-8 w-full rounded border bg-background px-1 text-xs" /></label><label className="text-xs font-medium">H<input type="number" value={Math.round(selected.height)} onChange={(event) => updateElement(selected.id, { height: Math.max(1, Number(event.target.value) || 1) })} className="mt-1 h-8 w-full rounded border bg-background px-1 text-xs" /></label></div><div className="grid grid-cols-3 gap-2"><label className="text-xs font-medium">Rotate<input type="number" value={Math.round(selected.rotation || 0)} onChange={(event) => updateElement(selected.id, { rotation: Number(event.target.value) || 0 })} className="mt-1 h-8 w-full rounded border bg-background px-1 text-xs" /></label><label className="text-xs font-medium">Radius<input type="number" value={Math.round(selected.borderRadius || 0)} onChange={(event) => updateElement(selected.id, { borderRadius: Math.max(0, Number(event.target.value) || 0) })} className="mt-1 h-8 w-full rounded border bg-background px-1 text-xs" /></label><label className="text-xs font-medium">Opacity<input type="number" min="0" max="1" step=".05" value={selected.opacity ?? 1} onChange={(event) => updateElement(selected.id, { opacity: Math.min(1, Math.max(0, Number(event.target.value) || 0)) })} className="mt-1 h-8 w-full rounded border bg-background px-1 text-xs" /></label></div><div className="grid grid-cols-2 gap-2"><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={selected.visible !== false} onChange={(event) => updateElement(selected.id, { visible: event.target.checked })} /> Visible</label><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={selected.locked === true} onChange={(event) => updateElement(selected.id, { locked: event.target.checked })} /> <Lock className="h-3.5 w-3.5" /> Locked</label><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={selected.editable !== false} onChange={(event) => updateElement(selected.id, { editable: event.target.checked })} /> Editable</label></div><div className="flex flex-wrap gap-1 border-t pt-3"><Button variant="outline" size="sm" onClick={duplicateSelected}><Copy className="h-3.5 w-3.5" /> Duplicate</Button><Button variant="outline" size="icon" onClick={() => orderSelected('front')} title="Bring to front"><BringToFront className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => orderSelected('back')} title="Send to back"><SendToBack className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => orderSelected('forward')} title="Bring forward"><ArrowUp className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => orderSelected('backward')} title="Send backward"><ArrowDown className="h-4 w-4" /></Button></div></div> : <div className="flex flex-1 flex-col items-center justify-center text-center text-sm text-muted-foreground"><Pencil className="mb-2 h-7 w-7" /><p>Select a layer to edit its properties.</p></div>}</aside>
     </div>
     <div className="grid gap-3 lg:grid-cols-[1fr_320px]"><section className="rounded-xl border bg-card p-3 shadow-sm"><div className="mb-2 flex items-center gap-2"><Layers3 className="h-4 w-4 text-secondary" /><h2 className="text-sm font-semibold">Layers</h2><span className="text-xs text-muted-foreground">{document.canvas.elements.length} objects</span></div><div className="flex max-h-48 flex-wrap gap-2 overflow-y-auto">{[...document.canvas.elements].sort((a, b) => (b.zIndex || 0) - (a.zIndex || 0)).map((element) => <button key={element.id} type="button" onClick={() => setSelectedId(element.id)} className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs ${selectedId === element.id ? 'border-primary bg-primary/10 text-primary' : 'bg-background hover:bg-accent'}`}><GripVertical className="h-3.5 w-3.5" /><span className="max-w-36 truncate">{element.id}</span>{element.locked ? <Lock className="h-3 w-3" /> : element.visible === false ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}</button>)}</div></section><section className="rounded-xl border bg-card p-3 shadow-sm"><div className="mb-2 flex items-center gap-2"><Palette className="h-4 w-4 text-secondary" /><h2 className="text-sm font-semibold">Background</h2></div><div className="grid grid-cols-2 gap-2"><label className="text-xs font-medium">Mode<select value={background.type || 'solid'} onChange={(event) => updateDocument({ canvas: { ...documentRef.current.canvas, background: { ...(documentRef.current.canvas.background || {}), type: event.target.value as TemplateCanvasBackground['type'], color: documentRef.current.canvas.backgroundColor } } })} className="mt-1 h-8 w-full rounded border bg-background px-1 text-xs"><option value="solid">Solid</option><option value="gradient">Gradient</option><option value="linear-gradient">Gradient (JSON)</option><option value="image">Image</option></select></label><label className="text-xs font-medium">Color<input type="color" value={colorValue(background.color || document.canvas.backgroundColor, '#F5E9D5')} onChange={(event) => updateDocument({ canvas: { ...documentRef.current.canvas, backgroundColor: event.target.value, background: { ...(documentRef.current.canvas.background || {}), color: event.target.value } } })} className="mt-1 h-8 w-full rounded border bg-background p-1" /></label></div>{(background.type === 'gradient' || background.type === 'linear-gradient') && <div className="mt-2 grid grid-cols-2 gap-2"><label className="text-xs font-medium">From<input type="color" value={colorValue(background.from || background.colors?.[0] || document.primaryColor, document.primaryColor)} onChange={(event) => updateDocument({ canvas: { ...documentRef.current.canvas, background: { ...(documentRef.current.canvas.background || {}), type: background.type, from: event.target.value } } })} className="mt-1 h-8 w-full rounded border bg-background p-1" /></label><label className="text-xs font-medium">To<input type="color" value={colorValue(background.to || background.colors?.[1] || document.secondaryColor, document.secondaryColor)} onChange={(event) => updateDocument({ canvas: { ...documentRef.current.canvas, background: { ...(documentRef.current.canvas.background || {}), type: background.type, to: event.target.value } } })} className="mt-1 h-8 w-full rounded border bg-background p-1" /></label></div>}{background.type === 'image' && <><Input value={document.canvas.backgroundImageUrl || ''} onChange={(event) => updateDocument({ canvas: { ...documentRef.current.canvas, backgroundImageUrl: event.target.value, background: { ...(documentRef.current.canvas.background || {}), type: 'image', imageUrl: event.target.value } } })} className="mt-2 h-8 text-xs" placeholder="Background image URL" /><label className="mt-2 flex h-8 cursor-pointer items-center justify-center gap-2 rounded-md border text-xs font-medium hover:bg-accent"><Upload className="h-3.5 w-3.5" /> Upload background<input type="file" accept="image/*" className="hidden" onChange={(event) => uploadImage(event)} /></label></>}<div className="mt-2 grid grid-cols-2 gap-2"><label className="text-xs font-medium">Poster width<input type="number" value={document.canvas.width} onChange={(event) => updateDocument({ canvas: { ...documentRef.current.canvas, width: Math.max(1, Number(event.target.value) || CANVAS_WIDTH) } })} className="mt-1 h-8 w-full rounded border bg-background px-1 text-xs" /></label><label className="text-xs font-medium">Poster height<input type="number" value={document.canvas.height} onChange={(event) => updateDocument({ canvas: { ...documentRef.current.canvas, height: Math.max(1, Number(event.target.value) || CANVAS_HEIGHT) } })} className="mt-1 h-8 w-full rounded border bg-background px-1 text-xs" /></label></div><div className="mt-3 flex flex-wrap gap-2 text-xs"><label className="flex items-center gap-2"><input type="checkbox" checked={document.allowColorChange} onChange={(event) => updateDocument({ allowColorChange: event.target.checked })} /> Allow user colors</label><label className="flex items-center gap-2"><input type="checkbox" checked={document.isActive} onChange={(event) => updateDocument({ isActive: event.target.checked })} /> Active</label></div></section></div>
-    {previewOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-5" onClick={() => setPreviewOpen(false)}><div className="flex max-h-[95vh] w-full max-w-3xl flex-col items-center gap-3 overflow-auto rounded-xl bg-card p-4" onClick={(event) => event.stopPropagation()}><div className="flex w-full items-center justify-between"><h2 className="font-semibold">Template preview</h2><Button variant="ghost" size="icon" onClick={() => setPreviewOpen(false)}><X className="h-4 w-4" /></Button></div><div className="relative w-full max-w-[540px] overflow-hidden shadow-2xl" style={{ aspectRatio: `${document.canvas.width}/${document.canvas.height}`, ...backgroundStyle }}>{document.canvas.backgroundImageUrl && <img src={document.canvas.backgroundImageUrl} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover" />}{sortedElements.map((element) => renderElement(element, true))}</div></div></div>}
+    {previewOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-5" onClick={() => setPreviewOpen(false)}><div className="flex max-h-[95vh] w-full max-w-3xl flex-col items-center gap-3 overflow-auto rounded-xl bg-card p-4" onClick={(event) => event.stopPropagation()}><div className="flex w-full items-center justify-between"><h2 className="font-semibold">Template preview</h2><Button variant="ghost" size="icon" onClick={() => setPreviewOpen(false)}><X className="h-4 w-4" /></Button></div><div className="max-h-[78vh] max-w-full overflow-auto">{renderCanvasSurface(Math.min(0.5, (window.innerHeight * 0.78) / CANVAS_HEIGHT), true)}</div></div></div>}
   </div>;
 };
