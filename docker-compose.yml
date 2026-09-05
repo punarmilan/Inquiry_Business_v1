@@ -11,7 +11,7 @@ services:
       - kaamsaathi-net
 
   mobile-backend:
-    image: demonicorpse23/kaamsaathi-mobile-backend:latest
+    image: ${DOCKERHUB_NAMESPACE:-demonicorpse23}/kaamsaathi-mobile-backend:latest
     container_name: kaamsaathi-mobile-backend
     restart: always
     ports:
@@ -38,7 +38,7 @@ services:
       - kaamsaathi-net
 
   website-backend:
-    image: demonicorpse23/kaamsaathi-website-backend:latest
+    image: ${DOCKERHUB_NAMESPACE:-demonicorpse23}/kaamsaathi-website-backend:latest
     container_name: kaamsaathi-website-backend
     restart: always
     ports:
@@ -56,7 +56,7 @@ services:
       - kaamsaathi-net
 
   website-frontend:
-    image: demonicorpse23/kaamsaathi-website-frontend:latest
+    image: ${DOCKERHUB_NAMESPACE:-demonicorpse23}/kaamsaathi-website-frontend:latest
     container_name: kaamsaathi-website-frontend
     restart: always
     ports:
@@ -65,7 +65,7 @@ services:
       - kaamsaathi-net
 
   admin-frontend:
-    image: demonicorpse23/kaamsaathi-admin-frontend:latest
+    image: ${DOCKERHUB_NAMESPACE:-demonicorpse23}/kaamsaathi-admin-frontend:latest
     container_name: kaamsaathi-admin-frontend
     restart: always
     ports:

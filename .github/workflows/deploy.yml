@@ -70,6 +70,8 @@ jobs:
       (github.event_name == 'workflow_dispatch' && inputs.confirm_production_deploy == true)
     needs: production-approval
     runs-on: ubuntu-latest
+    env:
+      DOCKERHUB_NAMESPACE: ${{ secrets.DOCKERHUB_USERNAME }}
 
     steps:
       - name: Checkout Code
@@ -91,8 +93,8 @@ jobs:
           file: ./mobile/backend/Dockerfile
           push: true
           tags: |
-            demonicorpse23/kaamsaathi-mobile-backend:${{ github.sha }}
-            demonicorpse23/kaamsaathi-mobile-backend:latest
+            ${{ env.DOCKERHUB_NAMESPACE }}/kaamsaathi-mobile-backend:${{ github.sha }}
+            ${{ env.DOCKERHUB_NAMESPACE }}/kaamsaathi-mobile-backend:latest
 
       - name: Build and Push Website Backend
         uses: docker/build-push-action@v7
@@ -101,8 +103,8 @@ jobs:
           file: ./website/backend/Dockerfile
           push: true
           tags: |
-            demonicorpse23/kaamsaathi-website-backend:${{ github.sha }}
-            demonicorpse23/kaamsaathi-website-backend:latest
+            ${{ env.DOCKERHUB_NAMESPACE }}/kaamsaathi-website-backend:${{ github.sha }}
+            ${{ env.DOCKERHUB_NAMESPACE }}/kaamsaathi-website-backend:latest
 
       - name: Build and Push Website Frontend
         uses: docker/build-push-action@v7
@@ -113,8 +115,8 @@ jobs:
             VITE_API_BASE_URL=https://web_api.inquiry.business
           push: true
           tags: |
-            demonicorpse23/kaamsaathi-website-frontend:${{ github.sha }}
-            demonicorpse23/kaamsaathi-website-frontend:latest
+            ${{ env.DOCKERHUB_NAMESPACE }}/kaamsaathi-website-frontend:${{ github.sha }}
+            ${{ env.DOCKERHUB_NAMESPACE }}/kaamsaathi-website-frontend:latest
 
       - name: Build and Push Admin Frontend
         uses: docker/build-push-action@v7
@@ -125,8 +127,8 @@ jobs:
             VITE_API_BASE_URL=https://web_api.inquiry.business
           push: true
           tags: |
-            demonicorpse23/kaamsaathi-admin-frontend:${{ github.sha }}
-            demonicorpse23/kaamsaathi-admin-frontend:latest
+            ${{ env.DOCKERHUB_NAMESPACE }}/kaamsaathi-admin-frontend:${{ github.sha }}
+            ${{ env.DOCKERHUB_NAMESPACE }}/kaamsaathi-admin-frontend:latest
 
   deploy-to-vps:
     name: Deploy to VPS
@@ -159,6 +161,7 @@ jobs:
       - name: Execute Remote SSH Commands
         uses: appleboy/ssh-action@v1.0.3
         env:
+          DOCKERHUB_NAMESPACE: ${{ secrets.DOCKERHUB_USERNAME }}
           GOOGLE_MAPS_SERVER_API_KEY: ${{ secrets.GOOGLE_MAPS_SERVER_API_KEY }}
           GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
           FACEBOOK_APP_ID: ${{ secrets.FACEBOOK_APP_ID }}
@@ -169,14 +172,15 @@ jobs:
           password: ${{ secrets.VPS_PASSWORD }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || '22' }}
-          envs: GOOGLE_MAPS_SERVER_API_KEY,GOOGLE_WEB_CLIENT_ID,FACEBOOK_APP_ID,FACEBOOK_APP_SECRET
+          envs: DOCKERHUB_NAMESPACE,GOOGLE_MAPS_SERVER_API_KEY,GOOGLE_WEB_CLIENT_ID,FACEBOOK_APP_ID,FACEBOOK_APP_SECRET
           script: |
             mkdir -p /var/www/kaamsaathi
             cd /var/www/kaamsaathi
             # Refresh just these keys so any other vars already in .env survive.
             touch .env
-            grep -vE '^(GOOGLE_MAPS_SERVER_API_KEY|GOOGLE_WEB_CLIENT_ID|FACEBOOK_APP_ID|FACEBOOK_APP_SECRET)=' .env > .env.tmp || true
+            grep -vE '^(DOCKERHUB_NAMESPACE|GOOGLE_MAPS_SERVER_API_KEY|GOOGLE_WEB_CLIENT_ID|FACEBOOK_APP_ID|FACEBOOK_APP_SECRET)=' .env > .env.tmp || true
             {
+              echo "DOCKERHUB_NAMESPACE=$DOCKERHUB_NAMESPACE"
               echo "GOOGLE_MAPS_SERVER_API_KEY=$GOOGLE_MAPS_SERVER_API_KEY"
               echo "GOOGLE_WEB_CLIENT_ID=$GOOGLE_WEB_CLIENT_ID"
               echo "FACEBOOK_APP_ID=$FACEBOOK_APP_ID"
