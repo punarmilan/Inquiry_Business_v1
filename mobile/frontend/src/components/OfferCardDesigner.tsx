@@ -118,7 +118,7 @@ export const OfferCardDesigner: React.FC<Props> = ({ design, onChange, title, de
         <Text style={styles.label}>Choose an app template</Text>
         <View style={styles.templateGrid}>
         <Pressable
-          onPress={() => onChange({ ...design, templateId: 'custom', templateSource: 'custom', templateVersion: undefined, previewUrl: undefined, canvas: undefined })}
+          onPress={() => onChange({ ...design, templateId: 'custom', templateSource: 'custom', templateVersion: undefined, previewUrl: undefined, canvas: undefined, dynamicFields: {} })}
           style={[styles.templateTile, design.templateId === 'custom' && styles.templateTileSelected]}
         >
           <View style={[styles.customSwatch, { backgroundColor: design.primaryColor }]}>
@@ -138,6 +138,7 @@ export const OfferCardDesigner: React.FC<Props> = ({ design, onChange, title, de
                 templateSource: template.source || 'system',
                 previewUrl: template.previewUrl,
                 canvas: template.canvas,
+                dynamicFields: template.dynamicFields || {},
                 avatarId: template.defaultAvatarId || design.avatarId,
                 primaryColor: template.primaryColor,
                 secondaryColor: template.secondaryColor,

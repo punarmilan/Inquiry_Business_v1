@@ -11,6 +11,7 @@ export type OfferCardDesign = {
   secondaryColor: string;
   layout: OfferCardLayout;
   customizations?: Record<string, string | number | boolean>;
+  dynamicFields?: Record<string, unknown>;
   titleFontSize?: number;
   descriptionFontSize?: number;
   fontWeight?: '500' | '600' | '700' | '800' | '900';
@@ -83,6 +84,7 @@ export type OfferCardTemplate = {
   description?: string;
   previewUrl?: string;
   canvas?: OfferTemplateCanvas;
+  dynamicFields?: Record<string, unknown>;
   editableFields?: Array<{
     key: string;
     label: string;
@@ -103,6 +105,55 @@ export type OfferCardTemplate = {
 
 const isObject = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 const finite = (value: unknown, fallback: number) => typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+const dynamicToken = /\{\{\s*([a-zA-Z][a-zA-Z0-9_.-]{0,59})\s*\}\}/g;
+
+export const getDynamicFieldName = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const match = dynamicToken.exec(value);
+  dynamicToken.lastIndex = 0;
+  return match?.[1];
+};
+
+const hasOwn = (source: Record<string, unknown>, key: string) => Object.prototype.hasOwnProperty.call(source, key);
+
+/** Resolve exact and embedded {{tokens}} without mutating the template. */
+export const resolveDynamicValue = (value: unknown, dynamicFields: Record<string, unknown>): string => {
+  if (value === null || value === undefined) return '';
+  if (Array.isArray(value)) return value.map((item) => resolveDynamicValue(item, dynamicFields)).filter(Boolean).join(', ');
+  if (typeof value !== 'string') return String(value);
+  return value.replace(dynamicToken, (token, path: string) => {
+    const result = path.split('.').reduce<unknown>((current, key) => isObject(current) ? current[key] : undefined, dynamicFields);
+    return result === undefined || result === null ? token : resolveDynamicValue(result, dynamicFields);
+  });
+};
+
+/** Apply an explicit binding when a legacy template stores static starter copy. */
+export const resolveTemplateElementValue = (value: unknown, field: string | undefined, dynamicFields: Record<string, unknown>): string => {
+  const embeddedField = getDynamicFieldName(value);
+  const boundValue = field ? dynamicFields[field] : undefined;
+  if (field && !embeddedField && hasOwn(dynamicFields, field) && boundValue !== undefined && boundValue !== null && boundValue !== '') {
+    return resolveDynamicValue(`{{${field}}}`, dynamicFields);
+  }
+  return resolveDynamicValue(value, dynamicFields);
+};
+
+const stringOr = (source: Record<string, unknown>, keys: string[], fallback = '') => {
+  for (const key of keys) if (typeof source[key] === 'string' && source[key].trim()) return source[key] as string;
+  return fallback;
+};
+
+const normalizeElementType = (value: unknown): OfferTemplateElement['type'] => {
+  const normalized = String(value || 'text').trim().toLowerCase();
+  if (normalized === 'rect' || normalized === 'rectangle') return 'rectangle';
+  if (normalized === 'circle' || normalized === 'ellipse') return 'circle';
+  if (normalized === 'photo' || normalized === 'picture') return 'image';
+  if (normalized === 'cta') return 'button';
+  if (normalized === 'sticker') return 'badge';
+  if (normalized === 'separator') return 'divider';
+  return ['text', 'image', 'shape', 'rectangle', 'circle', 'line', 'button', 'badge', 'icon', 'divider', 'group'].includes(normalized)
+    ? normalized as OfferTemplateElement['type']
+    : 'text';
+};
 
 /** Accepts canonical v2 JSON and legacy API templates at the mobile boundary. */
 export const normalizeOfferTemplateCanvas = (canvas?: OfferTemplateCanvas): OfferTemplateCanvas | undefined => {
@@ -115,18 +166,28 @@ export const normalizeOfferTemplateCanvas = (canvas?: OfferTemplateCanvas): Offe
     const source = isObject(raw) ? raw : {};
     const position = isObject(source.position) ? source.position : {};
     const size = isObject(source.size) ? source.size : {};
+    const frame = isObject(source.frame) ? source.frame : {};
+    const style = isObject(source.style) ? source.style : {};
     const content = isObject(source.content) ? source.content : {};
-    const x = Math.max(0, finite(source.x, finite(position.x, 0)));
-    const y = Math.max(0, finite(source.y, finite(position.y, 0)));
-    const elementWidth = Math.max(1, finite(source.width, finite(size.width, width * 0.8)));
-    const elementHeight = Math.max(1, finite(source.height, finite(size.height, 80)));
-    const field = typeof source.field === 'string' ? source.field : typeof source.key === 'string' ? source.key : typeof content.field === 'string' ? content.field : undefined;
-    const imageUrl = typeof source.imageUrl === 'string' ? source.imageUrl : typeof source.src === 'string' ? source.src : typeof content.src === 'string' ? content.src : undefined;
-    const text = typeof source.content === 'string' ? source.content : typeof source.text === 'string' ? source.text : typeof content.text === 'string' ? content.text : '';
+    const type = normalizeElementType(source.type ?? source.kind ?? source.elementType);
+    const x = Math.max(0, finite(source.x, finite(source.left, finite(position.x, finite(position.left, finite(frame.x, 0))))));
+    const y = Math.max(0, finite(source.y, finite(source.top, finite(position.y, finite(position.top, finite(frame.y, 0))))));
+    const elementWidth = Math.max(1, finite(source.width, finite(source.w, finite(size.width, finite(size.w, finite(frame.width, width * 0.8))))));
+    const elementHeight = Math.max(1, finite(source.height, finite(source.h, finite(size.height, finite(size.h, finite(frame.height, type === 'badge' ? 180 : 80))))));
+    const explicitField = stringOr(source, ['field', 'key', 'binding', 'bind'], stringOr(content, ['field', 'key', 'binding', 'bind']));
+    const imageUrl = stringOr(source, ['imageUrl', 'src', 'image', 'url'], stringOr(content, ['imageUrl', 'src', 'image', 'url']));
+    const text = typeof source.content === 'string'
+      ? source.content
+      : stringOr(content, ['text', 'value', 'label'], stringOr(source, ['text', 'value', 'label'], ''));
+    const field = explicitField || getDynamicFieldName(type === 'image' ? imageUrl : text) || getDynamicFieldName(type === 'image' ? text : imageUrl);
+    const fontStyle = (stringOr(source, ['fontStyle'], stringOr(style, ['fontStyle'], 'normal')) === 'italic' ? 'italic' : 'normal') as 'normal' | 'italic';
+    const textAlign = stringOr(source, ['textAlign', 'align'], stringOr(style, ['textAlign', 'align'], 'left'));
+    const textTransform = stringOr(source, ['textTransform', 'transformText'], stringOr(style, ['textTransform', 'transformText'], 'none'));
+    const resizeMode = stringOr(source, ['resizeMode', 'objectFit'], stringOr(style, ['resizeMode', 'objectFit'], 'contain'));
     return {
       ...(source as unknown as OfferTemplateElement),
       id: typeof source.id === 'string' && source.id ? source.id : `layer-${index + 1}`,
-      type: (typeof source.type === 'string' ? source.type : 'text') as OfferTemplateElement['type'],
+      type,
       ...(field ? { field, key: field } : {}),
       ...(imageUrl ? { imageUrl, src: imageUrl } : {}),
       content: text,
@@ -137,6 +198,31 @@ export const normalizeOfferTemplateCanvas = (canvas?: OfferTemplateCanvas): Offe
       height: elementHeight,
       position: { x, y },
       size: { width: elementWidth, height: elementHeight },
+      rotation: finite(source.rotation, finite(source.rotate, finite(style.rotation, finite(style.rotate, 0)))),
+      zIndex: Math.round(finite(source.zIndex, index + 1)),
+      visible: source.visible !== false,
+      locked: source.locked === true,
+      editable: typeof source.editable === 'boolean' ? source.editable : true,
+      color: stringOr(source, ['color', 'textColor'], stringOr(style, ['color', 'textColor'], type === 'shape' || type === 'rectangle' || type === 'circle' ? '#FFC400' : '#FFFFFF')),
+      backgroundColor: stringOr(source, ['backgroundColor', 'fill', 'background'], stringOr(style, ['backgroundColor', 'fill', 'background'], type === 'button' || type === 'badge' ? '#FFC400' : 'transparent')),
+      fontFamily: stringOr(source, ['fontFamily', 'font'], stringOr(style, ['fontFamily', 'font'], 'Inter')),
+      fontSize: Math.max(1, finite(source.fontSize, finite(style.fontSize, type === 'text' ? 64 : 30))),
+      fontWeight: stringOr(source, ['fontWeight', 'weight'], stringOr(style, ['fontWeight', 'weight'], '700')),
+      fontStyle,
+      letterSpacing: finite(source.letterSpacing, finite(style.letterSpacing, 0)),
+      lineHeight: finite(source.lineHeight, finite(style.lineHeight, 0)),
+      numberOfLines: Math.max(1, Math.round(finite(source.numberOfLines, finite(source.lines, finite(style.numberOfLines, finite(style.lines, 1)))))),
+      textAlign: (['left', 'center', 'right'].includes(textAlign) ? textAlign : 'left') as 'left' | 'center' | 'right',
+      textAlignVertical: (stringOr(source, ['textAlignVertical'], stringOr(style, ['textAlignVertical'], 'center')) as 'top' | 'center' | 'bottom'),
+      textDecorationLine: (stringOr(source, ['textDecorationLine'], stringOr(style, ['textDecorationLine'], 'none')) as OfferTemplateElement['textDecorationLine']),
+      textTransform: (['none', 'uppercase', 'lowercase', 'capitalize'].includes(textTransform) ? textTransform : 'none') as OfferTemplateElement['textTransform'],
+      borderRadius: Math.max(0, finite(source.borderRadius, finite(source.radius, finite(style.borderRadius, finite(style.radius, type === 'circle' || type === 'badge' ? 999 : type === 'button' ? 18 : 0))))),
+      borderWidth: Math.max(0, finite(source.borderWidth, finite(style.borderWidth, 0))),
+      borderColor: stringOr(source, ['borderColor'], stringOr(style, ['borderColor'], '#111827')),
+      borderStyle: (stringOr(source, ['borderStyle'], stringOr(style, ['borderStyle'], 'solid')) as OfferTemplateElement['borderStyle']),
+      opacity: Math.max(0, Math.min(1, finite(source.opacity, finite(style.opacity, 1)))),
+      resizeMode: (['cover', 'contain', 'stretch'].includes(resizeMode) ? resizeMode : 'contain') as 'cover' | 'contain' | 'stretch',
+      style,
     };
   });
   return { ...(canvas as OfferTemplateCanvas), width, height, elements };
@@ -242,6 +328,7 @@ export const DEFAULT_OFFER_CARD_DESIGN: OfferCardDesign = {
   fontWeight: '900',
   fontStyle: 'normal',
   textAlign: 'left',
+  dynamicFields: {},
 };
 
 export const toOfferCardTemplate = (template: {
@@ -256,6 +343,7 @@ export const toOfferCardTemplate = (template: {
   layout: OfferCardLayout;
   avatarId: string;
   editableFields?: OfferCardTemplate['editableFields'];
+  dynamicFields?: Record<string, unknown>;
   allowColorChange?: boolean;
   allowLayoutChange?: boolean;
   allowAvatarChange?: boolean;
@@ -271,6 +359,7 @@ export const toOfferCardTemplate = (template: {
   description: template.description,
   previewUrl: template.previewUrl,
   canvas: normalizeOfferTemplateCanvas(template.canvas),
+  dynamicFields: template.dynamicFields || {},
   editableFields: template.editableFields,
   allowColorChange: template.allowColorChange,
   allowLayoutChange: template.allowLayoutChange,

@@ -81,6 +81,7 @@ export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
           templateSource: 'admin',
           previewUrl: templates[0].previewUrl,
           canvas: templates[0].canvas,
+          dynamicFields: templates[0].dynamicFields || {},
           avatarId: templates[0].defaultAvatarId || current.avatarId,
           primaryColor: templates[0].primaryColor,
           secondaryColor: templates[0].secondaryColor,

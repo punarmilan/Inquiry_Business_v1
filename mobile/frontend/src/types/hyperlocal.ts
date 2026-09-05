@@ -57,6 +57,7 @@ export interface Offer {
     secondaryColor: string;
     layout?: 'right' | 'left' | 'bottom' | 'center';
     customizations?: Record<string, string | number | boolean>;
+    dynamicFields?: Record<string, unknown>;
     titleFontSize?: number;
     descriptionFontSize?: number;
     fontWeight?: '500' | '600' | '700' | '800' | '900';
@@ -149,6 +150,7 @@ export interface OfferTemplate {
   description?: string;
   previewUrl?: string;
   canvas?: OfferTemplateCanvas;
+  dynamicFields?: Record<string, unknown>;
   primaryColor: string;
   secondaryColor: string;
   layout: 'right' | 'left' | 'bottom' | 'center';

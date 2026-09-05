@@ -73,6 +73,7 @@ const offerPayload = Joi.object({
     secondaryColor: Joi.string().trim().pattern(/^#[0-9a-fA-F]{6}$/).required(),
     layout: Joi.string().valid('right', 'left', 'bottom', 'center').default('right'),
     customizations: Joi.object().unknown(true),
+    dynamicFields: Joi.object().unknown(true),
     titleFontSize: Joi.number().integer().min(16).max(56),
     descriptionFontSize: Joi.number().integer().min(11).max(28),
     fontWeight: Joi.string().valid('500', '600', '700', '800', '900'),

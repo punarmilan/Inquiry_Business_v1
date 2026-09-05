@@ -8,7 +8,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { listMyBusinesses, listOfferTemplates, listTemplateStickers } from '../../services/api';
-import { DEFAULT_OFFER_CARD_DESIGN, OFFER_AVATARS, OFFER_CARD_COLORS, OFFER_CARD_TEMPLATES, findOfferAvatar, toOfferCardTemplate, type OfferCardDesign, type OfferCardTemplate, type OfferTemplateCanvas, type OfferTemplateElement } from '../../config/offerCardDesigner';
+import { DEFAULT_OFFER_CARD_DESIGN, OFFER_AVATARS, OFFER_CARD_COLORS, OFFER_CARD_TEMPLATES, findOfferAvatar, resolveDynamicValue, resolveTemplateElementValue, toOfferCardTemplate, type OfferCardDesign, type OfferCardTemplate, type OfferTemplateCanvas, type OfferTemplateElement } from '../../config/offerCardDesigner';
 import { OfferAvatarSprite } from '../../components/OfferAvatarSprite';
 import type { OfferSticker } from '../../config/offerStickers';
 import type { Business } from '../../types/hyperlocal';
@@ -194,8 +194,8 @@ const EditableCanvasText: React.FC<{
 
   const isActive = editingText === kind || movingText === kind;
   return (
-    <View {...responder.panHandlers} style={[styles.canvasMovableText, layerStyle, { transform: [{ translateX: offset.x }, { translateY: offset.y }, { rotate: `${rotation}deg` }] }]}>
-      <Pressable onPress={handleTap} style={[styles.canvasTextTouch, isActive && styles.canvasTextSelected]}>
+    <View collapsable={false} {...responder.panHandlers} style={[styles.canvasMovableText, layerStyle, { transform: [{ translateX: offset.x }, { translateY: offset.y }, { rotate: `${rotation}deg` }] }]}>
+      <Pressable onPress={handleTap} hitSlop={8} style={[styles.canvasTextTouch, isActive && styles.canvasTextSelected]}>
         {editingText === kind ? (
           <TextInput
             autoFocus
@@ -310,6 +310,20 @@ const CanvasPreview: React.FC<{
   const bodySize = design.descriptionFontSize || 16;
   const poster = design.canvas || template?.canvas;
   const selectedSticker = poster?.elements.find((element) => element.id === selectedStickerId && element.id.startsWith('sticker-'));
+  const defaultValues = Object.fromEntries((template?.editableFields || []).map((field) => [field.key, field.defaultValue || '']));
+  const customValues = Object.fromEntries(Object.entries(design.customizations || {}).map(([key, value]) => [key, value]));
+  const values: Record<string, unknown> = {
+    ...(template?.dynamicFields || {}),
+    ...defaultValues,
+    ...(design.dynamicFields || {}),
+    ...customValues,
+    ...(title ? { title } : {}),
+    ...(description ? { description } : {}),
+    ...(category ? { category } : {}),
+    business,
+    businessName: business?.name || customValues.businessName || '',
+    ...(imageUrl ? { imageUrls: imageUrl } : {}),
+  };
   const [canvasWidth, setCanvasWidth] = useState(0);
   const [stageSize, setStageSize] = useState<LayoutSize>({ width: 0, height: 0 });
   const posterScale = poster && canvasWidth ? canvasWidth / poster.width : 0.28;
@@ -364,8 +378,6 @@ const CanvasPreview: React.FC<{
   } as any);
   const textFor = (element: OfferTemplateElement) => {
     const field = element.field || element.key;
-    const customValues = Object.fromEntries(Object.entries(design.customizations || {}).map(([key, value]) => [key, String(value)]));
-    const values: Record<string, string> = { ...customValues, title, description, category, businessName: business?.name || '', imageUrls: imageUrl || '' };
     // Poster layers keep their starter copy in `content`, while edits are
     // stored in `posterTextValues`/`text`. Prefer the edited value so a
     // controlled TextInput does not snap back to the starter copy.
@@ -380,12 +392,19 @@ const CanvasPreview: React.FC<{
     if (raw === undefined && field === 'timing') raw = element.content || element.text || '09:00 AM - 09:00 PM';
     if (raw === undefined && field === 'businessName') raw = business?.name || element.content || element.text || '';
     if (raw === undefined) raw = element.content || element.text || '';
-    return raw.replace(/\{\{\s*([a-zA-Z][a-zA-Z0-9_.-]{0,59})\s*\}\}/g, (token, key: string) => values[key] ?? token);
+    return textValues[element.id] !== undefined
+      ? resolveDynamicValue(raw, values)
+      : resolveTemplateElementValue(raw, field, values);
   };
   const imageFor = (element: OfferTemplateElement) => {
     const field = element.field || element.key || '';
-    if (field === 'imageUrls' || /image|photo|product/i.test(field)) return imageUrl || element.imageUrl || element.src;
-    return element.imageUrl || element.src || imageUrl;
+    const boundValue = values[field];
+    const boundImage = Array.isArray(boundValue)
+      ? boundValue.find((value): value is string => typeof value === 'string' && value.length > 0)
+      : typeof boundValue === 'string' && boundValue.length > 0 ? boundValue : undefined;
+    const elementImage = resolveDynamicValue(element.imageUrl || element.src || '', values);
+    if (field === 'imageUrls' || /image|photo|product/i.test(field)) return imageUrl || boundImage || elementImage || undefined;
+    return boundImage || elementImage || imageUrl;
   };
   const renderPosterElement = (element: OfferTemplateElement) => {
     if (!poster) return null;
@@ -516,7 +535,7 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
     listOfferTemplates().then((response) => {
       const nextTemplates = response.data.map(toOfferCardTemplate);
       setTemplates(nextTemplates);
-      if (nextTemplates[0]) setCardDesign((current) => current.templateId === DEFAULT_OFFER_CARD_DESIGN.templateId ? ({ ...current, templateId: nextTemplates[0].id, templateVersion: nextTemplates[0].version, templateSource: 'admin', previewUrl: nextTemplates[0].previewUrl, canvas: nextTemplates[0].canvas, avatarId: nextTemplates[0].defaultAvatarId || current.avatarId, primaryColor: nextTemplates[0].primaryColor, secondaryColor: nextTemplates[0].secondaryColor, layout: nextTemplates[0].layout }) : current);
+      if (nextTemplates[0]) setCardDesign((current) => current.templateId === DEFAULT_OFFER_CARD_DESIGN.templateId ? ({ ...current, templateId: nextTemplates[0].id, templateVersion: nextTemplates[0].version, templateSource: 'admin', previewUrl: nextTemplates[0].previewUrl, canvas: nextTemplates[0].canvas, dynamicFields: nextTemplates[0].dynamicFields || {}, avatarId: nextTemplates[0].defaultAvatarId || current.avatarId, primaryColor: nextTemplates[0].primaryColor, secondaryColor: nextTemplates[0].secondaryColor, layout: nextTemplates[0].layout }) : current);
     }).catch(() => {});
   }, [designMode]);
 
@@ -528,6 +547,22 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
   const templateCategories = useMemo(() => ['All', ...Array.from(new Set(allTemplates.map((template) => template.category).filter(Boolean) as string[]))], [allTemplates]);
   const visibleTemplates = useMemo(() => templateCategory === 'All' ? allTemplates : allTemplates.filter((template) => !template.category || template.category.toLowerCase() === templateCategory.toLowerCase()), [allTemplates, templateCategory]);
   const activeTemplate = allTemplates.find((template) => template.id === cardDesign.templateId);
+  const templateValues = useMemo<Record<string, unknown>>(() => {
+    const defaultValues = Object.fromEntries((activeTemplate?.editableFields || []).map((field) => [field.key, field.defaultValue || '']));
+    const customValues = Object.fromEntries(Object.entries(cardDesign.customizations || {}).map(([key, value]) => [key, value]));
+    return {
+      ...(activeTemplate?.dynamicFields || {}),
+      ...defaultValues,
+      ...(cardDesign.dynamicFields || {}),
+      ...customValues,
+      ...(title ? { title } : {}),
+      ...(description ? { description } : {}),
+      ...(category ? { category } : {}),
+      business,
+      businessName: business?.name || customValues.businessName || '',
+      ...(imageUrls[0] ? { imageUrls: imageUrls[0] } : {}),
+    };
+  }, [activeTemplate, business, cardDesign.customizations, cardDesign.dynamicFields, category, description, imageUrls, title]);
   const textEditorLayers = useMemo(() => {
     const canvasLayers = cardDesign.canvas?.elements.filter((element) => element.editable !== false && isTextElement(element)).map((element) => ({
       id: element.id,
@@ -542,13 +577,18 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
       ? (selectedTextElement.field || selectedTextElement.key || '')
       : `poster:${selectedTextElement.id}`
     : selectedTextElementId === '$description' ? 'description' : 'title';
+  const selectedCanvasText = selectedTextElement
+    ? posterTextValues[selectedTextElement.id] !== undefined
+      ? resolveDynamicValue(posterTextValues[selectedTextElement.id], templateValues)
+      : resolveTemplateElementValue(selectedTextElement.content ?? selectedTextElement.text ?? '', selectedTextElement.field || selectedTextElement.key, templateValues)
+    : '';
   const selectedTextValue = selectedTextKind === 'title'
-    ? title
+    ? title || selectedCanvasText
     : selectedTextKind === 'description'
-      ? description
+      ? description || selectedCanvasText
       : selectedTextKind === 'category'
-        ? category
-        : selectedTextElement ? (posterTextValues[selectedTextElement.id] ?? selectedTextElement.content ?? selectedTextElement.text ?? '') : '';
+        ? category || selectedCanvasText
+        : selectedCanvasText;
   const selectedTextPrefix = selectedTextElementId === '$description' ? 'description' : 'title';
   const selectedTextSettings = {
     fontSize: selectedTextElement?.fontSize || (selectedTextPrefix === 'description' ? cardDesign.descriptionFontSize || 16 : cardDesign.titleFontSize || 30),
@@ -780,7 +820,7 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
     setSelectedStickerId(null);
     setSelectedTextElementId(template.canvas?.elements.find((element) => element.editable !== false && isTextElement(element))?.id || '$title');
     setAvatarOffset({ x: 0, y: 0 });
-    setCardDesign((current) => ({ ...current, templateId: template.id, templateVersion: template.version, templateSource: template.source || 'system', previewUrl: template.previewUrl, canvas: template.canvas, avatarId: template.id === 'custom' ? '' : (template.defaultAvatarId || current.avatarId), primaryColor: template.primaryColor, secondaryColor: template.secondaryColor, layout: template.layout }));
+    setCardDesign((current) => ({ ...current, templateId: template.id, templateVersion: template.version, templateSource: template.source || 'system', previewUrl: template.previewUrl, canvas: template.canvas, dynamicFields: template.dynamicFields || {}, avatarId: template.id === 'custom' ? '' : (template.defaultAvatarId || current.avatarId), primaryColor: template.primaryColor, secondaryColor: template.secondaryColor, layout: template.layout }));
   };
 
   const selectBlankTemplate = () => {

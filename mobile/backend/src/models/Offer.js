@@ -17,6 +17,7 @@ const cardDesignSchema = new mongoose.Schema(
     // Snapshot the admin poster definition with the offer so published cards
     // keep the exact template version selected by the business owner.
     canvas: { type: mongoose.Schema.Types.Mixed, default: null },
+    dynamicFields: { type: mongoose.Schema.Types.Mixed, default: () => ({}) },
     avatarId: { type: String, trim: true, maxlength: 80 },
     primaryColor: { type: String, trim: true, maxlength: 16 },
     secondaryColor: { type: String, trim: true, maxlength: 16 },

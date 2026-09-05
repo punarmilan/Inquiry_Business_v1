@@ -2,7 +2,7 @@ import React from 'react';
 import { Image, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { findOfferAvatar } from '../config/offerCardDesigner';
+import { findOfferAvatar, resolveDynamicValue, resolveTemplateElementValue } from '../config/offerCardDesigner';
 import { OfferAvatarSprite } from './OfferAvatarSprite';
 import { theme } from '../theme';
 import type { Offer, Business, OfferTemplateCanvas, OfferTemplateElement } from '../types/hyperlocal';
@@ -35,24 +35,54 @@ const heroIcon = (category: string): React.ComponentProps<typeof MaterialCommuni
 
 const posterText = (offer: Offer, element: OfferTemplateElement) => {
   const field = element.field || element.key;
+  const business = offer.businessDocument || (offer.business && typeof offer.business !== 'string' ? offer.business : undefined);
+  const values: Record<string, unknown> = {
+    ...(offer.cardDesign?.dynamicFields || {}),
+    ...(offer.cardDesign?.customizations || {}),
+    title: offer.title,
+    description: offer.description,
+    category: offer.category,
+    originalPrice: offer.originalPrice,
+    offerPrice: offer.offerPrice,
+    discount: offer.discountPercentage,
+    discountPercentage: offer.discountPercentage,
+    business,
+    businessName: business?.name || '',
+    startsAt: new Date(offer.startsAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
+    expiresAt: new Date(offer.expiresAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
+    ...(offer.imageUrls?.[0] ? { imageUrls: offer.imageUrls[0] } : {}),
+  };
   if (field === 'title') return offer.title;
   if (field === 'description') return offer.description;
   if (field === 'category') return offer.category;
   if (field === 'offerPrice') return `₹${offer.offerPrice.toLocaleString('en-IN')}`;
   if (field === 'originalPrice') return `₹${offer.originalPrice.toLocaleString('en-IN')}`;
   if (field === 'discount' || field === 'discountPercentage') return `${Math.round(offer.discountPercentage)}% OFF`;
-  if (field === 'businessName' && offer.business && typeof offer.business !== 'string') return offer.business.name;
+  if (field === 'businessName' && business?.name) return business.name;
   if (field === 'startsAt') return new Date(offer.startsAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
   if (field === 'expiresAt') return new Date(offer.expiresAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
-  if (field === 'buttonText') return element.content || element.text || 'VIEW OFFER';
-  return element.content || element.text || '';
+  if (field === 'buttonText') return resolveTemplateElementValue(element.content || element.text || 'VIEW OFFER', field, values);
+  return resolveTemplateElementValue(element.content || element.text || '', field, values);
 };
 
 const posterImage = (offer: Offer, element: OfferTemplateElement) => {
   const field = element.field || element.key || '';
-  if (field === 'businessLogo' && offer.business && typeof offer.business !== 'string') return offer.business.logoUrl;
-  if (field === 'imageUrls' || /image|photo|product/i.test(field)) return offer.imageUrls?.[0] || element.imageUrl || element.src;
-  return element.imageUrl || element.src;
+  const business = offer.businessDocument || (offer.business && typeof offer.business !== 'string' ? offer.business : undefined);
+  const values: Record<string, unknown> = {
+    ...(offer.cardDesign?.dynamicFields || {}),
+    ...(offer.cardDesign?.customizations || {}),
+    business,
+    businessLogo: business?.logoUrl || '',
+    ...(offer.imageUrls?.[0] ? { imageUrls: offer.imageUrls[0] } : {}),
+  };
+  const dynamicValue = field ? values[field] : undefined;
+  const dynamicImage = Array.isArray(dynamicValue)
+    ? dynamicValue.find((value): value is string => typeof value === 'string' && value.length > 0)
+    : typeof dynamicValue === 'string' && dynamicValue.length > 0 ? dynamicValue : undefined;
+  const elementImage = resolveDynamicValue(element.imageUrl || element.src || '', values);
+  if (field === 'businessLogo') return business?.logoUrl || dynamicImage || elementImage;
+  if (field === 'imageUrls' || /image|photo|product/i.test(field)) return offer.imageUrls?.[0] || dynamicImage || elementImage;
+  return dynamicImage || elementImage;
 };
 
 const PosterLayers: React.FC<{ offer: Offer; canvas: OfferTemplateCanvas; previewUrl?: string }> = ({ offer, canvas, previewUrl }) => {
