@@ -130,7 +130,7 @@ function HomePage({ navigate }: HomePageProps) {
       </section>
 
       <section className="section featuresSection">
-        <SectionHeading eyebrow="Features" title="Simple tools for local life" />
+        <SectionHeading eyebrow="Inside the app" title="Everything you need, in one place" />
         <FeatureGrid />
       </section>
 

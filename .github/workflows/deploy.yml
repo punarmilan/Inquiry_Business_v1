@@ -112,7 +112,7 @@ jobs:
           context: ./website/frontend
           file: ./website/frontend/Dockerfile
           build-args: |
-            VITE_API_BASE_URL=https://web_api.inquiry.business
+            VITE_API_BASE_URL=https://web-api.inquiry.business
           push: true
           tags: |
             ${{ env.DOCKERHUB_NAMESPACE }}/kaamsaathi-website-frontend:${{ github.sha }}
@@ -124,7 +124,7 @@ jobs:
           context: ./website/admin-frontend
           file: ./website/admin-frontend/Dockerfile
           build-args: |
-            VITE_API_BASE_URL=https://web_api.inquiry.business
+            VITE_API_BASE_URL=https://web-api.inquiry.business
           push: true
           tags: |
             ${{ env.DOCKERHUB_NAMESPACE }}/kaamsaathi-admin-frontend:${{ github.sha }}

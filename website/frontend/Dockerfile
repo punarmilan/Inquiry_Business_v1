@@ -7,7 +7,7 @@ RUN npm ci
 
 COPY . .
 
-ARG VITE_API_BASE_URL=https://web_api.inquiry.business
+ARG VITE_API_BASE_URL=https://web-api.inquiry.business
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 
 RUN npm run build

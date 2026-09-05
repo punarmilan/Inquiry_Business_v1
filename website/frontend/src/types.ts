@@ -5,6 +5,7 @@ export type IconText = {
   icon: LucideIcon;
   title: string;
   body?: string;
+  category?: string;
   image?: string;
   imageAlt?: string;
 };

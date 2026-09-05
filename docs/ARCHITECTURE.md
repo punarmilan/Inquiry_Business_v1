@@ -5,10 +5,10 @@ This repository is a small service-oriented monorepo. The product has four deplo
 | Unit | Path | Responsibility | Public host |
 | --- | --- | --- | --- |
 | Mobile client | `mobile/frontend` | Customer and provider experience | Android/iOS |
-| App API | `mobile/backend` | Customer, provider, booking and realtime APIs | `app_api.inquiry.business` |
+| App API | `mobile/backend` | Customer, provider, booking and realtime APIs | `app-api.inquiry.business` |
 | Public website | `website/frontend` | Marketing, service discovery and app acquisition | `inquiry.business` |
 | Admin console | `website/admin-frontend` | Operations, moderation, finance and configuration | `admin.inquiry.business` |
-| Website API | `website/backend` | Admin-authenticated dashboard and operations API | `web_api.inquiry.business` |
+| Website API | `website/backend` | Admin-authenticated dashboard and operations API | `web-api.inquiry.business` |
 
 ## Micro-structure rules
 

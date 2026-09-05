@@ -8,13 +8,13 @@ function FeaturesPage() {
       eyebrow="Features"
       title={
         <>
-          Tools to discover and <span>book locally</span>
+          Explore every part of the <span>InquiryExperts app</span>
         </>
       }
-      body="10 KM discovery, city availability, trusted services, contextual chat, and secure payment status."
+      body="Offers, trusted services, business tools, provider mode, payments and support — all built into one hyperlocal app."
     >
       <section className="section featuresSection pageSection" id="features">
-        <SectionHeading eyebrow="Important features" title="Tools for offers, services and local businesses" />
+        <SectionHeading eyebrow="App feature map" title="Built around the way you work locally" />
         <FeatureGrid />
       </section>
     </PageShell>

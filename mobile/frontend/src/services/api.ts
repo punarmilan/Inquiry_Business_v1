@@ -28,7 +28,7 @@ import type { OfferSticker } from '../config/offerStickers';
 const API_PORT = 5000;
 
 // Last resort only: used for production builds. Local dev should use the Expo host.
-const FALLBACK_API_BASE_URL = 'https://app_api.inquiry.business';
+const FALLBACK_API_BASE_URL = 'https://app-api.inquiry.business';
 
 const isTunnelHost = (host: string) =>
   host.endsWith('.exp.direct') || host.endsWith('.ngrok.io') || host.endsWith('.loca.lt');

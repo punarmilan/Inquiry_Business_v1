@@ -1,12 +1,18 @@
 import { features } from '../data/siteData';
 
-function FeatureGrid() {
+type FeatureGridProps = {
+  limit?: number;
+};
+
+function FeatureGrid({ limit }: FeatureGridProps) {
+  const visibleFeatures = typeof limit === 'number' ? features.slice(0, limit) : features;
+
   return (
     <div className="featureGrid">
-      {features.map(({ icon: Icon, title, body, image, imageAlt }) => (
+      {visibleFeatures.map(({ icon: Icon, title, body, category }) => (
         <article className="featureCard" key={title}>
-          {image && <img className="featurePhoto" src={image} alt={imageAlt || ''} />}
           <div className="featureCardBody">
+            {category && <p className="featureCategory">{category}</p>}
             <span className="featureIcon">
               <Icon size={24} aria-hidden="true" />
             </span>

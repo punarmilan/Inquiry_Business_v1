@@ -1,46 +1,38 @@
 import {
-  Baby,
   BadgeCheck,
+  Bell,
+  Bookmark,
   Bot,
   BriefcaseBusiness,
-  Calculator,
+  CalendarClock,
   Car,
-  ChefHat,
-  Code,
   Construction,
   GraduationCap,
   Hammer,
-  HardHat,
   IndianRupee,
+  LayoutTemplate,
   MapPin,
   MessageCircle,
-  Package,
+  Navigation,
   Paintbrush,
-  Palette,
   PlugZap,
+  Radio,
   Search,
   ShieldCheck,
-  Sparkles,
+  SlidersHorizontal,
+  Store,
   UserRoundCheck,
-  Users,
+  UserRound,
   UsersRound,
+  Wallet,
   Wrench,
   Zap,
 } from 'lucide-react';
 import electricianWorker from '../../assets/electrician-worker.jpg';
 import heroWorker from '../../assets/home-hero-worker.png';
-import serviceAccountant from '../../assets/services/accountant.jpg';
-import serviceBabySitter from '../../assets/services/baby-sitter.jpg';
 import serviceCarpenter from '../../assets/services/carpenter.jpg';
-import serviceCleaning from '../../assets/services/cleaning.jpg';
-import serviceConstruction from '../../assets/services/construction.jpg';
-import serviceCook from '../../assets/services/cook.jpg';
-import serviceDesigner from '../../assets/services/designer.jpg';
-import serviceDeveloper from '../../assets/services/developer.jpg';
 import serviceDriver from '../../assets/services/driver.jpg';
-import serviceHelper from '../../assets/services/helper.jpg';
 import serviceLoading from '../../assets/services/loading.jpg';
-import serviceMaid from '../../assets/services/maid.jpg';
 import servicePainter from '../../assets/services/painter.jpg';
 import servicePlumber from '../../assets/services/plumber.jpg';
 import serviceTeacher from '../../assets/services/teacher.jpg';
@@ -96,42 +88,6 @@ export const employerSteps: IconText[] = [
 
 export const categories: ServiceItem[] = [
   {
-    icon: HardHat,
-    title: 'Helper',
-    slug: 'helper',
-    body: 'Everyday local support.',
-    intro: 'Find trusted helpers for quick local work and daily support tasks.',
-    image: serviceHelper,
-    imageAlt: 'People getting work support',
-  },
-  {
-    icon: Construction,
-    title: 'Construction',
-    slug: 'construction',
-    body: 'Site work and labor.',
-    intro: 'Book company-managed professionals for planned local support.',
-    image: serviceConstruction,
-    imageAlt: 'Construction worker on site',
-  },
-  {
-    icon: Package,
-    title: 'Loading',
-    slug: 'loading',
-    body: 'Packing and shifting.',
-    intro: 'Get loading, unloading, and shifting help for homes, shops, and offices.',
-    image: serviceLoading,
-    imageAlt: 'Worker loading boxes',
-  },
-  {
-    icon: Sparkles,
-    title: 'Cleaning',
-    slug: 'cleaning',
-    body: 'Home and office cleaning.',
-    intro: 'Book trusted cleaning support near your location.',
-    image: serviceCleaning,
-    imageAlt: 'Cleaning service in progress',
-  },
-  {
     icon: PlugZap,
     title: 'Electrician',
     slug: 'electrician',
@@ -168,33 +124,6 @@ export const categories: ServiceItem[] = [
     imageAlt: 'Painter working on a wall',
   },
   {
-    icon: Palette,
-    title: 'Designer',
-    slug: 'designer',
-    body: 'Creative work.',
-    intro: 'Connect with designers for creative, digital, and visual work.',
-    image: serviceDesigner,
-    imageAlt: 'Designer workspace with creative tools',
-  },
-  {
-    icon: Code,
-    title: 'Developer',
-    slug: 'developer',
-    body: 'Web and app work.',
-    intro: 'Find developers for websites, apps, fixes, and technical tasks.',
-    image: serviceDeveloper,
-    imageAlt: 'Developer coding on a laptop',
-  },
-  {
-    icon: Calculator,
-    title: 'Accountant',
-    slug: 'accountant',
-    body: 'Finance support.',
-    intro: 'Get accounting help for billing, records, payments, and reports.',
-    image: serviceAccountant,
-    imageAlt: 'Accountant checking finance details',
-  },
-  {
     icon: GraduationCap,
     title: 'Teacher',
     slug: 'teacher',
@@ -212,63 +141,122 @@ export const categories: ServiceItem[] = [
     image: serviceDriver,
     imageAlt: 'Driver on the road',
   },
-  {
-    icon: ChefHat,
-    title: 'Cook',
-    slug: 'cook',
-    body: 'Cooking service.',
-    intro: 'Find cooks for home meals, events, and regular kitchen help.',
-    image: serviceCook,
-    imageAlt: 'Cook preparing food',
-  },
-  {
-    icon: UserRoundCheck,
-    title: 'Maid',
-    slug: 'maid',
-    body: 'Housekeeping help.',
-    intro: 'Connect for housekeeping, cleaning, and daily home support.',
-    image: serviceMaid,
-    imageAlt: 'Housekeeping and cleaning work',
-  },
-  {
-    icon: Baby,
-    title: 'Baby Sitter',
-    slug: 'baby-sitter',
-    body: 'Child care support.',
-    intro: 'Find trusted child care and babysitting support near you.',
-    image: serviceBabySitter,
-    imageAlt: 'Child care and babysitting',
-  },
 ];
 
 export const features: IconText[] = [
   {
+    icon: MapPin,
+    category: 'Offers',
+    title: 'Nearby offers within 10 KM',
+    body: 'Discover approved local deals around your selected location.',
+  },
+  {
+    icon: SlidersHorizontal,
+    category: 'Offers',
+    title: 'Search and smart filters',
+    body: 'Filter offers by category, distance and what is available now.',
+  },
+  {
     icon: ShieldCheck,
-    title: 'Admin-Approved Offers',
-    body: 'Every public offer passes moderation.',
-    image: serviceHelper,
-    imageAlt: 'Profile verification and hiring support',
+    category: 'Offers',
+    title: 'Admin-approved offers',
+    body: 'Every offer is reviewed before it reaches customers.',
+  },
+  {
+    icon: BadgeCheck,
+    category: 'Offers',
+    title: 'City-controlled availability',
+    body: 'Offers and services appear only in enabled cities and localities.',
+  },
+  {
+    icon: Bookmark,
+    category: 'Offers',
+    title: 'Save offers and view businesses',
+    body: 'Keep favourite deals and open the full business or offer details.',
+  },
+  {
+    icon: Construction,
+    category: 'Services',
+    title: 'Trusted service providers',
+    body: 'Browse managed professionals by service, locality, rating and availability.',
+  },
+  {
+    icon: CalendarClock,
+    category: 'Services',
+    title: 'Book by service, area and time',
+    body: 'Choose a category, location, schedule and preferred professional.',
+  },
+  {
+    icon: Navigation,
+    category: 'Services',
+    title: 'Booking status and live location',
+    body: 'Follow assigned professionals and track an active booking in context.',
+  },
+  {
+    icon: MessageCircle,
+    category: 'Communication',
+    title: 'In-app chat and inbox',
+    body: 'Keep booking, business and support conversations in one place.',
+  },
+  {
+    icon: Bell,
+    category: 'Communication',
+    title: 'Useful notifications',
+    body: 'Get updates for offers, bookings, messages, approvals and plans.',
+  },
+  {
+    icon: Store,
+    category: 'Business',
+    title: 'Business profiles and Business Center',
+    body: 'Create, customize and manage one or more local business profiles.',
+  },
+  {
+    icon: LayoutTemplate,
+    category: 'Business',
+    title: 'Offer designer and templates',
+    body: 'Build branded offer cards with images, layouts, stickers and pricing.',
+  },
+  {
+    icon: UsersRound,
+    category: 'Business',
+    title: 'Plans, quotas and approval workflow',
+    body: 'Choose a promotion plan, track limits and submit offers for review.',
   },
   {
     icon: IndianRupee,
-    title: 'Clear Service Pricing',
-    body: 'Estimates and payment status upfront.',
-    image: serviceAccountant,
-    imageAlt: 'Clear pay and accounting details',
+    category: 'Payments',
+    title: 'Payments and subscription status',
+    body: 'See service payments and plan activation only after secure verification.',
+  },
+  {
+    icon: Wallet,
+    category: 'Payments',
+    title: 'Wallet and transaction history',
+    body: 'Add money, request withdrawals and review every wallet transaction.',
   },
   {
     icon: Bot,
-    title: 'AI Assistant',
-    body: 'Quick help for offers, bookings and payments.',
-    image: serviceDeveloper,
-    imageAlt: 'Digital assistant and app support',
+    category: 'Support',
+    title: 'AI assistant and help center',
+    body: 'Ask about jobs, applications, payments and using the app.',
   },
   {
-    icon: Users,
-    title: 'Business Promotion Plans',
-    body: 'Dynamic plans with server-enforced quotas.',
-    image: serviceLoading,
-    imageAlt: 'Customer and business coordination',
+    icon: UserRound,
+    category: 'Account',
+    title: 'Profile, KYC and preferences',
+    body: 'Manage your profile, verification, language, privacy and settings.',
+  },
+  {
+    icon: UserRoundCheck,
+    category: 'Account',
+    title: 'Simple OTP onboarding',
+    body: 'Create an account, complete your profile and switch into provider mode when ready.',
+  },
+  {
+    icon: Radio,
+    category: 'Provider mode',
+    title: 'Provider availability and dashboard',
+    body: 'Go online, receive requests, manage assigned work and view performance.',
   },
 ];
 
