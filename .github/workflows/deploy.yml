@@ -154,7 +154,7 @@ jobs:
           password: ${{ secrets.VPS_PASSWORD }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || '22' }}
-          source: "docker-compose.yml,nginx/nginx.conf"
+          source: "docker-compose.yml,nginx/nginx.conf,scripts/configure-vps-nginx.sh"
           target: /var/www/kaamsaathi
           overwrite: true
 
@@ -195,6 +195,7 @@ jobs:
             # Deploy the exact commit that was built and recreate all services
             # so a cached `latest` container cannot leave stale UI code live.
             docker compose up -d --force-recreate --remove-orphans
+            bash /var/www/kaamsaathi/scripts/configure-vps-nginx.sh
             # nginx (gateway) resolves upstream container names to an IP once at startup
             # and caches it for its whole lifetime. Since its own image never changes,
             # `up -d` above never recreates it — so after mobile-backend/website-backend
