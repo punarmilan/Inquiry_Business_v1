@@ -162,6 +162,7 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         env:
           DOCKERHUB_NAMESPACE: ${{ secrets.DOCKERHUB_USERNAME }}
+          IMAGE_TAG: ${{ github.sha }}
           GOOGLE_MAPS_SERVER_API_KEY: ${{ secrets.GOOGLE_MAPS_SERVER_API_KEY }}
           GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
           FACEBOOK_APP_ID: ${{ secrets.FACEBOOK_APP_ID }}
@@ -172,15 +173,17 @@ jobs:
           password: ${{ secrets.VPS_PASSWORD }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || '22' }}
-          envs: DOCKERHUB_NAMESPACE,GOOGLE_MAPS_SERVER_API_KEY,GOOGLE_WEB_CLIENT_ID,FACEBOOK_APP_ID,FACEBOOK_APP_SECRET
+          envs: DOCKERHUB_NAMESPACE,IMAGE_TAG,GOOGLE_MAPS_SERVER_API_KEY,GOOGLE_WEB_CLIENT_ID,FACEBOOK_APP_ID,FACEBOOK_APP_SECRET
           script: |
+            set -eu
             mkdir -p /var/www/kaamsaathi
             cd /var/www/kaamsaathi
             # Refresh just these keys so any other vars already in .env survive.
             touch .env
-            grep -vE '^(DOCKERHUB_NAMESPACE|GOOGLE_MAPS_SERVER_API_KEY|GOOGLE_WEB_CLIENT_ID|FACEBOOK_APP_ID|FACEBOOK_APP_SECRET)=' .env > .env.tmp || true
+            grep -vE '^(DOCKERHUB_NAMESPACE|IMAGE_TAG|GOOGLE_MAPS_SERVER_API_KEY|GOOGLE_WEB_CLIENT_ID|FACEBOOK_APP_ID|FACEBOOK_APP_SECRET)=' .env > .env.tmp || true
             {
               echo "DOCKERHUB_NAMESPACE=$DOCKERHUB_NAMESPACE"
+              echo "IMAGE_TAG=$IMAGE_TAG"
               echo "GOOGLE_MAPS_SERVER_API_KEY=$GOOGLE_MAPS_SERVER_API_KEY"
               echo "GOOGLE_WEB_CLIENT_ID=$GOOGLE_WEB_CLIENT_ID"
               echo "FACEBOOK_APP_ID=$FACEBOOK_APP_ID"
@@ -189,12 +192,17 @@ jobs:
             mv .env.tmp .env
             chmod 600 .env
             docker compose pull
-            docker compose up -d --remove-orphans
+            # Deploy the exact commit that was built and recreate all services
+            # so a cached `latest` container cannot leave stale UI code live.
+            docker compose up -d --force-recreate --remove-orphans
             # nginx (gateway) resolves upstream container names to an IP once at startup
             # and caches it for its whole lifetime. Since its own image never changes,
             # `up -d` above never recreates it — so after mobile-backend/website-backend
             # get new containers (new IPs) above, gateway would keep proxying to the old,
             # dead IPs until something restarts it. Do that here on every deploy.
-            docker compose restart gateway
+            # Verify the gateway before reporting a successful deployment.
+            curl --fail --silent --show-error --max-time 20 -H 'Host: inquiry.business' http://127.0.0.1:8088/ | grep -q 'InquiryExperts'
+            curl --fail --silent --show-error --max-time 20 -H 'Host: admin.inquiry.business' http://127.0.0.1:8088/login | grep -q 'InquiryExperts Admin'
+            curl --fail --silent --show-error --max-time 20 -H 'Host: web-api.inquiry.business' http://127.0.0.1:8088/health >/dev/null
+            curl --fail --silent --show-error --max-time 20 -H 'Host: app-api.inquiry.business' http://127.0.0.1:8088/health >/dev/null
             docker image prune -f
-            docker exec giftme-caddy-1 caddy reload --config /etc/caddy/Caddyfile || true

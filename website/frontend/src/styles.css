@@ -7,7 +7,7 @@
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  --orange: #118f91;
+  --orange: #0f7d7f;
   --orange-soft: #e2f6f5;
   --offer: #f45b18;
   --offer-soft: #fff0e7;
@@ -21,7 +21,7 @@
   --muted: #5c5c5c;
   --paper: #ffffff;
   --line: #dde3e7;
-  --shadow: 0 22px 60px rgba(17, 143, 145, 0.12);
+  --shadow: 0 22px 60px rgba(15, 125, 127, 0.12);
   --frame: 1180px;
   --gutter: clamp(16px, 3vw, 32px);
 }
@@ -109,12 +109,12 @@ p {
   display: grid;
   place-items: center;
   border-radius: 8px;
-  background: linear-gradient(135deg, #22b8b5, #0a6f71);
+  background: linear-gradient(135deg, #0f7d7f, #0a6264);
   color: #ffffff;
   font-size: 1.32rem;
   font-weight: 950;
   line-height: 1;
-  box-shadow: 0 14px 24px rgba(17, 143, 145, 0.24);
+  box-shadow: 0 14px 24px rgba(15, 125, 127, 0.24);
 }
 
 .navLinks {
@@ -158,9 +158,9 @@ p {
 
 .navButton,
 .primaryAction {
-  background: linear-gradient(135deg, #22b8b5, #0a6f71);
+  background: linear-gradient(135deg, #0f7d7f, #0a6264);
   color: #ffffff;
-  box-shadow: 0 16px 30px rgba(17, 143, 145, 0.25);
+  box-shadow: 0 16px 30px rgba(15, 125, 127, 0.25);
 }
 
 .navButton {
@@ -1416,7 +1416,7 @@ h3 {
   color: #ffffff;
   font-size: 1.58rem;
   line-height: 1;
-  box-shadow: 0 10px 20px rgba(17, 143, 145, 0.28);
+  box-shadow: 0 10px 20px rgba(15, 125, 127, 0.28);
 }
 
 .previewCopy {
