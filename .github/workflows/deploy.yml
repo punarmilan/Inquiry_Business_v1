@@ -201,9 +201,19 @@ jobs:
             # `up -d` above never recreates it — so after mobile-backend/website-backend
             # get new containers (new IPs) above, gateway would keep proxying to the old,
             # dead IPs until something restarts it. Do that here on every deploy.
-            # Verify the gateway before reporting a successful deployment.
-            curl --fail --silent --show-error --max-time 20 -H 'Host: inquiry.business' http://127.0.0.1:8088/ | grep -q 'InquiryExperts'
-            curl --fail --silent --show-error --max-time 20 -H 'Host: admin.inquiry.business' http://127.0.0.1:8088/login | grep -q 'InquiryExperts Admin'
-            curl --fail --silent --show-error --max-time 20 -H 'Host: web-api.inquiry.business' http://127.0.0.1:8088/health >/dev/null
-            curl --fail --silent --show-error --max-time 20 -H 'Host: app-api.inquiry.business' http://127.0.0.1:8088/health >/dev/null
+            # Containers can take a few seconds to start after recreation. Retry
+            # the complete gateway check so readiness timing is not a false failure.
+            ready=0
+            for attempt in $(seq 1 12); do
+              if curl --fail --silent --show-error --max-time 10 -H 'Host: inquiry.business' http://127.0.0.1:8088/ | grep -q 'InquiryExperts' \
+                && curl --fail --silent --show-error --max-time 10 -H 'Host: admin.inquiry.business' http://127.0.0.1:8088/login | grep -q 'InquiryExperts Admin' \
+                && curl --fail --silent --show-error --max-time 10 -H 'Host: web-api.inquiry.business' http://127.0.0.1:8088/health >/dev/null \
+                && curl --fail --silent --show-error --max-time 10 -H 'Host: app-api.inquiry.business' http://127.0.0.1:8088/health >/dev/null; then
+                ready=1
+                break
+              fi
+              echo "Waiting for gateway services (attempt $attempt/12)..."
+              sleep 5
+            done
+            test "$ready" -eq 1
             docker image prune -f
