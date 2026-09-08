@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import type { CategoryRecord } from '@/api/hyperlocal';
-import { useCategoriesList, useCreateCategory, useUpdateCategory } from '@/hooks/useHyperlocal';
+import { useCategoriesList, useCreateCategory, useDeleteCategory, useUpdateCategory } from '@/hooks/useHyperlocal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,6 +33,7 @@ export const ServiceCategoriesPage = () => {
   const { data: categories, isLoading } = useCategoriesList();
   const createCategory = useCreateCategory();
   const updateCategory = useUpdateCategory();
+  const deleteCategory = useDeleteCategory();
 
   const save = () => {
     const payload = { ...form, basePrice: Number(form.basePrice), sortOrder: Number(form.sortOrder), cityAvailability: [] };
@@ -124,9 +125,26 @@ export const ServiceCategoriesPage = () => {
                 </p>
                 <p>{item.description}</p>
                 <p>{item.isActive ? 'Active' : 'Inactive'}</p>
-                <Button variant="outline" onClick={() => edit(item)}>
-                  Edit
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => edit(item)}>
+                    Edit
+                  </Button>
+                  {item.isActive && (
+                    <Button
+                      variant="destructive"
+                      onClick={() => {
+                        if (!window.confirm(`Delete ${item.name}? Existing bookings will be preserved.`)) return;
+                        deleteCategory.mutate(item._id, {
+                          onSuccess: () => toast.success('Service category deleted.'),
+                          onError: (e: any) => toast.error(e.response?.data?.error?.message || 'Failed to delete category.'),
+                        });
+                      }}
+                      disabled={deleteCategory.isPending}
+                    >
+                      Delete
+                    </Button>
+                  )}
+                </div>
               </CardContent>
             </Card>
           ))}

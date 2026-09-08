@@ -102,6 +102,16 @@ const updateCity = asyncHandler(async (req, res) => {
   if (!city) throw new ApiError(404, 'City not found', 'CITY_NOT_FOUND');
   res.json({ success: true, city });
 });
+const deleteCity = asyncHandler(async (req, res) => {
+  const city = await City.findByIdAndUpdate(
+    req.params.id,
+    { $set: { isActive: false, offersEnabled: false, servicesEnabled: false } },
+    { new: true, runValidators: true }
+  );
+  if (!city) throw new ApiError(404, 'City not found', 'CITY_NOT_FOUND');
+  await Worker.updateMany({ city: city._id }, { $set: { isActive: false, availability: 'offline' } });
+  res.json({ success: true, city });
+});
 
 const listWorkers = asyncHandler(async (req, res) => {
   const filter = {};
@@ -212,6 +222,16 @@ const updateWorker = asyncHandler(async (req, res) => {
   await User.updateOne({ _id: worker.user }, { $set: userUpdate });
   res.json({ success: true, worker });
 });
+const deleteWorker = asyncHandler(async (req, res) => {
+  const worker = await Worker.findByIdAndUpdate(
+    req.params.id,
+    { $set: { isActive: false, availability: 'offline' } },
+    { new: true }
+  );
+  if (!worker) throw new ApiError(404, 'Worker not found', 'WORKER_NOT_FOUND');
+  await User.updateOne({ _id: worker.user }, { $set: { isActive: false } });
+  res.json({ success: true, worker });
+});
 
 const listServiceCategories = asyncHandler(async (_req, res) =>
   res.json({ success: true, data: await ServiceCategory.find().populate('cityAvailability', 'name state').sort({ sortOrder: 1, name: 1 }) })
@@ -222,6 +242,15 @@ const createServiceCategory = asyncHandler(async (req, res) => {
 });
 const updateServiceCategory = asyncHandler(async (req, res) => {
   const category = await ServiceCategory.findByIdAndUpdate(req.params.id, { $set: req.body }, { new: true, runValidators: true });
+  if (!category) throw new ApiError(404, 'Service category not found', 'SERVICE_CATEGORY_NOT_FOUND');
+  res.json({ success: true, category });
+});
+const deleteServiceCategory = asyncHandler(async (req, res) => {
+  const category = await ServiceCategory.findByIdAndUpdate(
+    req.params.id,
+    { $set: { isActive: false } },
+    { new: true, runValidators: true }
+  );
   if (!category) throw new ApiError(404, 'Service category not found', 'SERVICE_CATEGORY_NOT_FOUND');
   res.json({ success: true, category });
 });
@@ -378,6 +407,11 @@ const updatePlan = asyncHandler(async (req, res) => {
   if (!plan) throw new ApiError(404, 'Plan not found', 'PLAN_NOT_FOUND');
   res.json({ success: true, plan });
 });
+const deletePlan = asyncHandler(async (req, res) => {
+  const plan = await Plan.findByIdAndUpdate(req.params.id, { $set: { isActive: false } }, { new: true, runValidators: true });
+  if (!plan) throw new ApiError(404, 'Plan not found', 'PLAN_NOT_FOUND');
+  res.json({ success: true, plan });
+});
 
 const listBookings = asyncHandler(async (req, res) => {
   const filter = {};
@@ -505,8 +539,8 @@ const refundPayment = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
-  listCities, createCity, updateCity, listWorkers, listProviderApplications, approveProviderApplication, rejectProviderApplication, createWorker, updateWorker,
-  listServiceCategories, createServiceCategory, updateServiceCategory, listBusinesses, moderateBusiness,
-  listOffers, moderateOffer, listOfferTemplates, createOfferTemplate, updateOfferTemplate, deleteOfferTemplate, listTemplateStickers, createTemplateSticker, updateTemplateSticker, deleteTemplateSticker, uploadTemplateAsset, getTemplateAsset, listPlans, createPlan, updatePlan, listBookings, assignWorker, forwardBooking, updateBookingStatus,
+  listCities, createCity, updateCity, deleteCity, listWorkers, listProviderApplications, approveProviderApplication, rejectProviderApplication, createWorker, updateWorker, deleteWorker,
+  listServiceCategories, createServiceCategory, updateServiceCategory, deleteServiceCategory, listBusinesses, moderateBusiness,
+  listOffers, moderateOffer, listOfferTemplates, createOfferTemplate, updateOfferTemplate, deleteOfferTemplate, listTemplateStickers, createTemplateSticker, updateTemplateSticker, deleteTemplateSticker, uploadTemplateAsset, getTemplateAsset, listPlans, createPlan, updatePlan, deletePlan, listBookings, assignWorker, forwardBooking, updateBookingStatus,
   listPayments, verifyPayment, refundPayment,
 };

@@ -14,6 +14,10 @@ export const useUpdateCity = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['cities'] }),
   });
 };
+export const useDeleteCity = () => {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: api.deleteCity, onSuccess: () => qc.invalidateQueries({ queryKey: ['cities'] }) });
+};
 
 // ---- Service categories ----
 export const useCategoriesList = () => useQuery({ queryKey: ['service-categories'], queryFn: api.listCategories });
@@ -28,6 +32,10 @@ export const useUpdateCategory = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['service-categories'] }),
   });
 };
+export const useDeleteCategory = () => {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: api.deleteCategory, onSuccess: () => qc.invalidateQueries({ queryKey: ['service-categories'] }) });
+};
 
 // ---- Plans ----
 export const usePlansList = () => useQuery({ queryKey: ['plans'], queryFn: api.listPlans });
@@ -41,6 +49,10 @@ export const useUpdatePlan = () => {
     mutationFn: ({ id, payload }: { id: string; payload: unknown }) => api.updatePlan(id, payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['plans'] }),
   });
+};
+export const useDeletePlan = () => {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: api.deletePlan, onSuccess: () => qc.invalidateQueries({ queryKey: ['plans'] }) });
 };
 
 // ---- Workers ----
@@ -66,6 +78,10 @@ export const useUpdateWorker = () => {
     mutationFn: ({ id, payload }: { id: string; payload: unknown }) => api.updateWorker(id, payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['workers'] }),
   });
+};
+export const useDeleteWorker = () => {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: api.deleteWorker, onSuccess: () => qc.invalidateQueries({ queryKey: ['workers'] }) });
 };
 
 // ---- Businesses ----

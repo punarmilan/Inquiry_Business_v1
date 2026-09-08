@@ -96,7 +96,12 @@ export const OffersPage = () => {
             )}
             {offer.status === 'approved' && (
               <Button size="sm" variant="destructive" onClick={() => setConfirmAction({ offer, action: 'suspend' })}>
-                Remove
+                Delete
+              </Button>
+            )}
+            {!['approved', 'suspended'].includes(offer.status) && (
+              <Button size="sm" variant="destructive" onClick={() => setConfirmAction({ offer, action: 'suspend' })}>
+                Delete
               </Button>
             )}
             {offer.status === 'suspended' && (
@@ -119,7 +124,7 @@ export const OffersPage = () => {
 
   const confirmCopy: Record<string, { title: string; description: string; destructive?: boolean }> = {
     approve: { title: 'Approve this offer?', description: 'It will become visible to nearby customers when its selected start date arrives.' },
-    suspend: { title: 'Remove this offer?', description: 'It will no longer appear in customer discovery. You can restore it later.', destructive: true },
+    suspend: { title: 'Delete this offer?', description: 'It will be deactivated and removed from customer discovery. You can restore it later.', destructive: true },
     restore: { title: 'Restore this offer?', description: 'It will become visible to nearby customers again if it is within its active dates and 10 KM range.' },
     feature: { title: 'Feature this offer for 7 days?', description: 'It will be ranked higher among eligible nearby offers, without bypassing the 10 KM radius.' },
     unfeature: { title: 'Remove featured placement?', description: 'The offer stays live but loses priority ranking.' },

@@ -5,7 +5,7 @@ import { StatusBadge } from '@/components/shared/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useCitiesList, useCategoriesList, useWorkersList, useCreateWorker, useUpdateWorker } from '@/hooks/useHyperlocal';
+import { useCitiesList, useCategoriesList, useWorkersList, useCreateWorker, useDeleteWorker, useUpdateWorker } from '@/hooks/useHyperlocal';
 import { getPasswordValidationError } from '@/utils/passwordPolicy';
 
 const emptyForm = {
@@ -30,6 +30,7 @@ export const WorkersPage = () => {
   const { data: workers, isLoading } = useWorkersList({ limit: 100 });
   const createWorker = useCreateWorker();
   const updateWorker = useUpdateWorker();
+  const deleteWorker = useDeleteWorker();
 
   const handleCreate = () => {
     const passwordError = getPasswordValidationError(form.password);
@@ -164,6 +165,22 @@ export const WorkersPage = () => {
                   <Button size="sm" variant="outline" onClick={() => toggleAvailability(w._id, w.availability)} disabled={updateWorker.isPending}>
                     {w.availability === 'available' ? 'Set offline' : w.availability === 'busy' ? 'Set offline' : 'Set available'}
                   </Button>
+                  {w.isActive && (
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => {
+                        if (!window.confirm(`Delete ${w.name}? The provider account will be deactivated and booking history preserved.`)) return;
+                        deleteWorker.mutate(w._id, {
+                          onSuccess: () => toast.success('Worker deleted.'),
+                          onError: (e: any) => toast.error(e.response?.data?.error?.message || 'Failed to delete worker.'),
+                        });
+                      }}
+                      disabled={deleteWorker.isPending}
+                    >
+                      Delete
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>

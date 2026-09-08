@@ -199,6 +199,6 @@ const providerApplicationReject = Joi.object({
 });
 
 module.exports = {
-  list, cityCreate, cityUpdate, workerCreate, workerUpdate, categoryCreate, categoryUpdate,
+  idParams, list, cityCreate, cityUpdate, workerCreate, workerUpdate, categoryCreate, categoryUpdate,
   businessModerate, offerModerate, templateCreate, templateUpdate, stickerCreate, stickerUpdate, planCreate, planUpdate, assignWorker, forwardBooking, bookingStatus, verifyPayment, refundPayment, providerApplicationApprove, providerApplicationReject,
 };

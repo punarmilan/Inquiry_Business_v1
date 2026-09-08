@@ -77,7 +77,7 @@ export const BusinessesPage = () => {
                   )}
                   {b.isActive && (
                     <Button size="sm" variant="destructive" onClick={() => setNoteTarget({ business: b, status: 'suspended' })}>
-                      Suspend
+                      Delete
                     </Button>
                   )}
                 </div>
@@ -92,7 +92,7 @@ export const BusinessesPage = () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {noteTarget?.status === 'suspended' ? 'Suspend' : 'Reject'} {noteTarget?.business.name}?
+              {noteTarget?.status === 'suspended' ? 'Delete' : 'Reject'} {noteTarget?.business.name}?
             </DialogTitle>
             <DialogDescription>The owner will see this note.</DialogDescription>
           </DialogHeader>
@@ -108,7 +108,7 @@ export const BusinessesPage = () => {
                 noteTarget && apply(noteTarget.business, noteTarget.status, noteTarget.status !== 'suspended', note.trim())
               }
             >
-              {moderateBusiness.isPending ? 'Please wait…' : noteTarget?.status === 'suspended' ? 'Suspend' : 'Reject'}
+              {moderateBusiness.isPending ? 'Please wait…' : noteTarget?.status === 'suspended' ? 'Delete' : 'Reject'}
             </Button>
           </DialogFooter>
         </DialogContent>

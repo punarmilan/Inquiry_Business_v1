@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const Job = require('../models/Job');
 const Rating = require('../models/Rating');
+const Worker = require('../models/Worker');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { getPagination, paginatedResponse } = require('../utils/pagination');
@@ -51,6 +52,17 @@ const blockUser = asyncHandler(async (req, res) => {
 const unblockUser = asyncHandler(async (req, res) => {
   const user = await User.findByIdAndUpdate(req.params.id, { $set: { isBlocked: false } }, { new: true });
   if (!user) throw new ApiError(404, 'User not found', 'USER_NOT_FOUND');
+  res.json({ success: true, user });
+});
+
+const deleteUser = asyncHandler(async (req, res) => {
+  const user = await User.findByIdAndUpdate(
+    req.params.id,
+    { $set: { isActive: false, isBlocked: true } },
+    { new: true }
+  );
+  if (!user) throw new ApiError(404, 'User not found', 'USER_NOT_FOUND');
+  await Worker.updateMany({ user: user._id }, { $set: { isActive: false, availability: 'offline' } });
   res.json({ success: true, user });
 });
 
@@ -168,6 +180,7 @@ module.exports = {
   getUserDetail,
   blockUser,
   unblockUser,
+  deleteUser,
   verifyUser,
   approveKyc,
   rejectKyc,

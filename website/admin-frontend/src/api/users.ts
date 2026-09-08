@@ -47,6 +47,11 @@ export const unblockUser = async (id: string) => {
   return data.user;
 };
 
+export const deleteUser = async (id: string) => {
+  const { data } = await client.delete<{ success: true; user: User }>(`/users/${id}`);
+  return data.user;
+};
+
 export const verifyUser = async (id: string) => {
   const { data } = await client.put<{ success: true; user: User }>(`/users/${id}/verify`);
   return data.user;

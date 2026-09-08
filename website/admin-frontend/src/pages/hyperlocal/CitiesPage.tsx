@@ -3,7 +3,7 @@ import type { FormEvent, KeyboardEvent } from 'react';
 import { MapPinned, Plus, Search, Sparkles, X } from 'lucide-react';
 import { toast } from 'sonner';
 import type { CityRecord } from '@/api/hyperlocal';
-import { useCitiesList, useCreateCity, useUpdateCity } from '@/hooks/useHyperlocal';
+import { useCitiesList, useCreateCity, useDeleteCity, useUpdateCity } from '@/hooks/useHyperlocal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -71,6 +71,7 @@ export const CitiesPage = () => {
   const { data: cities, isLoading } = useCitiesList();
   const createCity = useCreateCity();
   const updateCity = useUpdateCity();
+  const deleteCity = useDeleteCity();
 
   const visibleLocalities = useMemo(() => {
     const query = localitySearch.trim().toLocaleLowerCase('en-IN');
@@ -383,9 +384,26 @@ export const CitiesPage = () => {
                       {city.localities.slice(0, 8).join(', ')}{city.localities.length > 8 ? ` +${city.localities.length - 8} more` : ''}
                     </p>
                   )}
-                  <Button variant="outline" className="w-full" onClick={() => edit(city)}>
-                    <MapPinned className="h-4 w-4" /> Edit coverage
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button variant="outline" className="flex-1" onClick={() => edit(city)}>
+                      <MapPinned className="h-4 w-4" /> Edit coverage
+                    </Button>
+                    {city.isActive && (
+                      <Button
+                        variant="destructive"
+                        onClick={() => {
+                          if (!window.confirm(`Delete ${city.name}? It will be deactivated and existing history will be preserved.`)) return;
+                          deleteCity.mutate(city._id, {
+                            onSuccess: () => toast.success('City deleted.'),
+                            onError: (error: any) => toast.error(error.response?.data?.error?.message || 'Failed to delete city.'),
+                          });
+                        }}
+                        disabled={deleteCity.isPending}
+                      >
+                        Delete
+                      </Button>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             ))}

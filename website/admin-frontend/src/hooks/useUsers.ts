@@ -24,6 +24,11 @@ export const useUnblockUser = () => {
   });
 };
 
+export const useDeleteUser = () => {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: usersApi.deleteUser, onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }) });
+};
+
 export const useVerifyUser = () => {
   const qc = useQueryClient();
   return useMutation({

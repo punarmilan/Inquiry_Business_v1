@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
 import { BadgeCheck } from 'lucide-react';
+import { toast } from 'sonner';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable } from '@/components/shared/DataTable';
 import { StatusBadge } from '@/components/shared/StatusBadge';
@@ -14,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useUsersList } from '@/hooks/useUsers';
+import { useDeleteUser, useUsersList } from '@/hooks/useUsers';
 import type { User } from '@/types';
 
 const VERIFICATION_OPTIONS = [
@@ -33,6 +34,7 @@ const REVIEW_STATUS_OPTIONS = [
 
 export const UsersPage = () => {
   const navigate = useNavigate();
+  const deleteUser = useDeleteUser();
   const [search, setSearch] = useState('');
   const [isVerified, setIsVerified] = useState('all');
   const [kycStatus, setKycStatus] = useState('all');
@@ -93,10 +95,26 @@ export const UsersPage = () => {
       id: 'actions',
       header: '',
       cell: ({ row }) => (
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
           <Button variant="outline" size="sm" onClick={() => navigate(`/users/${row.original._id}`)}>
             View
           </Button>
+          {row.original.isActive !== false && (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => {
+                if (!window.confirm(`Delete ${row.original.name || row.original.phone}? The account will be deactivated and history preserved.`)) return;
+                deleteUser.mutate(row.original._id, {
+                  onSuccess: () => toast.success('User deleted.'),
+                  onError: (e: any) => toast.error(e.response?.data?.error?.message || 'Failed to delete user.'),
+                });
+              }}
+              disabled={deleteUser.isPending}
+            >
+              Delete
+            </Button>
+          )}
         </div>
       ),
     },

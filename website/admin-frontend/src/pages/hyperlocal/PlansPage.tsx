@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import type { PlanRecord } from '@/api/hyperlocal';
-import { usePlansList, useCreatePlan, useUpdatePlan } from '@/hooks/useHyperlocal';
+import { usePlansList, useCreatePlan, useDeletePlan, useUpdatePlan } from '@/hooks/useHyperlocal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -43,6 +43,7 @@ export const PlansPage = () => {
   const { data: plans, isLoading } = usePlansList();
   const createPlan = useCreatePlan();
   const updatePlan = useUpdatePlan();
+  const deletePlan = useDeletePlan();
 
   const save = () => {
     const payload = {
@@ -220,9 +221,26 @@ export const PlansPage = () => {
                   {p.offerPostingLimit === -1 ? 'Unlimited' : p.offerPostingLimit} posts · {p.imagesPerOffer} images
                 </p>
                 <p>{p.isActive ? 'Active' : 'Inactive'}</p>
-                <Button variant="outline" onClick={() => edit(p)}>
-                  Edit
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => edit(p)}>
+                    Edit
+                  </Button>
+                  {p.isActive && (
+                    <Button
+                      variant="destructive"
+                      onClick={() => {
+                        if (!window.confirm(`Delete ${p.name}? Existing subscriptions will be preserved.`)) return;
+                        deletePlan.mutate(p._id, {
+                          onSuccess: () => toast.success('Plan deleted.'),
+                          onError: (e: any) => toast.error(e.response?.data?.error?.message || 'Failed to delete plan.'),
+                        });
+                      }}
+                      disabled={deletePlan.isPending}
+                    >
+                      Delete
+                    </Button>
+                  )}
+                </div>
               </CardContent>
             </Card>
           ))}
