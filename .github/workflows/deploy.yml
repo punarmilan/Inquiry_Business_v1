@@ -234,9 +234,24 @@ jobs:
             done
             docker compose --env-file .env config --quiet
             docker compose --env-file .env pull
+            # Older releases used hard-coded container_name values. Remove only
+            # those exact legacy containers once so Compose can take ownership
+            # with project-scoped names; named volumes are intentionally kept.
+            docker compose --project-name kaamsaathi --env-file .env down --remove-orphans || true
+            for legacy_container in \
+              kaamsaathi-mongodb \
+              kaamsaathi-mobile-backend \
+              kaamsaathi-website-backend \
+              kaamsaathi-website-frontend \
+              kaamsaathi-admin-frontend \
+              kaamsaathi-gateway; do
+              if docker ps -aq --filter "name=^/${legacy_container}$" | grep -q .; then
+                docker rm -f "$legacy_container"
+              fi
+            done
             # Deploy the exact commit that was built and recreate all services
             # so a cached `latest` container cannot leave stale UI code live.
-            docker compose --env-file .env up -d --force-recreate --remove-orphans
+            docker compose --project-name kaamsaathi --env-file .env up -d --force-recreate --remove-orphans
             bash "$APP_DIR/scripts/configure-vps-nginx.sh"
             # nginx (gateway) resolves upstream container names to an IP once at startup
             # and caches it for its whole lifetime. Since its own image never changes,
