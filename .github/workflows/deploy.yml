@@ -130,6 +130,18 @@ jobs:
             ${{ env.DOCKERHUB_NAMESPACE }}/kaamsaathi-admin-frontend:${{ github.sha }}
             ${{ env.DOCKERHUB_NAMESPACE }}/kaamsaathi-admin-frontend:latest
 
+      - name: Verify all release images exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          for image in \
+            kaamsaathi-mobile-backend \
+            kaamsaathi-website-backend \
+            kaamsaathi-website-frontend \
+            kaamsaathi-admin-frontend; do
+            docker buildx imagetools inspect "${DOCKERHUB_NAMESPACE}/${image}:${GITHUB_SHA}" >/dev/null
+          done
+
   deploy-to-vps:
     name: Deploy to VPS
     if: >-
@@ -139,6 +151,8 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: production
+    env:
+      VPS_APP_DIR: ${{ secrets.VPS_APP_DIR || '/var/www/Inquiry_Business_v1' }}
 
     steps:
       - name: Checkout Code
@@ -155,14 +169,21 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || '22' }}
           source: "docker-compose.yml,nginx/nginx.conf,scripts/configure-vps-nginx.sh"
-          target: /var/www/kaamsaathi
+          target: ${{ env.VPS_APP_DIR }}
           overwrite: true
 
       - name: Execute Remote SSH Commands
         uses: appleboy/ssh-action@v1.0.3
         env:
           DOCKERHUB_NAMESPACE: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
           IMAGE_TAG: ${{ github.sha }}
+          APP_DIR: ${{ env.VPS_APP_DIR }}
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+          MOBILE_JWT_ACCESS_SECRET: ${{ secrets.MOBILE_JWT_ACCESS_SECRET }}
+          MOBILE_JWT_REFRESH_SECRET: ${{ secrets.MOBILE_JWT_REFRESH_SECRET }}
+          WEB_JWT_ACCESS_SECRET: ${{ secrets.WEB_JWT_ACCESS_SECRET }}
+          WEB_JWT_REFRESH_SECRET: ${{ secrets.WEB_JWT_REFRESH_SECRET }}
           GOOGLE_MAPS_SERVER_API_KEY: ${{ secrets.GOOGLE_MAPS_SERVER_API_KEY }}
           GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
           FACEBOOK_APP_ID: ${{ secrets.FACEBOOK_APP_ID }}
@@ -173,29 +194,50 @@ jobs:
           password: ${{ secrets.VPS_PASSWORD }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || '22' }}
-          envs: DOCKERHUB_NAMESPACE,IMAGE_TAG,GOOGLE_MAPS_SERVER_API_KEY,GOOGLE_WEB_CLIENT_ID,FACEBOOK_APP_ID,FACEBOOK_APP_SECRET
+          envs: DOCKERHUB_NAMESPACE,DOCKERHUB_TOKEN,IMAGE_TAG,APP_DIR,MONGO_URI,MOBILE_JWT_ACCESS_SECRET,MOBILE_JWT_REFRESH_SECRET,WEB_JWT_ACCESS_SECRET,WEB_JWT_REFRESH_SECRET,GOOGLE_MAPS_SERVER_API_KEY,GOOGLE_WEB_CLIENT_ID,FACEBOOK_APP_ID,FACEBOOK_APP_SECRET
           script: |
             set -eu
-            mkdir -p /var/www/kaamsaathi
-            cd /var/www/kaamsaathi
-            # Refresh just these keys so any other vars already in .env survive.
+            mkdir -p "$APP_DIR"
+            cd "$APP_DIR"
+            if [ -n "${DOCKERHUB_TOKEN:-}" ]; then
+              printf '%s' "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_NAMESPACE" --password-stdin
+            fi
+            # Refresh deployment keys while preserving unrelated VPS settings.
             touch .env
-            grep -vE '^(DOCKERHUB_NAMESPACE|IMAGE_TAG|GOOGLE_MAPS_SERVER_API_KEY|GOOGLE_WEB_CLIENT_ID|FACEBOOK_APP_ID|FACEBOOK_APP_SECRET)=' .env > .env.tmp || true
+            env_keys='DOCKERHUB_NAMESPACE|IMAGE_TAG'
+            for key in MONGO_URI MOBILE_JWT_ACCESS_SECRET MOBILE_JWT_REFRESH_SECRET WEB_JWT_ACCESS_SECRET WEB_JWT_REFRESH_SECRET GOOGLE_MAPS_SERVER_API_KEY GOOGLE_WEB_CLIENT_ID FACEBOOK_APP_ID FACEBOOK_APP_SECRET; do
+              if [ -n "${!key:-}" ]; then
+                env_keys="$env_keys|$key"
+              fi
+            done
+            grep -vE "^(${env_keys})=" .env > .env.tmp || true
             {
               echo "DOCKERHUB_NAMESPACE=$DOCKERHUB_NAMESPACE"
               echo "IMAGE_TAG=$IMAGE_TAG"
-              echo "GOOGLE_MAPS_SERVER_API_KEY=$GOOGLE_MAPS_SERVER_API_KEY"
-              echo "GOOGLE_WEB_CLIENT_ID=$GOOGLE_WEB_CLIENT_ID"
-              echo "FACEBOOK_APP_ID=$FACEBOOK_APP_ID"
-              echo "FACEBOOK_APP_SECRET=$FACEBOOK_APP_SECRET"
+              [ -z "${MONGO_URI:-}" ] || echo "MONGO_URI=$MONGO_URI"
+              [ -z "${MOBILE_JWT_ACCESS_SECRET:-}" ] || echo "MOBILE_JWT_ACCESS_SECRET=$MOBILE_JWT_ACCESS_SECRET"
+              [ -z "${MOBILE_JWT_REFRESH_SECRET:-}" ] || echo "MOBILE_JWT_REFRESH_SECRET=$MOBILE_JWT_REFRESH_SECRET"
+              [ -z "${WEB_JWT_ACCESS_SECRET:-}" ] || echo "WEB_JWT_ACCESS_SECRET=$WEB_JWT_ACCESS_SECRET"
+              [ -z "${WEB_JWT_REFRESH_SECRET:-}" ] || echo "WEB_JWT_REFRESH_SECRET=$WEB_JWT_REFRESH_SECRET"
+              [ -z "${GOOGLE_MAPS_SERVER_API_KEY:-}" ] || echo "GOOGLE_MAPS_SERVER_API_KEY=$GOOGLE_MAPS_SERVER_API_KEY"
+              [ -z "${GOOGLE_WEB_CLIENT_ID:-}" ] || echo "GOOGLE_WEB_CLIENT_ID=$GOOGLE_WEB_CLIENT_ID"
+              [ -z "${FACEBOOK_APP_ID:-}" ] || echo "FACEBOOK_APP_ID=$FACEBOOK_APP_ID"
+              [ -z "${FACEBOOK_APP_SECRET:-}" ] || echo "FACEBOOK_APP_SECRET=$FACEBOOK_APP_SECRET"
             } >> .env.tmp
             mv .env.tmp .env
             chmod 600 .env
-            docker compose pull
+            for key in MONGO_URI MOBILE_JWT_ACCESS_SECRET MOBILE_JWT_REFRESH_SECRET WEB_JWT_ACCESS_SECRET WEB_JWT_REFRESH_SECRET; do
+              if ! grep -qE "^${key}=.+" .env; then
+                echo "Missing required deployment secret: ${key}" >&2
+                exit 1
+              fi
+            done
+            docker compose --env-file .env config --quiet
+            docker compose --env-file .env pull
             # Deploy the exact commit that was built and recreate all services
             # so a cached `latest` container cannot leave stale UI code live.
-            docker compose up -d --force-recreate --remove-orphans
-            bash /var/www/kaamsaathi/scripts/configure-vps-nginx.sh
+            docker compose --env-file .env up -d --force-recreate --remove-orphans
+            bash "$APP_DIR/scripts/configure-vps-nginx.sh"
             # nginx (gateway) resolves upstream container names to an IP once at startup
             # and caches it for its whole lifetime. Since its own image never changes,
             # `up -d` above never recreates it — so after mobile-backend/website-backend
