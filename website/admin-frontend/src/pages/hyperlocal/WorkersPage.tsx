@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useCitiesList, useCategoriesList, useWorkersList, useCreateWorker, useUpdateWorker } from '@/hooks/useHyperlocal';
+import { getPasswordValidationError } from '@/utils/passwordPolicy';
 
 const emptyForm = {
   name: '',
@@ -31,8 +32,9 @@ export const WorkersPage = () => {
   const updateWorker = useUpdateWorker();
 
   const handleCreate = () => {
-    if (!form.name.trim() || !form.phone.trim() || !form.cityId || !form.categoryIds.length || form.password.length < 6) {
-      toast.error('Name, phone, password, city and at least one category are required.');
+    const passwordError = getPasswordValidationError(form.password);
+    if (!form.name.trim() || !form.phone.trim() || !form.cityId || !form.categoryIds.length || passwordError) {
+      toast.error(passwordError || 'Name, phone, password, city and at least one category are required.');
       return;
     }
     createWorker.mutate(
@@ -82,12 +84,15 @@ export const WorkersPage = () => {
             value={form.experienceYears}
             onChange={(e) => setForm({ ...form, experienceYears: e.target.value })}
           />
-          <Input
-            type="password"
-            placeholder="Provider login password"
-            value={form.password}
-            onChange={(e) => setForm({ ...form, password: e.target.value })}
-          />
+          <div>
+            <Input
+              type="password"
+              placeholder="Provider login password"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+            />
+            {form.password && getPasswordValidationError(form.password) ? <p className="mt-1 text-xs text-destructive">{getPasswordValidationError(form.password)}</p> : null}
+          </div>
           <select
             className="h-10 rounded-md border border-input bg-background px-3 text-sm"
             value={form.cityId}

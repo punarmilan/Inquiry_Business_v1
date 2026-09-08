@@ -194,7 +194,7 @@ export const ProviderHomeScreen: React.FC<Props> = ({ navigation }) => {
               <Text style={styles.heroSub}>{provider?.city?.name || 'Assigned city'}  •  {provider?.categories?.map((category: any) => category.name).join(', ') || 'Services'}</Text>
             </View>
             <View style={styles.heroActions}>
-              <Pressable onPress={() => (navigation.getParent()?.getParent() as any)?.navigate('ProviderNotifications')} style={styles.heroAction}>
+              <Pressable onPress={() => (navigation.getParent() as any)?.navigate('ProviderNotifications')} style={styles.heroAction}>
                 <MaterialCommunityIcons name="bell-outline" size={21} color={theme.colors.textInverse} />
                 {unreadNotificationCount > 0 ? <View style={styles.notificationBadge}><Text style={styles.notificationBadgeText}>{unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}</Text></View> : null}
               </Pressable>

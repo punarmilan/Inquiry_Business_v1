@@ -10,7 +10,7 @@ const OPTIONS: { code: Language; label: string }[] = [
   { code: 'hi', label: 'हिंदी' },
 ];
 
-export const LanguageToggle: React.FC = () => {
+export const LanguageToggle: React.FC<{ onboarding?: boolean }> = ({ onboarding = false }) => {
   const { language, setLanguage } = useApp();
   const [visible, setVisible] = useState(false);
 
@@ -20,9 +20,11 @@ export const LanguageToggle: React.FC = () => {
         accessibilityRole="button"
         accessibilityLabel="Change language"
         onPress={() => setVisible(true)}
-        style={styles.button}
+        style={[styles.button, onboarding && styles.onboardingButton]}
       >
-        <MaterialCommunityIcons name="translate" size={20} color={theme.colors.textSecondary} />
+        <MaterialCommunityIcons name="web" size={18} color={onboarding ? '#103C48' : theme.colors.textSecondary} />
+        <Text style={[styles.buttonText, onboarding && styles.onboardingButtonText]}>{language === 'en' ? 'EN' : 'HI'}</Text>
+        <MaterialCommunityIcons name="chevron-down" size={17} color={onboarding ? '#103C48' : theme.colors.textSecondary} />
       </Pressable>
 
       <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
@@ -54,13 +56,23 @@ export const LanguageToggle: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
+  onboardingButton: { backgroundColor: '#EFF7F8', height: 34 },
+  onboardingButtonText: { color: '#103C48', fontWeight: '600' },
   button: {
-    width: 36,
+    minWidth: 82,
     height: 36,
     borderRadius: theme.radius.pill,
     backgroundColor: theme.colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 5,
+    paddingHorizontal: 11,
+  },
+  buttonText: {
+    ...theme.typography.caption,
+    color: theme.colors.textSecondary,
+    fontWeight: '800',
   },
   overlay: {
     flex: 1,

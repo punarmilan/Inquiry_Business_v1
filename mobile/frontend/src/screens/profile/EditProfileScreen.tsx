@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import * as ImagePicker from 'expo-image-picker';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScreenContainer } from '../../components/ScreenContainer';
@@ -11,8 +12,12 @@ import { useApp } from '../../context/AppContext';
 import type { ProfileStackParamList } from '../../navigation/types';
 import { theme } from '../../theme';
 type Props = NativeStackScreenProps<ProfileStackParamList, 'EditProfile'>;
+const MAX_PROFILE_IMAGE_CHARS = 7_000_000;
+const SUPPORTED_PROFILE_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
 export const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
   const { currentUser, updateProfile } = useApp();
+  const tabBarHeight = useBottomTabBarHeight();
   const [name, setName] = useState(currentUser?.name || '');
   const [email, setEmail] = useState(currentUser?.email || '');
   const [address, setAddress] = useState(currentUser?.currentAddress || '');
@@ -34,7 +39,21 @@ export const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
     });
     if (result.canceled || !result.assets?.[0]) return;
     const asset = result.assets[0];
-    setAvatar(asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri);
+    if (!asset.base64) {
+      Alert.alert('Image unavailable', 'This image could not be prepared for upload. Please choose another image.');
+      return;
+    }
+    const mimeType = (asset.mimeType || 'image/jpeg').toLowerCase() === 'image/jpg' ? 'image/jpeg' : (asset.mimeType || 'image/jpeg').toLowerCase();
+    if (!SUPPORTED_PROFILE_IMAGE_TYPES.includes(mimeType)) {
+      Alert.alert('Unsupported image', 'Choose a JPG, PNG, or WEBP image.');
+      return;
+    }
+    const dataUri = `data:${mimeType};base64,${asset.base64}`;
+    if (dataUri.length > MAX_PROFILE_IMAGE_CHARS) {
+      Alert.alert('Image too large', 'Choose an image smaller than 5 MB.');
+      return;
+    }
+    setAvatar(dataUri);
   };
 
   const save = async () => {
@@ -50,7 +69,7 @@ export const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
-  return <ScreenContainer><View style={styles.top}><Pressable onPress={navigation.goBack} style={styles.back}><MaterialCommunityIcons name="arrow-left" size={24} /></Pressable><Text style={styles.title}>Edit Profile</Text></View><ScrollView contentContainerStyle={styles.content}>
+  return <ScreenContainer><View style={styles.top}><Pressable onPress={navigation.goBack} style={styles.back}><MaterialCommunityIcons name="arrow-left" size={24} /></Pressable><Text style={styles.title}>Edit Profile</Text></View><ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + 24 }]} keyboardShouldPersistTaps="handled">
     <Text style={styles.photoLabel}>Profile photo</Text>
     <Pressable onPress={pickProfilePhoto} style={styles.photoPicker} accessibilityRole="button" accessibilityLabel="Add profile photo">
       <Avatar uri={avatar || undefined} name={name || 'User'} size={104} />

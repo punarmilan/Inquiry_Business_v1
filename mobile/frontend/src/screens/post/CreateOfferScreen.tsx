@@ -72,7 +72,8 @@ export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
     listOfferTemplates()
       .then((response) => {
         if (!mounted) return;
-        const templates = response.data.map(toOfferCardTemplate);
+        // Admin data must never be allowed to break the create-offer screen.
+        const templates = Array.isArray(response.data) ? response.data.map(toOfferCardTemplate) : [];
         setAdminTemplates(templates);
         if (!isEditing && designMode === 'templates' && templates[0]) setCardDesign((current) => current.templateId === DEFAULT_OFFER_CARD_DESIGN.templateId ? ({
           ...current,

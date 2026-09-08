@@ -100,7 +100,7 @@ const toQueryString = (query?: RequestOptions['query']) => {
 let currentTokens: TokenPair | null = null;
 let onTokensRefreshed: ((tokens: TokenPair) => void) | null = null;
 let onAuthExpired: (() => void) | null = null;
-let refreshInFlight: Promise<TokenPair> | null = null;
+let refreshInFlight: { source: TokenPair; promise: Promise<TokenPair> } | null = null;
 let onRequestStart: (() => void) | null = null;
 let onRequestEnd: (() => void) | null = null;
 
@@ -142,29 +142,41 @@ const rawFetch = async (path: string, options: RequestOptions) => {
 };
 
 const refreshAccessToken = async (): Promise<TokenPair> => {
-  if (!currentTokens?.refreshToken) {
+  const tokensAtStart = currentTokens;
+  if (!tokensAtStart?.refreshToken) {
     throw new ApiRequestError(401, 'Session expired', 'AUTH_TOKEN_INVALID');
   }
-  if (!refreshInFlight) {
-    // Concurrent requests that all 401 at once share one refresh call instead of each
-    // racing to rotate the refresh token (the server revokes it on every use).
-    refreshInFlight = (async () => {
-      const { res, data } = await rawFetch('/auth/refresh', {
-        method: 'POST',
-        body: { refreshToken: currentTokens!.refreshToken },
-      });
-      if (!res.ok || data.success === false) {
-        throw new ApiRequestError(res.status, data.error?.message ?? 'Session expired', data.error?.code ?? data.code);
-      }
-      const tokens: TokenPair = { accessToken: data.accessToken, refreshToken: data.refreshToken };
-      currentTokens = tokens;
-      onTokensRefreshed?.(tokens);
-      return tokens;
-    })().finally(() => {
-      refreshInFlight = null;
-    });
+  if (refreshInFlight?.source === tokensAtStart) {
+    return refreshInFlight.promise;
   }
-  return refreshInFlight;
+
+  // Concurrent requests that all 401 at once share one refresh call instead of each
+  // racing to rotate the refresh token (the server revokes it on every use).
+  const promise = (async () => {
+    const { res, data } = await rawFetch('/auth/refresh', {
+      method: 'POST',
+      body: { refreshToken: tokensAtStart.refreshToken },
+    });
+    if (!res.ok || data.success === false) {
+      throw new ApiRequestError(res.status, data.error?.message ?? 'Session expired', data.error?.code ?? data.code);
+    }
+    // A manual/automatic logout or a subsequent login may have replaced the
+    // session while this refresh request was in flight. Never let the old
+    // refresh response re-authenticate that newer session.
+    if (currentTokens !== tokensAtStart) {
+      throw new ApiRequestError(409, 'Authentication session changed', 'AUTH_SESSION_CHANGED');
+    }
+    const tokens: TokenPair = { accessToken: data.accessToken, refreshToken: data.refreshToken };
+    currentTokens = tokens;
+    onTokensRefreshed?.(tokens);
+    return tokens;
+  })().finally(() => {
+    if (refreshInFlight?.source === tokensAtStart) {
+      refreshInFlight = null;
+    }
+  });
+  refreshInFlight = { source: tokensAtStart, promise };
+  return promise;
 };
 
 async function request<T>(path: string, options: RequestOptions = {}, isRetry = false): Promise<T> {
@@ -174,6 +186,7 @@ async function request<T>(path: string, options: RequestOptions = {}, isRetry = 
 
   if (!res.ok || data.success === false) {
     const code = data.error?.code ?? data.code;
+    const errorMessage = typeof data.error === 'string' ? data.error : data.error?.message;
     const isExpiredAccessToken =
       res.status === 401 &&
       !!options.accessToken &&
@@ -181,6 +194,7 @@ async function request<T>(path: string, options: RequestOptions = {}, isRetry = 
       ['AUTH_TOKEN_INVALID', 'AUTH_TOKEN_MISSING', 'AUTH_TOKEN_INVALID_TYPE'].includes(code);
 
     if (isExpiredAccessToken) {
+      const authStateAtRequest = currentTokens;
       try {
         const fresh = await refreshAccessToken();
         return request<T>(path, { ...options, accessToken: fresh.accessToken }, true);
@@ -188,7 +202,12 @@ async function request<T>(path: string, options: RequestOptions = {}, isRetry = 
         // Only force a logout when the server actually rejected the refresh token (expired,
         // revoked, or user deactivated) — a network blip while refreshing shouldn't sign
         // someone out, just surface the original error and let them retry.
-        if (refreshError instanceof ApiRequestError) {
+        if (
+          refreshError instanceof ApiRequestError &&
+          refreshError.code !== 'AUTH_SESSION_CHANGED' &&
+          authStateAtRequest &&
+          currentTokens === authStateAtRequest
+        ) {
           onAuthExpired?.();
         }
       }
@@ -196,7 +215,7 @@ async function request<T>(path: string, options: RequestOptions = {}, isRetry = 
 
     throw new ApiRequestError(
       res.status,
-      data.error?.message ?? data.message ?? 'Something went wrong',
+      errorMessage ?? data.message ?? 'Something went wrong',
       code,
       data.error?.details
     );
@@ -371,10 +390,10 @@ export const oauthLogin = (provider: OAuthProvider, token: string) =>
 
 // Creates a new account directly from a verified Google/Facebook profile — no OTP round-trip,
 // see authController.oauthRegister. Phone is required but NOT verified at this step.
-export const oauthRegister = (provider: OAuthProvider, token: string, phone: string, accountType: AccountType) =>
+export const oauthRegister = (provider: OAuthProvider, token: string, phone: string, email: string, accountType: AccountType) =>
   request<{ success: true; user: BackendUser; isNewUser: true } & TokenPair>('/auth/oauth-register', {
     method: 'POST',
-    body: { provider, token, phone, accountType, termsAccepted: true },
+    body: { provider, token, phone, email, accountType, termsAccepted: true },
   });
 
 export const getProfile = (accessToken: string) =>
@@ -432,7 +451,7 @@ export const updateProfile = (
     accessToken,
     body: {
       name: profile.name,
-      ...(profile.photoUrl ? { photoUrl: profile.photoUrl } : {}),
+      ...(profile.photoUrl !== undefined ? { photoUrl: profile.photoUrl } : {}),
       ...(profile.email ? { email: profile.email } : {}),
       ...(profile.password ? { password: profile.password } : {}),
       ...(profile.accountType ? { accountType: profile.accountType } : {}),
@@ -442,7 +461,7 @@ export const updateProfile = (
       ...(profile.gender ? { gender: profile.gender } : {}),
       ...(profile.languages ? { languages: profile.languages } : {}),
       ...(profile.education ? { education: profile.education } : {}),
-      ...(profile.currentAddress ? { currentAddress: profile.currentAddress } : {}),
+      ...(profile.currentAddress !== undefined ? { currentAddress: profile.currentAddress } : {}),
       ...(profile.workerProfile ? { workerProfile: profile.workerProfile } : {}),
       ...(profile.employerProfile ? { employerProfile: profile.employerProfile } : {}),
       ...(profile.kyc ? { kyc: profile.kyc } : {}),
@@ -710,7 +729,7 @@ export const verifyWorkerOtp = (accessToken: string, jobId: string, otp: string)
 
 export interface BackendChat {
   _id: string;
-  job: { _id: string; title: string; status: string } | string;
+  job: { _id: string; title: string; status: string } | string | null;
   poster: BackendUser | string;
   applicant: BackendUser | string;
   otherUser?: BackendUser;
@@ -1020,16 +1039,34 @@ export const listServiceCategories = (cityId: string) =>
     { query: { cityId } }
   );
 
+export interface BackendPayment {
+  _id: string;
+  orderId: string;
+  type: 'subscription' | 'service' | 'promotion' | 'refund';
+  amount: number;
+  currency: 'INR';
+  status: 'created' | 'pending_verification' | 'verified' | 'failed' | 'refunded';
+  createdAt: string;
+  plan?: { name?: string; code?: string } | string | null;
+  business?: { name?: string } | string | null;
+  booking?: string | null;
+}
+
+export const listMyPayments = (accessToken: string) =>
+  request<{ success: true; data: BackendPayment[] }>('/payments/mine', { accessToken });
+
 export type ProviderApplicationPayload = {
   name: string;
   phone: string;
-  email?: string;
+  email: string;
   cityId: string;
   categoryIds: string[];
   experienceYears?: number;
-  serviceAreas?: string[];
-  message?: string;
+  serviceAreas: string[];
+  message: string;
   termsAccepted: true;
+  oauthProvider?: 'google';
+  oauthToken?: string;
 };
 
 export const createProviderApplication = (payload: ProviderApplicationPayload) =>
@@ -1041,6 +1078,12 @@ export const listServiceProviders = (cityId: string, categoryId?: string, locali
   request<{ success: true; data: ServiceProvider[] }>('/services/providers', {
     query: { cityId, categoryId: categoryId || undefined, locality: locality || undefined },
   });
+
+export const listSavedProviders = (accessToken: string) =>
+  request<{ success: true; data: ServiceProvider[] }>('/services/providers/saved', { accessToken });
+
+export const toggleSavedProvider = (accessToken: string, providerId: string) =>
+  request<{ success: true; saved: boolean }>(`/services/providers/${providerId}/save`, { method: 'POST', accessToken });
 
 export const createServiceBooking = (accessToken: string, payload: {
   cityId: string; categoryId: string; workerId?: string; address: string; locality?: string; latitude: number; longitude: number;

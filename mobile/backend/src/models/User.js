@@ -399,6 +399,7 @@ const userSchema = new mongoose.Schema(
       min: 0,
     },
     savedOffers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Offer' }],
+    savedProviders: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Worker' }],
     role: {
       type: String,
       enum: ['user', 'staff', 'worker', 'admin', 'superadmin'],

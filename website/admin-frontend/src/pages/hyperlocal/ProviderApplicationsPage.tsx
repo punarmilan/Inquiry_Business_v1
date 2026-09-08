@@ -5,6 +5,7 @@ import { StatusBadge } from '@/components/shared/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useApproveProviderApplication, useProviderApplicationsList, useRejectProviderApplication } from '@/hooks/useHyperlocal';
+import { getPasswordValidationError } from '@/utils/passwordPolicy';
 
 export const ProviderApplicationsPage = () => {
   const [status, setStatus] = useState<'pending' | 'approved' | 'rejected' | ''>('pending');
@@ -13,8 +14,9 @@ export const ProviderApplicationsPage = () => {
   const reject = useRejectProviderApplication();
 
   const approveApplication = (id: string) => {
-    const password = window.prompt('Set provider login password (minimum 6 characters):') || '';
-    if (password.length < 6) return toast.error('Password must be at least 6 characters.');
+    const password = window.prompt('Set provider login password (8+ chars with upper/lowercase, number and symbol):') || '';
+    const passwordError = getPasswordValidationError(password);
+    if (passwordError) return toast.error(passwordError);
     approve.mutate({ id, password }, { onSuccess: () => toast.success('Provider approved and login created.'), onError: (e: any) => toast.error(e.response?.data?.error?.message || 'Approval failed.') });
   };
 

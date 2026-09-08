@@ -3,11 +3,14 @@ const City = require('../models/City');
 const ServiceCategory = require('../models/ServiceCategory');
 const ServiceBooking = require('../models/ServiceBooking');
 const Worker = require('../models/Worker');
+const User = require('../models/User');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const { getPagination, paginatedResponse } = require('../utils/pagination');
 const chatService = require('../services/chatService');
 const { notifyUser } = require('../services/notificationService');
+
+const ACTIVE_PROVIDER_BOOKING_STATUSES = ['assigned', 'in_progress'];
 
 const supportedServiceCities = () =>
   City.find({ isActive: true, servicesEnabled: true }).select('name state slug').sort({ name: 1 });
@@ -59,6 +62,32 @@ const listProviders = asyncHandler(async (req, res) => {
     category: category || null,
     locality,
   });
+});
+
+const listSavedProviders = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id).select('savedProviders');
+  const savedIds = user?.savedProviders || [];
+  const providers = await Worker.find({
+    _id: { $in: savedIds },
+    isActive: true,
+    verificationStatus: 'verified',
+  })
+    .select('_id name photoUrl categories city serviceAreas ratingAverage ratingCount completedBookings availability experienceYears')
+    .populate('categories', 'name icon basePrice priceUnit')
+    .populate('city', 'name state slug localities');
+  const providerById = new Map(providers.map((provider) => [String(provider._id), provider]));
+  res.json({ success: true, data: savedIds.map((id) => providerById.get(String(id))).filter(Boolean) });
+});
+
+const toggleSavedProvider = asyncHandler(async (req, res) => {
+  const provider = await Worker.findOne({ _id: req.params.id, isActive: true, verificationStatus: 'verified' }).select('_id');
+  if (!provider) throw new ApiError(404, 'Provider not found', 'PROVIDER_NOT_FOUND');
+  const alreadySaved = (req.user.savedProviders || []).some((id) => String(id) === String(provider._id));
+  await User.updateOne(
+    { _id: req.user._id },
+    alreadySaved ? { $pull: { savedProviders: provider._id } } : { $addToSet: { savedProviders: provider._id } }
+  );
+  res.json({ success: true, saved: !alreadySaved });
 });
 
 const createBooking = asyncHandler(async (req, res) => {
@@ -265,7 +294,11 @@ const updateProviderBookingStatus = asyncHandler(async (req, res) => {
 
 const updateProviderAvailability = asyncHandler(async (req, res) => {
   const provider = await getProvider(req);
-  if (provider.availability === 'busy' && req.body.availability === 'available') {
+  const hasActiveBooking = await ServiceBooking.exists({
+    worker: provider._id,
+    status: { $in: ACTIVE_PROVIDER_BOOKING_STATUSES },
+  });
+  if (hasActiveBooking && req.body.availability === 'available') {
     throw new ApiError(409, 'Finish the active booking before going online again', 'PROVIDER_HAS_ACTIVE_BOOKING');
   }
   provider.availability = req.body.availability;
@@ -301,4 +334,4 @@ const getBookingLocations = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = { listCategories, listProviders, createBooking, listBookings, getBooking, cancelBooking, rateBooking, openBookingChat, listProviderBookings, respondToProviderBooking, updateProviderBookingStatus, updateProviderAvailability, openProviderBookingChat, getBookingLocations };
+module.exports = { listCategories, listProviders, listSavedProviders, toggleSavedProvider, createBooking, listBookings, getBooking, cancelBooking, rateBooking, openBookingChat, listProviderBookings, respondToProviderBooking, updateProviderBookingStatus, updateProviderAvailability, openProviderBookingChat, getBookingLocations };

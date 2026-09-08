@@ -137,6 +137,23 @@ export const resolveTemplateElementValue = (value: unknown, field: string | unde
   return resolveDynamicValue(value, dynamicFields);
 };
 
+/** Convert web/editor font names into families that are safe in a native build. */
+export const resolveOfferFontFamily = (value?: string): string | undefined => {
+  const name = String(value || '').trim().toLowerCase();
+  if (!name || name === 'inter' || name === 'system') return undefined;
+  if (name.includes('serif') || name.includes('georgia') || name.includes('times') || name.includes('baskerville') || name.includes('playfair')) return 'serif';
+  if (name.includes('mono') || name.includes('courier')) return 'monospace';
+  // Android does not have most web fonts used by the admin builder. Let the
+  // native sans family render them instead of showing broken glyphs.
+  return 'sans-serif';
+};
+
+/** Admin templates may store lineHeight as either pixels or a font-size ratio. */
+export const resolveOfferLineHeight = (fontSize: number, lineHeight?: number): number => {
+  if (!lineHeight || !Number.isFinite(lineHeight)) return fontSize * 1.12;
+  return lineHeight <= 4 ? fontSize * lineHeight : lineHeight;
+};
+
 const stringOr = (source: Record<string, unknown>, keys: string[], fallback = '') => {
   for (const key of keys) if (typeof source[key] === 'string' && source[key].trim()) return source[key] as string;
   return fallback;
@@ -266,6 +283,7 @@ const templateDefinitions: Array<[string, string, string, string, OfferCardTempl
 const SYSTEM_COLOR_TEMPLATES: OfferCardTemplate[] = templateDefinitions.map(([id, name, primaryColor, secondaryColor, layout]) => ({
   id,
   name,
+  category: 'General',
   source: 'system',
   primaryColor,
   secondaryColor,

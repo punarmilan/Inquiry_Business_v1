@@ -41,6 +41,8 @@ module.exports = {
   trustProxy: toTrustProxy(process.env.TRUST_PROXY, 1),
   rateLimitWindowMs: toNumber(process.env.RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000),
   rateLimitMax: toNumber(process.env.RATE_LIMIT_MAX, 100),
+  loginRateLimitWindowMs: toNumber(process.env.LOGIN_RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000),
+  loginRateLimitMax: toNumber(process.env.LOGIN_RATE_LIMIT_MAX, 10),
   otpRateLimitWindowMs: toNumber(process.env.OTP_RATE_LIMIT_WINDOW_MS, 10 * 60 * 1000),
   otpRateLimitMax: toNumber(process.env.OTP_RATE_LIMIT_MAX, 50),
   platformCommissionRate: Number(process.env.PLATFORM_COMMISSION_RATE) || 0.1,

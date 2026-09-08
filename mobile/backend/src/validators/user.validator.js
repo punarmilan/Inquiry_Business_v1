@@ -1,5 +1,6 @@
 const { Joi, location } = require('./common');
 const { categoryKey } = require('./category.validator');
+const { passwordPolicy } = require('./password.validator');
 
 const imageSource = Joi.string()
   .trim()
@@ -14,11 +15,24 @@ const imageSource = Joi.string()
   })
   .allow('');
 
+const profileImageSource = Joi.string()
+  .trim()
+  .max(7_000_000)
+  .custom((value, helpers) => {
+    const isProfileImage =
+      value === '' ||
+      /^https?:\/\//i.test(value) ||
+      /^data:image\/(jpeg|jpg|png|webp);base64,/i.test(value);
+    if (!isProfileImage) return helpers.error('string.uri');
+    return value;
+  })
+  .allow('');
+
 const profileBody = Joi.object({
   name: Joi.string().trim().min(2).max(100),
-  photoUrl: imageSource,
+  photoUrl: profileImageSource,
   email: Joi.string().trim().email(),
-  password: Joi.string().trim().min(6).max(200),
+  password: passwordPolicy,
   accountType: Joi.string().valid('worker', 'employer', 'both'),
   termsAccepted: Joi.boolean(),
   termsAcceptedAt: Joi.date().iso(),

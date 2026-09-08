@@ -146,7 +146,9 @@ export const OffersHomeScreen: React.FC<Props> = ({ navigation }) => {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
           {shownCategories.map((item) => {
             const isMore = item.label === 'More';
-            const isSelected = isMore && category !== 'All' && !primaryCategories.some((primary) => primary.label === category);
+            const isSelected = isMore
+              ? category !== 'All' && !primaryCategories.some((primary) => primary.label === category)
+              : category === item.label;
             return <Pressable key={item.label} onPress={() => isMore ? setCategoryExpanded(true) : setCategory(item.label)} style={[styles.category, isSelected && styles.categoryActive]}>
               <View pointerEvents="none" style={styles.categorySheen} />
               {item.icon ? <MaterialCommunityIcons name={item.icon} size={17} color={isSelected ? '#FFFFFF' : item.color} /> : null}
@@ -182,6 +184,8 @@ export const OffersHomeScreen: React.FC<Props> = ({ navigation }) => {
         cities={locationState.cities}
         onSelect={locationState.chooseManual}
         onUseCurrentLocation={locationState.detect}
+        currentLocationLoading={locationState.loadingLocation}
+        currentLocationError={locationState.locationError}
         onClose={() => locationState.setPickerVisible(false)}
       />
       <Modal visible={filterVisible} transparent animationType="slide" onRequestClose={() => setFilterVisible(false)}>

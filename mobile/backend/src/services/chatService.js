@@ -26,19 +26,32 @@ const findOrCreateChat = async ({ jobId, posterId, applicantId }) => {
   return chat;
 };
 
-const findOrCreateBookingChat = async ({ bookingId, customerId, workerUserId }) =>
-  Chat.findOneAndUpdate(
-    { booking: bookingId, applicant: workerUserId },
-    {
-      $setOnInsert: {
-        booking: bookingId,
-        contextType: 'booking',
-        poster: customerId,
-        applicant: workerUserId,
+const findOrCreateBookingChat = async ({ bookingId, customerId, workerUserId }) => {
+  const lookup = { booking: bookingId, applicant: workerUserId };
+
+  try {
+    return await Chat.findOneAndUpdate(
+      lookup,
+      {
+        $setOnInsert: {
+          booking: bookingId,
+          contextType: 'booking',
+          poster: customerId,
+          applicant: workerUserId,
+        },
       },
-    },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  );
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+  } catch (error) {
+    // Concurrent first opens can race on the booking/applicant unique index.
+    // Only resolve that database duplicate by returning the exact existing chat.
+    if (error?.code !== 11000) throw error;
+
+    const existingChat = await Chat.findOne(lookup);
+    if (!existingChat) throw error;
+    return existingChat;
+  }
+};
 
 const postSystemMessage = async ({ chatId, senderId, text }) => {
   const chat = await Chat.findById(chatId);

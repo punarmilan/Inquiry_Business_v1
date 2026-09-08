@@ -166,7 +166,7 @@ interface AppContextValue {
 
   loginWithPassword: (identifier: AuthIdentifier, password: string) => Promise<void>;
   loginWithOAuth: (provider: OAuthProvider, token: string) => Promise<void>;
-  registerWithOAuth: (provider: OAuthProvider, token: string, phone: string, accountType: AccountType) => Promise<void>;
+  registerWithOAuth: (provider: OAuthProvider, token: string, phone: string, email: string, accountType: AccountType) => Promise<void>;
   requestOtp: (identifier: AuthIdentifier) => Promise<{ demoOtp: string }>;
   startRegistration: (phone: string, profile: ProfilePayload) => Promise<{ demoOtp: string }>;
   confirmOtp: (otp: string) => Promise<void>;
@@ -191,6 +191,7 @@ interface AppContextValue {
 
   notifications: BackendNotification[];
   unreadNotificationCount: number;
+  notificationError: string | null;
   fetchNotifications: () => Promise<void>;
   markNotificationRead: (notificationId: string) => Promise<void>;
   markAllNotificationsRead: () => Promise<void>;
@@ -219,6 +220,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [welcome, setWelcome] = useState<{ name: string; isNewUser: boolean } | null>(null);
   const [notifications, setNotifications] = useState<BackendNotification[]>([]);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [notificationError, setNotificationError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchRemoteSettings().then(setRemoteSettings);
@@ -227,7 +229,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const refreshCategories = useCallback(async () => {
     try {
       const res = await apiListCategories();
-      const mapped = res.categories.map(toCategoryMeta);
+      // The backend can return a successful response with a missing/null
+      // categories payload while it is warming up or when no categories exist.
+      // Keep the app on the local fallback instead of crashing during boot.
+      const mapped = Array.isArray(res.categories) ? res.categories.map(toCategoryMeta) : [];
       setCategories(mapped.length ? mapped : fallbackCategories);
     } catch {
       setCategories(fallbackCategories);
@@ -286,9 +291,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setWelcome({ name: user.name, isNewUser: false });
   }, []);
 
-  const registerWithOAuth = useCallback(async (provider: OAuthProvider, token: string, phone: string, accountType: AccountType) => {
+  const registerWithOAuth = useCallback(async (provider: OAuthProvider, token: string, phone: string, email: string, accountType: AccountType) => {
     setPendingRegistrationProfile(null);
-    const res = await apiOauthRegister(provider, token, phone, accountType);
+    const res = await apiOauthRegister(provider, token, phone, email, accountType);
     setAuthIdentifierValue(phone);
     setAuthIdentifierType('phone');
     setTokens({ accessToken: res.accessToken, refreshToken: res.refreshToken });
@@ -400,7 +405,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setBusinessAccessLoading(true);
     try {
       const res = await apiListMyBusinesses(tokens.accessToken);
-      setBusinesses(res.data);
+      setBusinesses(Array.isArray(res.data) ? res.data : []);
     } catch {
       // Business access is best-effort. Keep the last known state so a
       // temporary network problem does not unexpectedly remove the Post tab.
@@ -422,13 +427,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [tokens, refreshBusinesses]);
 
   const fetchNotifications = useCallback(async () => {
-    if (!tokens) return;
+    if (!tokens) {
+      setNotifications([]);
+      setUnreadNotificationCount(0);
+      setNotificationError(null);
+      return;
+    }
+    setNotificationError(null);
     try {
       const res = await apiListNotifications(tokens.accessToken, { limit: 50 });
+      if (!Array.isArray(res.data)) {
+        setNotifications([]);
+        setUnreadNotificationCount(0);
+        setNotificationError('Could not load notifications.');
+        return;
+      }
       setNotifications(res.data);
-      setUnreadNotificationCount(res.unreadCount);
-    } catch {
-      // best-effort — the notifications screen can retry via pull-to-refresh
+      setUnreadNotificationCount(Number.isFinite(res.unreadCount) ? Math.max(0, res.unreadCount) : 0);
+    } catch (error) {
+      setNotificationError(error instanceof Error ? error.message : 'Could not load notifications.');
     }
   }, [tokens]);
 
@@ -441,9 +458,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setUnreadNotificationCount((prev) => Math.max(0, prev - 1));
       try {
         await apiMarkNotificationRead(tokens.accessToken, notificationId);
-      } catch {
-        // local state already flipped; a stale unread badge is a minor inconsistency,
-        // not worth re-fetching/reverting for
+      } catch (error) {
+        setNotificationError(error instanceof Error ? error.message : 'Could not update notification.');
       }
     },
     [tokens]
@@ -455,8 +471,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setUnreadNotificationCount(0);
     try {
       await apiMarkAllNotificationsRead(tokens.accessToken);
-    } catch {
-      // see markNotificationRead
+    } catch (error) {
+      setNotificationError(error instanceof Error ? error.message : 'Could not update notifications.');
     }
   }, [tokens]);
 
@@ -513,14 +529,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   );
 
   const logout = useCallback(() => {
+    // Clear the API client's module-level session before any pending request can
+    // refresh or restore the old credentials. The persistence write below is
+    // intentionally synchronous from the auth flow's perspective as well.
+    setAuthTokens(null);
+    AsyncStorage.removeItem(TOKENS_STORAGE_KEY).catch(() => {});
     disconnectSocket();
     setIsAuthenticated(false);
     setNeedsRegistration(false);
     setCurrentUser(null);
     setAuthIdentifierValue('');
+    setAuthIdentifierType('phone');
     setTokens(null);
     setBusinesses([]);
     setBusinessAccessLoading(false);
+    setNotifications([]);
+    setUnreadNotificationCount(0);
+    setNotificationError(null);
     setPendingRegistrationProfile(null);
     setAnnouncementSeen(true);
     setWelcome(null);
@@ -647,6 +672,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       dismissWelcome,
       notifications,
       unreadNotificationCount,
+      notificationError,
       fetchNotifications,
       markNotificationRead,
       markAllNotificationsRead,
@@ -689,6 +715,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       dismissWelcome,
       notifications,
       unreadNotificationCount,
+      notificationError,
       fetchNotifications,
       markNotificationRead,
       markAllNotificationsRead,

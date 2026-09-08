@@ -212,6 +212,7 @@ export interface ServiceProvider {
   ratingCount: number;
   completedBookings: number;
   availability: 'available' | 'busy' | 'offline';
+  city?: { _id: string; name: string; state?: string; slug?: string; localities?: string[] };
   categories?: { _id: string; name: string; icon?: string; basePrice?: number; priceUnit?: string }[];
 }
 

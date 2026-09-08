@@ -22,6 +22,7 @@ export const BookingDetailsScreen: React.FC<Props> = ({ route, navigation }) => 
   const [ratingStars, setRatingStars] = useState(0);
   const [ratingComment, setRatingComment] = useState('');
   const [ratingSubmitting, setRatingSubmitting] = useState(false);
+  const [chatOpening, setChatOpening] = useState(false);
 
   const load = useCallback(() => {
     if (!accessToken) return;
@@ -39,13 +40,16 @@ export const BookingDetailsScreen: React.FC<Props> = ({ route, navigation }) => 
   const ratingRequired = booking.status === 'completed' && !booking.rating?.ratedAt;
 
   const openChat = async () => {
-    if (!accessToken || !booking.worker) return;
+    if (!accessToken || !booking.worker || chatOpening) return;
+    setChatOpening(true);
     try {
       const response = await openBookingChat(accessToken, booking._id);
       const chat: any = response.chat;
       navigation.navigate('ChatThread', { chatId: chat._id, bookingId: booking._id, jobTitle: `Booking #${booking.bookingNumber}`, otherUserId: String(chat.applicant), otherUserName: booking.worker.name, otherUserAvatar: booking.worker.photoUrl });
     } catch (error: any) {
       Alert.alert('Chat unavailable', error.message);
+    } finally {
+      setChatOpening(false);
     }
   };
 
@@ -80,7 +84,7 @@ export const BookingDetailsScreen: React.FC<Props> = ({ route, navigation }) => 
       <Info label="Price estimate" value={`\u20B9${booking.priceEstimate}${booking.finalPrice != null ? `  •  Final \u20B9${booking.finalPrice}` : ''}`} icon="currency-inr" />
       <Info label="Payment" value={booking.paymentStatus} icon="credit-card-outline" />
 
-      {booking.worker ? <View style={styles.workerCard}><View style={styles.workerAvatar}><MaterialCommunityIcons name="account-hard-hat" size={29} color={theme.colors.secondary} /></View><View style={styles.flex}><Text style={styles.workerLabel}>Assigned professional</Text><Text style={styles.workerName}>{booking.worker.name}</Text><Text style={styles.workerRating}>★ {booking.worker.ratingAverage || 'New'}</Text></View><Button label="Chat" variant="outline" onPress={openChat} /></View> : <View style={styles.waiting}><MaterialCommunityIcons name="account-clock-outline" size={28} color={theme.colors.warning} /><View style={styles.flex}><Text style={styles.waitTitle}>Assignment in progress</Text><Text style={styles.waitText}>Our team will assign a verified professional.</Text></View></View>}
+      {booking.worker ? <View style={styles.workerCard}><View style={styles.workerAvatar}><MaterialCommunityIcons name="account-hard-hat" size={29} color={theme.colors.secondary} /></View><View style={styles.flex}><Text style={styles.workerLabel}>Assigned professional</Text><Text style={styles.workerName}>{booking.worker.name}</Text><Text style={styles.workerRating}>★ {booking.worker.ratingAverage || 'New'}</Text></View><Button label="Chat" variant="outline" onPress={openChat} disabled={chatOpening} loading={chatOpening} /></View> : <View style={styles.waiting}><MaterialCommunityIcons name="account-clock-outline" size={28} color={theme.colors.warning} /><View style={styles.flex}><Text style={styles.waitTitle}>Assignment in progress</Text><Text style={styles.waitText}>Our team will assign a verified professional.</Text></View></View>}
       {booking.worker && ['assigned', 'in_progress'].includes(booking.status) ? <View style={styles.connectionActions}><Text style={styles.connectionTitle}>Stay connected</Text><Text style={styles.connectionText}>Your provider has accepted the request. You can coordinate safely from here.</Text><View style={styles.connectionButtons}><Button label="Call" variant="outline" onPress={openCall} style={styles.connectionButton} icon={<MaterialCommunityIcons name="phone-outline" size={17} color={theme.colors.primary} />} /><Button label="Location" variant="outline" onPress={openLocation} style={styles.connectionButton} icon={<MaterialCommunityIcons name="map-marker-radius-outline" size={17} color={theme.colors.primary} />} /></View></View> : null}
 
       {ratingRequired ? <View style={styles.ratingCard}><View style={styles.ratingHeader}><View style={styles.ratingIcon}><MaterialCommunityIcons name="star-check-outline" size={22} color={theme.colors.accentDark} /></View><View style={styles.flex}><Text style={styles.ratingTitle}>Rate this service</Text><Text style={styles.ratingHint}>Rating is required. Comment is optional.</Text></View></View><View style={styles.stars}>{[1, 2, 3, 4, 5].map((star) => <Pressable key={star} accessibilityRole="button" accessibilityLabel={`${star} star${star > 1 ? 's' : ''}`} onPress={() => setRatingStars(star)} style={styles.starButton}><MaterialCommunityIcons name={star <= ratingStars ? 'star' : 'star-outline'} size={38} color={star <= ratingStars ? theme.colors.accent : theme.colors.textMuted} /></Pressable>)}</View><TextInput value={ratingComment} onChangeText={setRatingComment} placeholder="Write a comment (optional)" placeholderTextColor={theme.colors.textMuted} multiline maxLength={1000} style={styles.commentInput} /><Button label={ratingStars ? 'Submit rating' : 'Select stars to continue'} onPress={submitRating} disabled={!ratingStars || ratingSubmitting} loading={ratingSubmitting} fullWidth /></View> : null}

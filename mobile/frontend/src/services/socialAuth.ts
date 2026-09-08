@@ -54,10 +54,14 @@ export const signInWithGoogle = async (): Promise<GoogleSignInResult> => {
     if (!isSuccessResponse(response) || !response.data.idToken) {
       throw new Error('Google sign-in did not return a token.');
     }
+    const email = String(response.data.user.email || '').trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new Error('This Google account did not provide a usable email address.');
+    }
     return {
       idToken: response.data.idToken,
       name: response.data.user.name || '',
-      email: response.data.user.email,
+      email,
     };
   } catch (e) {
     if (isErrorWithCode(e)) {

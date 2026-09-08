@@ -10,6 +10,7 @@ export type AuthStackParamList = {
   OtpVerification: { demoOtp: string };
   ProfileSetup: { prefillName?: string; prefillEmail?: string } | undefined;
   ProviderRegistration: undefined;
+  LegalDocument: { document: 'terms' | 'privacy' };
 };
 
 export type LiveLocationParams = { jobId?: string; bookingId?: string; contextType?: 'job' | 'booking'; otherUserName: string };
@@ -63,6 +64,9 @@ export type MoreStackParamList = {
   MyOffers: undefined;
   CreateOffer: { businessId: string; offer: Offer; designMode?: 'custom' | 'templates' };
   SavedOffers: undefined;
+  SavedProviders: undefined;
+  Payments: undefined;
+  LegalDocument: { document: 'terms' | 'privacy' };
   MyBusiness: undefined;
   BusinessSetup: { businessId?: string } | undefined;
   Plans: { businessId?: string } | undefined;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, FlatList, Pressable, StyleSheet, RefreshControl } from 'react-native';
+import { ActivityIndicator, View, Text, FlatList, Pressable, StyleSheet, RefreshControl } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
@@ -36,12 +36,32 @@ export const ChatListScreen: React.FC<Props> = ({ navigation }) => {
   const [threads, setThreads] = useState<BackendChat[]>([]);
   const [tab, setTab] = useState<ChatTab>('chats');
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchThreads = useCallback(() => {
-    if (!accessToken) return Promise.resolve();
+    if (!accessToken) {
+      setThreads([]);
+      setLoading(false);
+      setError(null);
+      return Promise.resolve();
+    }
+    setLoading(true);
+    setError(null);
     return listThreads(accessToken)
-      .then((res) => setThreads(res.data))
-      .catch(() => {});
+      .then((res) => {
+        if (!Array.isArray(res.data)) {
+          setThreads([]);
+          setError('Could not load messages.');
+          return;
+        }
+        setThreads(res.data);
+      })
+      .catch((requestError) => {
+        setThreads([]);
+        setError(requestError instanceof Error ? requestError.message : 'Could not load messages.');
+      })
+      .finally(() => setLoading(false));
   }, [accessToken]);
 
   useFocusEffect(
@@ -79,8 +99,8 @@ export const ChatListScreen: React.FC<Props> = ({ navigation }) => {
 
   const renderItem = ({ item }: { item: BackendChat }) => {
     const other = item.otherUser;
-    const jobTitle = typeof item.job === 'object' ? item.job.title : '';
-    const jobId = typeof item.job === 'object' ? item.job._id : item.job;
+    const jobTitle = item.job && typeof item.job === 'object' ? item.job.title : '';
+    const jobId = item.job && typeof item.job === 'object' ? item.job._id : typeof item.job === 'string' ? item.job : undefined;
     const unread = typeof item.unreadCount === 'number' ? item.unreadCount : 0;
     const openThread = (params: any) => {
       if (navigation.getState().routeNames.includes('ChatThread')) {
@@ -147,10 +167,22 @@ export const ChatListScreen: React.FC<Props> = ({ navigation }) => {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[theme.colors.primary]} />}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <MaterialCommunityIcons name="chat-outline" size={48} color={theme.colors.textMuted} />
-            <Text style={styles.emptyText}>{tab === 'chats' ? t('noMessages') : 'No pending requests'}</Text>
-          </View>
+          loading ? (
+            <View style={styles.empty}><ActivityIndicator color={theme.colors.primary} /></View>
+          ) : error ? (
+            <View style={styles.empty}>
+              <MaterialCommunityIcons name="alert-circle-outline" size={48} color={theme.colors.danger} />
+              <Text style={styles.emptyText}>{error}</Text>
+              <Pressable accessibilityRole="button" onPress={fetchThreads} style={styles.retryButton}>
+                <Text style={styles.retryText}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.empty}>
+              <MaterialCommunityIcons name="chat-outline" size={48} color={theme.colors.textMuted} />
+              <Text style={styles.emptyText}>{tab === 'chats' ? t('noMessages') : 'No pending requests'}</Text>
+            </View>
+          )
         }
       />
     </ScreenContainer>
@@ -277,5 +309,16 @@ const styles = StyleSheet.create({
   emptyText: {
     ...theme.typography.bodyLg,
     color: theme.colors.textMuted,
+  },
+  retryButton: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.primary,
+  },
+  retryText: {
+    ...theme.typography.caption,
+    color: theme.colors.textInverse,
+    fontWeight: '800',
   },
 });

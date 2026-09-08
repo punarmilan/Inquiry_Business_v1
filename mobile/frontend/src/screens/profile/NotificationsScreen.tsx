@@ -34,7 +34,7 @@ const timeAgo = (iso: string) => {
 };
 
 export const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
-  const { notifications, unreadNotificationCount, fetchNotifications, markNotificationRead, markAllNotificationsRead } =
+  const { notifications, unreadNotificationCount, notificationError, fetchNotifications, markNotificationRead, markAllNotificationsRead } =
     useApp();
   const [refreshing, setRefreshing] = useState(false);
 
@@ -91,6 +91,7 @@ export const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
         keyExtractor={(item) => item._id}
         contentContainerStyle={styles.listContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[theme.colors.primary]} />}
+        ListHeaderComponent={notificationError ? <View style={styles.errorBox}><Text style={styles.errorText}>{notificationError}</Text><Pressable onPress={handleRefresh}><Text style={styles.retryText}>Retry</Text></Pressable></View> : null}
         renderItem={({ item }) => (
           <Pressable
             accessibilityRole="button"
@@ -116,12 +117,7 @@ export const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
             {!item.read ? <View style={styles.unreadDot} /> : null}
           </Pressable>
         )}
-        ListEmptyComponent={
-          <View style={styles.center}>
-            <MaterialCommunityIcons name="bell-outline" size={48} color={theme.colors.textMuted} />
-            <Text style={styles.emptyText}>No notifications yet.</Text>
-          </View>
-        }
+        ListEmptyComponent={notificationError ? <View style={styles.center}><MaterialCommunityIcons name="alert-circle-outline" size={48} color={theme.colors.danger} /><Text style={styles.emptyText}>Could not load notifications.</Text></View> : <View style={styles.center}><MaterialCommunityIcons name="bell-outline" size={48} color={theme.colors.textMuted} /><Text style={styles.emptyText}>No notifications yet.</Text></View>}
       />
     </ScreenContainer>
   );
@@ -213,5 +209,24 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.75,
+  },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    padding: theme.spacing.sm,
+    marginBottom: theme.spacing.sm,
+    borderRadius: theme.radius.md,
+    backgroundColor: `${theme.colors.danger}12`,
+  },
+  errorText: {
+    ...theme.typography.caption,
+    color: theme.colors.danger,
+    flex: 1,
+  },
+  retryText: {
+    ...theme.typography.caption,
+    color: theme.colors.primary,
+    fontWeight: '800',
   },
 });

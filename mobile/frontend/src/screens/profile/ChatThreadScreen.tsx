@@ -1,5 +1,6 @@
 import React, { useState, useRef, useLayoutEffect, useEffect, useCallback } from 'react';
 import {
+  ActivityIndicator,
   View,
   Text,
   FlatList,
@@ -28,10 +29,14 @@ const formatTime = (iso: string) =>
   new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 
 export const ChatThreadScreen: React.FC<Props> = ({ route, navigation }) => {
-  const { chatId, otherUserName, otherUserAvatar } = route.params;
+  const chatId = route.params?.chatId;
+  const otherUserName = route.params?.otherUserName || 'User';
+  const otherUserAvatar = route.params?.otherUserAvatar;
   const { t, accessToken, currentUser } = useApp();
   const [messages, setMessages] = useState<BackendMessage[]>([]);
   const [draft, setDraft] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const listRef = useRef<FlatList>(null);
 
   // Hide the bottom tab bar while the thread is open so it can't sit between
@@ -43,14 +48,32 @@ export const ChatThreadScreen: React.FC<Props> = ({ route, navigation }) => {
   }, [navigation]);
 
   useEffect(() => {
-    if (!accessToken) return;
+    if (!accessToken || !chatId) {
+      setLoading(false);
+      setError('This conversation is unavailable.');
+      return;
+    }
+    setLoading(true);
+    setError(null);
     getThreadMessages(accessToken, chatId, { limit: 30 })
-      .then((res) => setMessages(res.data))
-      .catch(() => {});
+      .then((res) => {
+        if (!Array.isArray(res.data)) {
+          setMessages([]);
+          setError('Could not load messages.');
+          return;
+        }
+        setMessages(res.data);
+      })
+      .catch((requestError) => {
+        setMessages([]);
+        setError(requestError instanceof Error ? requestError.message : 'Could not load messages.');
+      })
+      .finally(() => setLoading(false));
     markThreadRead(accessToken, chatId).catch(() => {});
   }, [accessToken, chatId]);
 
   useEffect(() => {
+    if (!chatId) return;
     const socket = getSocket();
     if (!socket) return;
 
@@ -74,7 +97,7 @@ export const ChatThreadScreen: React.FC<Props> = ({ route, navigation }) => {
 
   const send = useCallback(() => {
     const text = draft.trim();
-    if (!text) return;
+    if (!text || !chatId) return;
     setDraft('');
     getSocket()?.emit('send_message', { chatId, text }, (ack: { ok: boolean; error?: string }) => {
       if (!ack?.ok) {
@@ -118,6 +141,16 @@ export const ChatThreadScreen: React.FC<Props> = ({ route, navigation }) => {
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
+          ListEmptyComponent={
+            loading ? (
+              <View style={styles.threadState}><ActivityIndicator color={theme.colors.primary} /></View>
+            ) : error ? (
+              <View style={styles.threadState}>
+                <MaterialCommunityIcons name="alert-circle-outline" size={42} color={theme.colors.danger} />
+                <Text style={styles.threadStateText}>{error}</Text>
+              </View>
+            ) : null
+          }
         />
 
         <View style={styles.inputRow}>
@@ -224,5 +257,16 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.sm,
     maxHeight: 100,
     minHeight: theme.MIN_TAP_TARGET,
+  },
+  threadState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: theme.spacing.xxxl,
+    gap: theme.spacing.sm,
+  },
+  threadStateText: {
+    ...theme.typography.body,
+    color: theme.colors.textMuted,
+    textAlign: 'center',
   },
 });

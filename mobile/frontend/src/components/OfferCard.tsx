@@ -2,7 +2,7 @@ import React from 'react';
 import { Image, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { findOfferAvatar, resolveDynamicValue, resolveTemplateElementValue } from '../config/offerCardDesigner';
+import { findOfferAvatar, resolveDynamicValue, resolveOfferFontFamily, resolveOfferLineHeight, resolveTemplateElementValue } from '../config/offerCardDesigner';
 import { OfferAvatarSprite } from './OfferAvatarSprite';
 import { theme } from '../theme';
 import type { Offer, Business, OfferTemplateCanvas, OfferTemplateElement } from '../types/hyperlocal';
@@ -85,6 +85,12 @@ const posterImage = (offer: Offer, element: OfferTemplateElement) => {
   return dynamicImage || elementImage;
 };
 
+const rotationTransform = (rotation?: number) => (
+  typeof rotation === 'number' && Number.isFinite(rotation) && rotation !== 0
+    ? [{ rotate: `${rotation}deg` }]
+    : []
+);
+
 const PosterLayers: React.FC<{ offer: Offer; canvas: OfferTemplateCanvas; previewUrl?: string }> = ({ offer, canvas, previewUrl }) => {
   const [surfaceWidth, setSurfaceWidth] = React.useState(0);
   const scale = surfaceWidth ? surfaceWidth / canvas.width : 0.28;
@@ -110,7 +116,7 @@ const PosterLayers: React.FC<{ offer: Offer; canvas: OfferTemplateCanvas; previe
           height: `${(element.height / canvas.height) * 100}%`,
           zIndex: element.zIndex ?? 2,
           opacity: element.opacity ?? value('opacity', 1),
-          transform: element.rotation ? [{ rotate: `${element.rotation}deg` }] : undefined,
+          transform: rotationTransform(element.rotation),
           borderRadius: (element.borderRadius ?? value('borderRadius', 0)) * scale,
           borderWidth: (element.borderWidth ?? value('borderWidth', 0)) * scale,
           borderColor: element.borderColor || value('borderColor', 'transparent'),
@@ -121,14 +127,16 @@ const PosterLayers: React.FC<{ offer: Offer; canvas: OfferTemplateCanvas; previe
           return uri ? <Image key={element.id} source={{ uri }} style={layer} resizeMode={element.resizeMode === 'stretch' ? 'stretch' : element.resizeMode || value('objectFit', 'contain')} /> : null;
         }
         if (element.type === 'shape' || element.type === 'divider' || element.type === 'group') return <View key={element.id} style={[layer, { backgroundColor: element.backgroundColor || value('backgroundColor', element.color || 'transparent') }]} />;
-        const fontSize = Math.max(1, (element.fontSize || value('fontSize', 36)) * scale);
-        return <Text key={element.id} numberOfLines={element.numberOfLines} style={[layer, styles.posterText, {
+        const baseFontSize = element.fontSize || value('fontSize', 36);
+        const fontSize = Math.max(1, baseFontSize * scale);
+        const rawLineHeight = element.lineHeight || value('lineHeight', undefined);
+        return <Text key={element.id} numberOfLines={Math.max(2, element.numberOfLines || 1)} adjustsFontSizeToFit minimumFontScale={0.55} allowFontScaling={false} style={[layer, styles.posterText, {
           backgroundColor: element.backgroundColor || value('backgroundColor', element.type === 'button' || element.type === 'badge' ? '#FFC400' : undefined),
           color: element.color || value('color', '#FFFFFF'),
           fontSize,
-          lineHeight: Math.max(1, element.lineHeight ? element.lineHeight * scale : fontSize * 1.12),
+          lineHeight: Math.max(1, resolveOfferLineHeight(baseFontSize, rawLineHeight) * scale),
           fontWeight: (element.fontWeight || '700') as '400' | '500' | '600' | '700' | '800' | '900',
-          fontFamily: element.fontFamily || value('fontFamily', undefined),
+          fontFamily: resolveOfferFontFamily(element.fontFamily || value('fontFamily', undefined)),
           fontStyle: element.fontStyle || value('fontStyle', 'normal'),
           letterSpacing: element.letterSpacing === undefined ? (value('letterSpacing', undefined) === undefined ? undefined : value('letterSpacing', 0) * scale) : element.letterSpacing * scale,
           textAlign: element.textAlign || value('textAlign', 'left'),

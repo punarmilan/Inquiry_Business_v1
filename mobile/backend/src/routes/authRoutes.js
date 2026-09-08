@@ -1,7 +1,7 @@
 const express = require('express');
 const authController = require('../controllers/authController');
 const validate = require('../middleware/validate');
-const { otpLimiter } = require('../middleware/rateLimiters');
+const { loginLimiter, otpLimiter } = require('../middleware/rateLimiters');
 const {
   loginWithPasswordSchema,
   oauthLoginSchema,
@@ -14,7 +14,7 @@ const {
 const router = express.Router();
 
 // validate runs first so otpLimiter keys off a parsed, trimmed phone number.
-router.post('/login', validate(loginWithPasswordSchema), authController.loginWithPassword);
+router.post('/login', validate(loginWithPasswordSchema), loginLimiter, authController.loginWithPassword);
 router.post('/oauth', validate(oauthLoginSchema), authController.oauthLogin);
 router.post('/oauth-register', validate(oauthRegisterSchema), authController.oauthRegister);
 router.post('/send-otp', validate(sendOtpSchema), otpLimiter, authController.sendOtp);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
@@ -30,13 +30,16 @@ const resolveManualCoordinates = async (city: City, locality?: string) => {
   return fallback;
 };
 
-export const useHyperlocalLocation = () => {
+export const useHyperlocalLocation = ({ autoDetect = false }: { autoDetect?: boolean } = {}) => {
   const [location, setLocation] = useState<HyperlocalLocation | null>(null);
   const [cities, setCities] = useState<City[]>([]);
   const [pickerVisible, setPickerVisible] = useState(false);
   const [loadingLocation, setLoadingLocation] = useState(true);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const detectingRef = useRef(false);
 
   const chooseManual = useCallback(async (city: City, locality?: string) => {
+    setLocationError(null);
     const coordinates = await resolveManualCoordinates(city, locality);
     const next: HyperlocalLocation = {
       city,
@@ -51,7 +54,7 @@ export const useHyperlocalLocation = () => {
 
   const selectCoordinates = useCallback(async (coordinates: { latitude: number; longitude: number }) => {
     const [place, availability] = await Promise.all([
-      Location.reverseGeocodeAsync(coordinates).then((items) => items[0]),
+      Location.reverseGeocodeAsync(coordinates).then((items) => items[0]).catch(() => undefined),
       getCityAvailability(coordinates),
     ]);
     const next: HyperlocalLocation = {
@@ -61,31 +64,57 @@ export const useHyperlocalLocation = () => {
       source: 'gps',
     };
     setLocation(next);
-    setPickerVisible(!availability.supported);
+    setPickerVisible(false);
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     return { place, availability };
   }, []);
 
   const detect = useCallback(async () => {
+    if (detectingRef.current) return;
+    detectingRef.current = true;
+    setLocationError(null);
     setLoadingLocation(true);
     try {
       const permission = await Location.requestForegroundPermissionsAsync();
       if (!permission.granted) {
+        setLocationError('Location permission is required to detect your current position.');
         setPickerVisible(true);
         return;
       }
       const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       const coordinates = { latitude: position.coords.latitude, longitude: position.coords.longitude };
-      const { availability } = await selectCoordinates(coordinates);
+      await selectCoordinates(coordinates);
       // A GPS selection replaces the manual city-centre fallback. This keeps
       // the offer feed anchored to the user's real 10 KM discovery area.
-      setPickerVisible(!availability.supported);
-    } catch {
+    } catch (error) {
+      setLocationError(error instanceof Error && error.message ? error.message : 'Unable to detect your location. Try again or choose a city manually.');
       setPickerVisible(true);
     } finally {
       setLoadingLocation(false);
+      detectingRef.current = false;
     }
   }, [selectCoordinates]);
+
+  // Screens inside the tab navigator can stay mounted while another tab changes
+  // the persisted location. Re-read that state on focus instead of keeping a
+  // stale location in the mounted Services screen. A GPS request is only started
+  // when no location exists, and detectingRef still prevents concurrent requests.
+  const refreshStoredLocation = useCallback(async () => {
+    const stored = await AsyncStorage.getItem(STORAGE_KEY);
+    if (!stored) {
+      if (autoDetect && !detectingRef.current) await detect();
+      return;
+    }
+    try {
+      const saved = JSON.parse(stored) as HyperlocalLocation;
+      if (!saved.city || !Number.isFinite(saved.latitude) || !Number.isFinite(saved.longitude)) return;
+      setLocation(saved);
+      setLocationError(null);
+      setLoadingLocation(false);
+    } catch {
+      if (autoDetect && !detectingRef.current) await detect();
+    }
+  }, [autoDetect, detect]);
 
   useEffect(() => {
     let active = true;
@@ -96,20 +125,25 @@ export const useHyperlocalLocation = () => {
         AsyncStorage.getItem(INTRO_KEY),
       ]);
       if (!active) return;
-      setCities(cityResponse.data);
+      const availableCities = Array.isArray(cityResponse.data) ? cityResponse.data : [];
+      setCities(availableCities);
       if (stored) {
         try {
           const storedLocation = JSON.parse(stored) as HyperlocalLocation;
           const liveCity = storedLocation.city
-            ? cityResponse.data.find(
+            ? availableCities.find(
                 (city) => city._id === storedLocation.city?._id || city.slug === storedLocation.city?.slug
               )
             : null;
           if (storedLocation.city && !liveCity) {
             await AsyncStorage.removeItem(STORAGE_KEY);
             setLocation(null);
-            setPickerVisible(true);
-            setLoadingLocation(false);
+            if (autoDetect) {
+              void detect();
+            } else {
+              setPickerVisible(true);
+              setLoadingLocation(false);
+            }
             return;
           }
           const saved = liveCity ? { ...storedLocation, city: liveCity } : storedLocation;
@@ -132,6 +166,11 @@ export const useHyperlocalLocation = () => {
         setLoadingLocation(false);
         return;
       }
+      if (autoDetect) {
+        await AsyncStorage.setItem(INTRO_KEY, '1');
+        void detect();
+        return;
+      }
       if (!introSeen) {
         await AsyncStorage.setItem(INTRO_KEY, '1');
         Alert.alert(
@@ -149,7 +188,7 @@ export const useHyperlocalLocation = () => {
       }
     })();
     return () => { active = false; };
-  }, [detect]);
+  }, [autoDetect, detect]);
 
-  return { location, cities, pickerVisible, setPickerVisible, chooseManual, selectCoordinates, detect, loadingLocation };
+  return { location, cities, pickerVisible, setPickerVisible, chooseManual, selectCoordinates, detect, refreshStoredLocation, loadingLocation, locationError };
 };

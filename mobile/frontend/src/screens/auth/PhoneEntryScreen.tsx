@@ -9,9 +9,18 @@ import { GoogleMark } from '../../components/GoogleMark';
 import { useApp } from '../../context/AppContext';
 import { AuthStackParamList } from '../../navigation/types';
 import { signInWithGoogle } from '../../services/socialAuth';
+import { isValidIndianPhoneDigits, sanitizeIndianPhoneInput } from '../../utils/phoneValidation';
+import { ApiRequestError } from '../../services/api';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'PhoneEntry'>;
 type SocialIcon = 'google' | 'facebook' | 'apple';
+
+const authErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof ApiRequestError && error.status === 429) {
+    return error.message || 'Too many login attempts. Please wait a few minutes and try again.';
+  }
+  return error instanceof Error ? error.message : fallback;
+};
 
 export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
   const { t, loginWithPassword, loginWithOAuth, requestOtp, remoteSettings } = useApp();
@@ -47,7 +56,7 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
     : 'Enter your password to continue';
   const otpLoginLabel = content?.sendOtpLabel || 'Send OTP';
 
-  const isValid = digits.length === 10;
+  const isValid = isValidIndianPhoneDigits(digits);
   const emailValue = email.trim();
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue);
   const passwordValue = password.trim();
@@ -82,7 +91,7 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
       const identifier = loginMode === 'email' ? { email: emailValue } : { phone: `+91${digits}` };
       await loginWithPassword(identifier, passwordValue);
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Could not log in. Try again.';
+      const message = authErrorMessage(e, 'Could not log in. Try again.');
       setError(
         message.includes('No account found')
           ? loginMode === 'email'
@@ -104,7 +113,7 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
       const { demoOtp } = await requestOtp({ phone: `+91${digits}` });
       navigation.navigate('OtpVerification', { demoOtp });
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Could not send OTP. Try again.';
+      const message = authErrorMessage(e, 'Could not send OTP. Try again.');
       setError(
         message.includes('No account found')
           ? 'This phone number is not registered. Please register first.'
@@ -124,7 +133,7 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
       const { demoOtp } = await requestOtp({ email: emailValue });
       navigation.navigate('OtpVerification', { demoOtp });
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Could not send OTP. Try again.';
+      const message = authErrorMessage(e, 'Could not send OTP. Try again.');
       setError(
         message.includes('No account found')
           ? 'No account found with this email. Please register with your phone number first.'
@@ -272,7 +281,7 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
                   <TextInput
                     ref={inputRef}
                     value={digits}
-                    onChangeText={(text) => setDigits(text.replace(/\D/g, '').slice(0, 10))}
+                    onChangeText={(text) => setDigits(sanitizeIndianPhoneInput(text).digits)}
                     placeholder="Enter your phone number"
                     placeholderTextColor="#B8B2AA"
                     keyboardType="phone-pad"

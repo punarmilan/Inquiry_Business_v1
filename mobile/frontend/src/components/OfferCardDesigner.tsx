@@ -59,6 +59,27 @@ const TEXT_ALIGN_OPTIONS = [
 
 const AVATAR_SIZES: Record<OfferCardLayout, number> = { right: 208, left: 208, bottom: 178, center: 148 };
 
+const TemplatePreview: React.FC<{ template: OfferCardTemplate; selected: boolean }> = ({ template, selected }) => {
+  const [imageFailed, setImageFailed] = useState(false);
+  const showImage = Boolean(template.previewUrl) && !imageFailed;
+
+  if (showImage) {
+    return (
+      <View style={styles.templateSwatch}>
+        <Image source={{ uri: template.previewUrl }} style={styles.templateImage} resizeMode="cover" onError={() => setImageFailed(true)} />
+        {selected ? <View style={styles.templateImageCheck}><MaterialCommunityIcons name="check" size={18} color={theme.colors.textInverse} /></View> : null}
+      </View>
+    );
+  }
+
+  return (
+    <LinearGradient colors={[template.primaryColor, template.secondaryColor]} style={styles.templateSwatch}>
+      <MaterialCommunityIcons name="palette-outline" size={22} color={theme.colors.textInverse} />
+      {selected ? <View style={styles.templateImageCheck}><MaterialCommunityIcons name="check" size={18} color={theme.colors.textInverse} /></View> : null}
+    </LinearGradient>
+  );
+};
+
 export const OfferCardDesigner: React.FC<Props> = ({ design, onChange, title, description, price, category, templates, mode = 'templates' }) => {
   const [templateCategory, setTemplateCategory] = useState('All');
   const systemTemplates = OFFER_CARD_TEMPLATES;
@@ -66,7 +87,7 @@ export const OfferCardDesigner: React.FC<Props> = ({ design, onChange, title, de
   const templateCategories = useMemo(() => ['All', ...Array.from(new Set(allTemplates.map((template) => template.category).filter(Boolean) as string[]))], [allTemplates]);
   const availableTemplates = useMemo(() => {
     if (templateCategory === 'All' || !allTemplates.length) return allTemplates;
-    return allTemplates.filter((template) => !template.category || template.category.toLowerCase() === templateCategory.toLowerCase());
+    return allTemplates.filter((template) => template.category?.toLowerCase() === templateCategory.toLowerCase());
   }, [allTemplates, templateCategory]);
   const customTemplate: OfferCardTemplate = {
     id: 'custom', name: 'My custom card', primaryColor: design.primaryColor, secondaryColor: design.secondaryColor, layout: design.layout,
@@ -146,16 +167,7 @@ export const OfferCardDesigner: React.FC<Props> = ({ design, onChange, title, de
               })}
               style={[styles.templateTile, selected && styles.templateTileSelected]}
             >
-              {template.previewUrl ? (
-                <View style={styles.templateSwatch}>
-                  <Image source={{ uri: template.previewUrl }} style={styles.templateImage} />
-                  {selected ? <View style={styles.templateImageCheck}><MaterialCommunityIcons name="check" size={18} color={theme.colors.textInverse} /></View> : null}
-                </View>
-              ) : (
-                <LinearGradient colors={[template.primaryColor, template.secondaryColor]} style={styles.templateSwatch}>
-                  {selected ? <MaterialCommunityIcons name="check" size={18} color={theme.colors.textInverse} /> : null}
-                </LinearGradient>
-              )}
+              <TemplatePreview template={template} selected={selected} />
               <Text numberOfLines={1} style={[styles.templateName, selected && styles.templateNameSelected]}>{template.name}</Text>
             </Pressable>
           );
@@ -273,14 +285,14 @@ const styles = StyleSheet.create({
   optionTileSelected: { borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight },
   optionText: { ...theme.typography.caption, color: theme.colors.textSecondary, fontWeight: '800' },
   optionTextSelected: { color: theme.colors.primaryDark },
-  templateGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
-  templateTile: { width: '23%', alignItems: 'center', padding: 4, borderRadius: 10, borderWidth: 1, borderColor: 'transparent' },
+  templateGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 10, marginBottom: 16 },
+  templateTile: { width: '48%', alignItems: 'center', padding: 7, borderRadius: 13, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
   templateTileSelected: { borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight },
-  templateSwatch: { width: '100%', height: 37, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
+  templateSwatch: { width: '100%', aspectRatio: 1.55, borderRadius: 9, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   templateImage: { ...StyleSheet.absoluteFill, borderRadius: 7 },
-  templateImageCheck: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)' },
-  customSwatch: { width: '100%', height: 37, borderRadius: 7, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)' },
-  templateName: { width: '100%', fontSize: 8, color: theme.colors.textMuted, textAlign: 'center', marginTop: 4, fontWeight: '700' },
+  templateImageCheck: { position: 'absolute', right: 7, top: 7, width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.55)' },
+  customSwatch: { width: '100%', aspectRatio: 1.55, borderRadius: 9, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)' },
+  templateName: { width: '100%', fontSize: 12, lineHeight: 16, color: theme.colors.textSecondary, textAlign: 'left', marginTop: 7, fontWeight: '800', minHeight: 32 },
   templateNameSelected: { color: theme.colors.primaryDark },
   layoutGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
   layoutTile: { width: '48%', minHeight: 56, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 12, paddingHorizontal: 11, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.colors.surface },

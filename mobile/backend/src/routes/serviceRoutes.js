@@ -8,7 +8,9 @@ const {
 
 const router = express.Router();
 router.get('/categories', validate(listServiceCategoriesSchema), controller.listCategories);
+router.get('/providers/saved', requireAuth, controller.listSavedProviders);
 router.get('/providers', validate(listProvidersSchema), controller.listProviders);
+router.post('/providers/:id/save', requireAuth, validate(bookingIdSchema), controller.toggleSavedProvider);
 router.get('/bookings', requireAuth, validate(listBookingsSchema), controller.listBookings);
 router.post('/bookings', requireAuth, validate(createBookingSchema), controller.createBooking);
 router.get('/bookings/:id', requireAuth, validate(bookingIdSchema), controller.getBooking);

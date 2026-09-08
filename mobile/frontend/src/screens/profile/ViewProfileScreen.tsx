@@ -45,6 +45,9 @@ export const ViewProfileScreen: React.FC<Props> = ({ route, navigation }) => {
     );
   }
 
+  const skills = Array.isArray(profile.skills) ? profile.skills : [];
+  const reviews = Array.isArray(profile.reviews) ? profile.reviews : [];
+
   return (
     <ScreenContainer>
       <View style={styles.header}>
@@ -88,11 +91,11 @@ export const ViewProfileScreen: React.FC<Props> = ({ route, navigation }) => {
           )}
         </View>
 
-        {profile.skills.length > 0 && (
+        {skills.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Skills</Text>
             <View style={styles.chipRow}>
-              {profile.skills.map((skill) => (
+              {skills.map((skill) => (
                 <View key={skill} style={styles.chip}>
                   <Text style={styles.chipText}>{skill}</Text>
                 </View>
@@ -103,10 +106,10 @@ export const ViewProfileScreen: React.FC<Props> = ({ route, navigation }) => {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Reviews</Text>
-          {profile.reviews.length === 0 ? (
+          {reviews.length === 0 ? (
             <Text style={styles.emptyReviews}>No reviews yet.</Text>
           ) : (
-            profile.reviews.map((review) => (
+            reviews.map((review) => (
               <View key={review._id} style={styles.reviewRow}>
                 <Avatar uri={review.raterPhotoUrl} name={review.raterName || 'User'} size={36} />
                 <View style={styles.reviewBody}>

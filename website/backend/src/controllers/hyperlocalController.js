@@ -17,6 +17,7 @@ const Notification = require('../models/Notification');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { getPagination, paginatedResponse } = require('../utils/pagination');
+const { isStrongPassword, PASSWORD_POLICY_MESSAGE } = require('../validators/password.validator');
 
 // No socket server on this service — this only persists the notification for the mobile
 // app to pick up on its next fetch, unlike mobile-backend's notifyUser which also pushes
@@ -128,7 +129,7 @@ const approveProviderApplication = asyncHandler(async (req, res) => {
   if (application.status !== 'pending') throw new ApiError(409, 'Only pending applications can be approved', 'PROVIDER_APPLICATION_NOT_PENDING');
 
   const providerPhone = normalizeProviderPhone(application.phone);
-  if (!req.body.password || String(req.body.password).length < 6) throw new ApiError(422, 'Set a provider password of at least 6 characters', 'PROVIDER_PASSWORD_REQUIRED');
+  if (!isStrongPassword(req.body.password)) throw new ApiError(422, PASSWORD_POLICY_MESSAGE, 'PROVIDER_PASSWORD_INVALID');
   const existingUser = await User.findOne({ phone: { $in: [providerPhone, providerPhone.replace(/^\+91/, '')] } });
   if (existingUser) throw new ApiError(409, 'This phone number already belongs to an account', 'PROVIDER_PHONE_IN_USE');
 
@@ -178,7 +179,7 @@ const createWorker = asyncHandler(async (req, res) => {
   if (!city?.isActive || !city.servicesEnabled) throw new ApiError(422, 'Worker city must have services enabled', 'WORKER_CITY_UNAVAILABLE');
   if (categoryCount !== req.body.categoryIds.length) throw new ApiError(422, 'One or more service categories are invalid', 'WORKER_CATEGORY_INVALID');
   if (existingUser) throw new ApiError(409, 'Phone already belongs to an account', 'WORKER_PHONE_IN_USE');
-  if (!req.body.password || req.body.password.length < 6) throw new ApiError(422, 'Provider password must be at least 6 characters', 'WORKER_PASSWORD_REQUIRED');
+  if (!isStrongPassword(req.body.password)) throw new ApiError(422, PASSWORD_POLICY_MESSAGE, 'WORKER_PASSWORD_INVALID');
   const user = await User.create({ name: req.body.name, phone: providerPhone, passwordHash: await bcrypt.hash(req.body.password, 12), role: 'worker', accountType: 'worker', isActive: true });
   try {
     const worker = await Worker.create({

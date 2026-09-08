@@ -9,75 +9,12 @@ const asyncHandler = require('../utils/asyncHandler');
 const { hashOtp, hashToken } = require('../utils/crypto');
 const { issueTokenPair } = require('../utils/tokens');
 const { normalizePhone } = require('../utils/phone');
+const { verifyOauthProfile } = require('../services/oauthService');
 
 const generateOtp = () => String(Math.floor(1000 + Math.random() * 9000));
 
-// Verifies a Google ID token server-side (audience must match our web client ID so a token
-// minted for a different app can't be replayed here) and returns the verified email.
-const verifyGoogleToken = async (idToken) => {
-  let response;
-  try {
-    response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
-  } catch {
-    throw new ApiError(401, 'Could not verify Google token', 'OAUTH_VERIFICATION_FAILED');
-  }
-  if (!response.ok) {
-    throw new ApiError(401, 'Invalid or expired Google token', 'INVALID_OAUTH_TOKEN');
-  }
-  const data = await response.json();
-  if (env.googleWebClientId && data.aud !== env.googleWebClientId) {
-    throw new ApiError(401, 'Invalid Google token audience', 'INVALID_OAUTH_TOKEN');
-  }
-  if (!data.email || data.email_verified !== 'true') {
-    throw new ApiError(401, 'Google account email is not verified', 'EMAIL_NOT_VERIFIED');
-  }
-  return { email: String(data.email).trim().toLowerCase(), name: data.name || '' };
-};
-
-// Verifies a Facebook access token via the app-token debug endpoint (confirms it was minted
-// for *our* app, not just any Facebook app) before trusting the profile it points to.
-const verifyFacebookToken = async (accessToken) => {
-  const appToken = `${env.facebookAppId}|${env.facebookAppSecret}`;
-  let debugResponse;
-  try {
-    debugResponse = await fetch(
-      `https://graph.facebook.com/debug_token?input_token=${encodeURIComponent(accessToken)}&access_token=${encodeURIComponent(appToken)}`
-    );
-  } catch {
-    throw new ApiError(401, 'Could not verify Facebook token', 'OAUTH_VERIFICATION_FAILED');
-  }
-  const debugData = await debugResponse.json();
-  if (!debugResponse.ok || !debugData.data?.is_valid || debugData.data.app_id !== env.facebookAppId) {
-    throw new ApiError(401, 'Invalid or expired Facebook token', 'INVALID_OAUTH_TOKEN');
-  }
-
-  const profileResponse = await fetch(
-    `https://graph.facebook.com/me?fields=id,name,email&access_token=${encodeURIComponent(accessToken)}`
-  );
-  const profile = await profileResponse.json();
-  if (!profileResponse.ok || !profile.email) {
-    throw new ApiError(401, 'Facebook account has no verified email', 'EMAIL_NOT_VERIFIED');
-  }
-  return { email: String(profile.email).trim().toLowerCase(), name: profile.name || '' };
-};
-
-// Shared by oauthLogin and oauthRegister — verifies whichever provider's token and returns
-// { email, name }, or throws a 400/503 ApiError for an unsupported/unconfigured provider.
-const verifyOauthProfile = async (provider, token) => {
-  if (provider === 'google') {
-    if (!env.googleWebClientId) {
-      throw new ApiError(503, 'Google login is not configured', 'OAUTH_NOT_CONFIGURED');
-    }
-    return verifyGoogleToken(token);
-  }
-  if (provider === 'facebook') {
-    if (!env.facebookAppId || !env.facebookAppSecret) {
-      throw new ApiError(503, 'Facebook login is not configured', 'OAUTH_NOT_CONFIGURED');
-    }
-    return verifyFacebookToken(token);
-  }
-  throw new ApiError(400, 'Unsupported OAuth provider', 'UNSUPPORTED_PROVIDER');
-};
+// OAuth profile verification is shared with provider applications so both flows use the
+// same server-side token and audience checks.
 
 // Accounts are always created phone-first (see verifyOtp's register branch below) — email is
 // only ever a secondary, optional identifier a user adds later from their profile. So an OTP
@@ -167,9 +104,14 @@ const oauthLogin = asyncHandler(async (req, res) => {
 const oauthRegister = asyncHandler(async (req, res) => {
   const { provider, token } = req.body;
   const profile = await verifyOauthProfile(provider, token);
+  const verifiedEmail = String(profile.email || '').trim().toLowerCase();
   const normalizedPhone = normalizePhone(req.body.phone);
+  const requestedEmail = String(req.body.email || '').trim().toLowerCase();
+  if (!verifiedEmail || !requestedEmail || requestedEmail !== verifiedEmail) {
+    throw new ApiError(422, 'Email must match the verified OAuth account email', 'OAUTH_EMAIL_MISMATCH');
+  }
 
-  const existingEmailUser = await User.findOne({ email: profile.email });
+  const existingEmailUser = await User.findOne({ email: verifiedEmail });
   if (existingEmailUser && existingEmailUser.name) {
     throw new ApiError(409, 'An account already exists for this email. Please login instead.', 'EMAIL_ALREADY_REGISTERED');
   }
@@ -182,8 +124,8 @@ const oauthRegister = asyncHandler(async (req, res) => {
   if (!user) {
     user = new User({ phone: normalizedPhone });
   }
-  user.name = profile.name || profile.email.split('@')[0];
-  user.email = profile.email;
+  user.name = profile.name || verifiedEmail.split('@')[0];
+  user.email = verifiedEmail;
   user.accountType = 'employer';
   user.role = 'user';
   user.isActive = true;

@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { Avatar } from '../../components/Avatar';
 import { HyperlocalHeader } from '../../components/HyperlocalHeader';
 import { CityPickerModal } from '../../components/CityPickerModal';
 import { useHyperlocalLocation } from '../../hooks/useHyperlocalLocation';
-import { listServiceCategories, listServiceProviders } from '../../services/api';
+import { listSavedProviders, listServiceCategories, listServiceProviders, toggleSavedProvider } from '../../services/api';
 import type { ServiceCategory, ServiceProvider } from '../../types/hyperlocal';
 import type { ServicesStackParamList } from '../../navigation/types';
 import { getProviderAvatar } from '../../config/providerAvatars';
@@ -20,8 +21,8 @@ type FilterKey = 'location' | 'experience' | 'service' | 'more';
 const normalize = (value: string) => value.trim().toLocaleLowerCase('en-IN');
 
 export const ServicesHomeScreen: React.FC<Props> = ({ navigation }) => {
-  const { unreadNotificationCount } = useApp();
-  const locationState = useHyperlocalLocation();
+  const { accessToken, unreadNotificationCount } = useApp();
+  const locationState = useHyperlocalLocation({ autoDetect: true });
   const scrollRef = useRef<ScrollView>(null);
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [providers, setProviders] = useState<ServiceProvider[]>([]);
@@ -68,6 +69,26 @@ export const ServicesHomeScreen: React.FC<Props> = ({ navigation }) => {
 
   useEffect(() => { setSelectedLocality(locationState.location?.locality || ''); }, [locationState.location?.locality, cityId]);
   useEffect(() => { load(); }, [load]);
+
+  useFocusEffect(useCallback(() => {
+    void locationState.refreshStoredLocation();
+    if (!accessToken) {
+      setFavorites([]);
+      return undefined;
+    }
+    listSavedProviders(accessToken).then((response) => setFavorites(response.data.map((provider) => provider._id))).catch(() => undefined);
+    return undefined;
+  }, [accessToken, locationState.refreshStoredLocation]));
+
+  const toggleFavorite = async (providerId: string) => {
+    if (!accessToken) return;
+    try {
+      const response = await toggleSavedProvider(accessToken, providerId);
+      setFavorites((current) => response.saved ? (current.includes(providerId) ? current : [...current, providerId]) : current.filter((id) => id !== providerId));
+    } catch (error) {
+      Alert.alert('Favourite provider', error instanceof Error ? error.message : 'Could not update favourites.');
+    }
+  };
 
   const locationNames = useMemo(() => {
     const names = [...availableAreas];
@@ -158,15 +179,15 @@ export const ServicesHomeScreen: React.FC<Props> = ({ navigation }) => {
       <SectionHeading title="Service Providers" onPress={() => setShowAllProviders((value) => !value)} expanded={showAllProviders} />
       {loading && !providers.length ? <ActivityIndicator color={theme.colors.primary} style={styles.loader} /> : null}
       {!loading && !visibleProviders.length ? <View style={[styles.noResults, compactStyles.noResults]}><MaterialCommunityIcons name="account-search-outline" size={28} color={theme.colors.textMuted} /><Text style={styles.noResultsTitle}>No providers match these filters</Text><Text style={styles.noResultsText}>Try another locality, service or availability filter.</Text></View> : null}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.providerRow}>{providerItems.map((provider) => <ProviderCard key={provider._id} provider={provider} favorite={favorites.includes(provider._id)} onFavorite={() => setFavorites((current) => current.includes(provider._id) ? current.filter((id) => id !== provider._id) : [...current, provider._id])} onBook={() => openBooking(provider)} />)}</ScrollView>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.providerRow}>{providerItems.map((provider) => <ProviderCard key={provider._id} provider={provider} favorite={favorites.includes(provider._id)} onFavorite={() => toggleFavorite(provider._id)} onBook={() => openBooking(provider)} />)}</ScrollView>
 
-      {additionalProviderItems.length ? <><SectionHeading title="All Service Providers" onPress={() => setShowAllCityProviders((value) => !value)} expanded={showAllCityProviders} /><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.providerRow}>{cityProviderItems.map((provider) => <ProviderCard key={provider._id} provider={provider} favorite={favorites.includes(provider._id)} onFavorite={() => setFavorites((current) => current.includes(provider._id) ? current.filter((id) => id !== provider._id) : [...current, provider._id])} onBook={() => openBooking(provider)} />)}</ScrollView></> : null}
+      {additionalProviderItems.length ? <><SectionHeading title="All Service Providers" onPress={() => setShowAllCityProviders((value) => !value)} expanded={showAllCityProviders} /><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.providerRow}>{cityProviderItems.map((provider) => <ProviderCard key={provider._id} provider={provider} favorite={favorites.includes(provider._id)} onFavorite={() => toggleFavorite(provider._id)} onBook={() => openBooking(provider)} />)}</ScrollView></> : null}
 
       <SectionHeading title="Top Locations" onPress={() => setShowAllLocations((value) => !value)} expanded={showAllLocations} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.locationRow}>{locationItems.map((item, index) => <Pressable key={item.name} onPress={() => { setSelectedLocality(item.name); scrollRef.current?.scrollTo({ y: 0, animated: true }); }} style={[styles.locationCard, rectangleStyles.locationCard]}><View style={styles.locationIcon}><MaterialCommunityIcons name={index < 2 ? 'map-marker-outline' : 'home-city-outline'} size={27} color={theme.colors.textSecondary} /></View><View><Text style={styles.locationName}>{item.name}</Text><Text style={styles.locationCount}>{item.count} {item.count === 1 ? 'Provider' : 'Providers'}</Text></View></Pressable>)}</ScrollView>
       <View style={styles.trust}><View style={styles.trustIcon}><MaterialCommunityIcons name="shield-check" size={27} color={theme.colors.textInverse} /></View><View style={styles.flex}><Text style={styles.trustTitle}>Verified & Trusted</Text><Text style={styles.trustText}>All providers are admin verified for your safety and peace of mind.</Text></View></View>
     </ScrollView>
-    <CityPickerModal visible={locationState.pickerVisible} cities={locationState.cities.filter((item) => item.servicesEnabled || item.offersEnabled)} onSelect={locationState.chooseManual} onClose={() => locationState.setPickerVisible(false)} />
+    <CityPickerModal visible={locationState.pickerVisible} cities={locationState.cities.filter((item) => item.servicesEnabled || item.offersEnabled)} onSelect={locationState.chooseManual} onUseCurrentLocation={locationState.detect} currentLocationLoading={locationState.loadingLocation} currentLocationError={locationState.locationError} onClose={() => locationState.setPickerVisible(false)} />
     <Modal visible={Boolean(activeFilter)} transparent animationType="slide" onRequestClose={() => setActiveFilter(null)}><Pressable style={styles.modalBackdrop} onPress={() => setActiveFilter(null)}><Pressable style={styles.modalCard} onPress={(event) => event.stopPropagation()}><View style={styles.modalHandle} /><Text style={styles.modalTitle}>{activeFilter === 'location' ? 'Choose location' : activeFilter === 'experience' ? 'Experience' : activeFilter === 'service' ? 'Choose service' : 'More filters'}</Text>{filterOptions.map((value) => { const label = activeFilter === 'service' ? categories.find((category) => category._id === value)?.name || value : activeFilter === 'experience' ? (value === '0' ? 'Any experience' : `${value}+ years`) : value; return <Pressable key={value} onPress={() => chooseFilter(value)} style={styles.modalOption}><Text style={styles.modalOptionText}>{label}</Text><MaterialCommunityIcons name="chevron-right" size={21} color={theme.colors.textMuted} /></Pressable>; })}</Pressable></Pressable></Modal>
   </ScreenContainer>;
 };

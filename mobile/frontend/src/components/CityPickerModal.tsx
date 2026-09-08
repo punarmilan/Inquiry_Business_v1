@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../theme';
 import type { City } from '../types/hyperlocal';
@@ -9,8 +9,10 @@ export const CityPickerModal: React.FC<{
   cities: City[];
   onSelect: (city: City, locality?: string) => void;
   onUseCurrentLocation?: () => void;
+  currentLocationLoading?: boolean;
+  currentLocationError?: string | null;
   onClose: () => void;
-}> = ({ visible, cities, onSelect, onUseCurrentLocation, onClose }) => (
+}> = ({ visible, cities, onSelect, onUseCurrentLocation, currentLocationLoading = false, currentLocationError, onClose }) => (
   <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
     <View style={styles.backdrop}>
       <View style={styles.sheet}>
@@ -22,13 +24,13 @@ export const CityPickerModal: React.FC<{
           <Pressable onPress={onClose} style={styles.close}><MaterialCommunityIcons name="close" size={24} /></Pressable>
         </View>
         {onUseCurrentLocation ? (
-          <Pressable onPress={onUseCurrentLocation} style={styles.currentLocation}>
-            <MaterialCommunityIcons name="crosshairs-gps" size={21} color={theme.colors.primary} />
+          <Pressable disabled={currentLocationLoading} onPress={onUseCurrentLocation} style={[styles.currentLocation, currentLocationLoading && styles.currentLocationDisabled]}>
+            {currentLocationLoading ? <ActivityIndicator size="small" color={theme.colors.primary} /> : <MaterialCommunityIcons name="crosshairs-gps" size={21} color={theme.colors.primary} />}
             <View style={styles.flex}>
-              <Text style={styles.currentLocationTitle}>Use my current location</Text>
-              <Text style={styles.currentLocationText}>Show offers around your exact GPS position</Text>
+              <Text style={styles.currentLocationTitle}>{currentLocationLoading ? 'Detecting your location…' : currentLocationError ? 'Try current location again' : 'Use my current location'}</Text>
+              <Text style={styles.currentLocationText}>{currentLocationError || 'Show offers around your exact GPS position'}</Text>
             </View>
-            <MaterialCommunityIcons name="chevron-right" size={22} color={theme.colors.primary} />
+            {!currentLocationLoading && <MaterialCommunityIcons name="chevron-right" size={22} color={theme.colors.primary} />}
           </Pressable>
         ) : null}
         <ScrollView contentContainerStyle={styles.list}>
@@ -65,6 +67,7 @@ const styles = StyleSheet.create({
   subtitle: { ...theme.typography.caption, color: theme.colors.textSecondary, marginTop: 3 },
   close: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   currentLocation: { flexDirection: 'row', alignItems: 'center', gap: 11, marginTop: 16, padding: 13, borderRadius: theme.radius.lg, backgroundColor: theme.colors.primaryLight },
+  currentLocationDisabled: { opacity: 0.78 },
   currentLocationTitle: { ...theme.typography.bodyBold, color: theme.colors.primaryDark },
   currentLocationText: { ...theme.typography.caption, color: theme.colors.textSecondary, marginTop: 2 },
   list: { paddingVertical: 16, gap: 10 },

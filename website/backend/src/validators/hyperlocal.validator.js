@@ -1,4 +1,5 @@
 const { Joi, objectId, pagination } = require('./common');
+const { passwordPolicy } = require('./password.validator');
 
 const idParams = Joi.object({ id: objectId.required() });
 const list = Joi.object({
@@ -19,7 +20,7 @@ const worker = Joi.object({
   phone: Joi.string().trim().pattern(/^\+?[1-9]\d{7,14}$/).required(), cityId: objectId.required(),
   categoryIds: Joi.array().items(objectId.required()).min(1).max(20).required(), experienceYears: Joi.number().min(0).max(60),
   serviceAreas: Joi.array().items(Joi.string().trim().max(120)).max(100), availability: Joi.string().valid('available', 'busy', 'offline'),
-  password: Joi.string().min(6).max(120), isActive: Joi.boolean(), verificationStatus: Joi.string().valid('pending', 'verified', 'rejected'), internalNotes: Joi.string().trim().allow('').max(2000),
+  password: passwordPolicy, isActive: Joi.boolean(), verificationStatus: Joi.string().valid('pending', 'verified', 'rejected'), internalNotes: Joi.string().trim().allow('').max(2000),
 });
 const workerCreate = Joi.object({ body: worker });
 const workerUpdate = Joi.object({ params: idParams, body: worker.fork(Object.keys(worker.describe().keys), (s) => s.optional()).min(1) });
@@ -190,7 +191,7 @@ const verifyPayment = Joi.object({
 const refundPayment = Joi.object({ params: idParams, body: Joi.object({ reason: Joi.string().trim().min(3).max(500).required() }) });
 const providerApplicationApprove = Joi.object({
   params: idParams,
-  body: Joi.object({ password: Joi.string().min(6).max(120).required() }),
+  body: Joi.object({ password: passwordPolicy.required() }),
 });
 const providerApplicationReject = Joi.object({
   params: idParams,
