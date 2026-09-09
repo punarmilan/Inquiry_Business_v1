@@ -88,7 +88,12 @@ test('TC_03: slow provider requests time out with a useful error', async () => {
     MessageModel,
     timeoutMs: 5,
     fetchImpl: async (_url, { signal }) =>
-      new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true })),
+      // AbortSignal.timeout(5) may already be aborted before this mock runs
+      // (especially on slow CI); a correct consumer must handle both states.
+      new Promise((_resolve, reject) => {
+        if (signal.aborted) return reject(signal.reason);
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+      }),
   });
   await assert.rejects(service.callOllama([]), (error) => error.code === 'AI_TIMEOUT' && error.statusCode === 504);
 });
