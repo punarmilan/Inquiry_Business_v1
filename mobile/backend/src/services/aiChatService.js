@@ -11,6 +11,12 @@ Keep replies short, friendly, and in plain language. If asked something unrelate
 
 const createAiChatService = ({ MessageModel = AiChatMessage, fetchImpl = fetch, timeoutMs = AI_TIMEOUT_MS } = {}) => {
   const callOllama = async (messages) => {
+    // Explicit ref'd timer (not AbortSignal.timeout): its internal timer is
+    // unref'd and does not keep the event loop alive, so on a drained loop a
+    // slow provider would hang forever instead of timing out. This controller
+    // guarantees the abort is delivered and the caller always settles.
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     let res;
     try {
       res = await fetchImpl(`${env.ollamaBaseUrl}/api/chat`, {
@@ -21,13 +27,15 @@ const createAiChatService = ({ MessageModel = AiChatMessage, fetchImpl = fetch, 
           stream: false,
           messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages],
         }),
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: controller.signal,
       });
     } catch (error) {
       if (error?.name === 'TimeoutError' || error?.name === 'AbortError') {
         throw new ApiError(504, 'The AI assistant took too long to respond. Please try again.', 'AI_TIMEOUT');
       }
       throw new ApiError(503, 'The AI assistant is temporarily unavailable. Please try again later.', 'AI_UNAVAILABLE');
+    } finally {
+      clearTimeout(timeout);
     }
 
     if (!res.ok) {
