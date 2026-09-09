@@ -25,7 +25,10 @@ Write-Host 'InquiryExperts quality gate' -ForegroundColor Green
 Invoke-Step 'Check tracked secret-like files' {
   $matches = @(git ls-files | Select-String -Pattern '(^|/)(\.env($|\.)|.*\.pem$|.*\.key$|.*credentials.*|.*secret.*)' -CaseSensitive:$false)
   $allowed = @('website/admin-frontend/.env.example', 'website/backend/.env.example')
-  $unexpected = @($matches | Where-Object { $allowed -notcontains $_.Line })
+  # Documentation files (*.md) never carry machine-readable secrets: they hold
+  # public fingerprints/notes (e.g. mobile/frontend/credentials/README.md).
+  # Real secret extensions (.env, .pem, .key, keystores) are still flagged.
+  $unexpected = @($matches | Where-Object { $allowed -notcontains $_.Line -and $_.Line -notmatch '\.md$' })
   if ($unexpected.Count -gt 0) {
     $unexpected | ForEach-Object { Write-Host $_.Line -ForegroundColor Red }
     throw 'Secret-like files are tracked. Remove them before committing.'

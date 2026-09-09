@@ -21,6 +21,7 @@ credentials.json
 *.p12
 *.key
 *.mobileprovision
+keystore.properties
 
 # Metro
 .metro-health-check*

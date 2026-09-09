@@ -1,6 +1,6 @@
 # InquiryExperts Android upload key
 
-- Keystore: `inquiryexperts-upload.jks` (Git-ignored)
+- Keystore: `inquiryexperts-upload.jks` (original, kept in `credentials/`) — copied to `android/app/inquiryexperts-upload-key.keystore` for the Gradle release build (same key, same fingerprints; both Git-ignored)
 - Alias: `inquiryexperts-upload`
 - Certificate owner: `CN=InquiryExperts, OU=Mobile, O=InquiryExperts, L=Pune, ST=Maharashtra, C=IN`
 - Valid until: 25 January 2054
