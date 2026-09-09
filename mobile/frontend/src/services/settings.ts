@@ -47,6 +47,7 @@ export interface LoginAnnouncement {
 }
 
 export interface RemoteSettings {
+  faq?: string;
   'mobile.splash.tagline'?: string;
   'mobile.onboarding.slides'?: OnboardingSlideContent[];
   'mobile.home.heroImageUrl'?: string;

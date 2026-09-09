@@ -2,6 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../theme';
+import { useApp } from '../context/AppContext';
 
 export const HyperlocalHeader: React.FC<{
   cityLabel: string;
@@ -10,25 +11,26 @@ export const HyperlocalHeader: React.FC<{
   onInbox: () => void;
   unreadCount?: number;
   locationLabel?: string;
-}> = ({ cityLabel, onLocationPress, onNotifications, onInbox, unreadCount = 0, locationLabel = 'NEAR YOU' }) => (
-  <View style={styles.row}>
-    <Pressable onPress={onLocationPress} style={styles.location} accessibilityLabel="Change city or area">
+}> = ({ cityLabel, onLocationPress, onNotifications, onInbox, unreadCount = 0, locationLabel }) => {
+  const { t } = useApp();
+  return <View style={styles.row}>
+    <Pressable onPress={onLocationPress} style={styles.location} accessibilityLabel={t('changeCityArea')}>
       <MaterialCommunityIcons name="map-marker" size={42} color={theme.colors.primary} />
       <View style={styles.locationCopy}>
-        <Text style={styles.nearby}>{locationLabel}</Text>
-        <Text style={styles.city} numberOfLines={1}>{cityLabel || 'Choose location'}</Text>
+        <Text style={styles.nearby}>{locationLabel || t('nearYou')}</Text>
+        <Text style={styles.city} numberOfLines={1}>{cityLabel || t('chooseLocation')}</Text>
       </View>
       <MaterialCommunityIcons name="chevron-down" size={23} color={theme.colors.text} />
     </Pressable>
-    <Pressable onPress={onNotifications} style={styles.iconButton} accessibilityLabel="Notifications">
+    <Pressable onPress={onNotifications} style={styles.iconButton} accessibilityLabel={t('notificationsLabel')}>
       <MaterialCommunityIcons name="bell-outline" size={30} color={theme.colors.text} />
       {unreadCount > 0 && <View style={styles.dot} />}
     </Pressable>
-    <Pressable onPress={onInbox} style={styles.iconButton} accessibilityLabel="Inbox">
+    <Pressable onPress={onInbox} style={styles.iconButton} accessibilityLabel={t('inbox')}>
       <MaterialCommunityIcons name="message-text-outline" size={29} color={theme.colors.text} />
     </Pressable>
   </View>
-);
+};
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 12, backgroundColor: theme.colors.background },

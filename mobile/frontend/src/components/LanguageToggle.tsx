@@ -11,14 +11,14 @@ const OPTIONS: { code: Language; label: string }[] = [
 ];
 
 export const LanguageToggle: React.FC<{ onboarding?: boolean }> = ({ onboarding = false }) => {
-  const { language, setLanguage } = useApp();
+  const { language, setLanguage, t } = useApp();
   const [visible, setVisible] = useState(false);
 
   return (
     <>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Change language"
+        accessibilityLabel={t('changeLanguage')}
         onPress={() => setVisible(true)}
         style={[styles.button, onboarding && styles.onboardingButton]}
       >
@@ -30,7 +30,7 @@ export const LanguageToggle: React.FC<{ onboarding?: boolean }> = ({ onboarding 
       <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
         <Pressable style={styles.overlay} onPress={() => setVisible(false)}>
           <Pressable style={styles.card}>
-            <Text style={styles.title}>Language</Text>
+            <Text style={styles.title}>{t('languageTitle')}</Text>
             {OPTIONS.map((option) => (
               <Pressable
                 key={option.code}

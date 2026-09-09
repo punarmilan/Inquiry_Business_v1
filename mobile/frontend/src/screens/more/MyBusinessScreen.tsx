@@ -1,25 +1,19 @@
-import React, { useCallback, useState } from 'react';
+import React from 'react';
 import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { Button } from '../../components/Button';
-import { listMyBusinesses } from '../../services/api';
-import type { Business } from '../../types/hyperlocal';
 import { useApp } from '../../context/AppContext';
 import { theme } from '../../theme';
 
 export const MyBusinessScreen: React.FC<any> = ({ navigation }) => {
-  const { accessToken } = useApp();
-  const [items, setItems] = useState<Business[]>([]);
-  const [loading, setLoading] = useState(true);
-  const load = useCallback(() => {
-    if (!accessToken) return;
-    setLoading(true);
-    listMyBusinesses(accessToken).then((response) => setItems(response.data)).finally(() => setLoading(false));
-  }, [accessToken]);
+  // Canonical source: same context businesses array rendered by BusinessCenter
+  // ("Manage Your Business"), so both screens can never diverge.
+  const { businesses, businessAccessLoading, refreshBusinesses } = useApp();
+  const items = businesses;
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(React.useCallback(() => { refreshBusinesses(); }, [refreshBusinesses]));
 
   return (
     <ScreenContainer>
@@ -28,8 +22,8 @@ export const MyBusinessScreen: React.FC<any> = ({ navigation }) => {
         <View style={styles.flex}><Text style={styles.title}>Business Profiles</Text><Text style={styles.subtitle}>Manage multiple businesses from one account</Text></View>
         <Pressable onPress={() => navigation.navigate('BusinessSetup')} style={styles.add} accessibilityRole="button" accessibilityLabel="Add business profile"><MaterialCommunityIcons name="plus" size={23} color={theme.colors.primary} /></Pressable>
       </View>
-      <ScrollView refreshControl={<RefreshControl refreshing={loading} onRefresh={load} colors={[theme.colors.primary]} />} contentContainerStyle={styles.content}>
-        {loading && !items.length ? <ActivityIndicator color={theme.colors.primary} /> : null}
+      <ScrollView refreshControl={<RefreshControl refreshing={businessAccessLoading} onRefresh={refreshBusinesses} colors={[theme.colors.primary]} />} contentContainerStyle={styles.content}>
+        {businessAccessLoading && !items.length ? <ActivityIndicator color={theme.colors.primary} /> : null}
         {items.map((business) => {
           const approved = business.verificationStatus === 'verified';
           const hasPlan = Boolean(approved && business.activeSubscription?.status === 'active' && new Date(business.activeSubscription.endsAt) >= new Date());
@@ -53,7 +47,7 @@ export const MyBusinessScreen: React.FC<any> = ({ navigation }) => {
             </View>
           );
         })}
-        {!loading && !items.length ? <View style={styles.empty}><MaterialCommunityIcons name="storefront-plus-outline" size={40} color={theme.colors.primary} /><Text style={styles.emptyTitle}>No business profile yet</Text><Text style={styles.emptyText}>Add your first business profile here. You can add more later without creating another account.</Text><Button label="Add Business Profile" onPress={() => navigation.navigate('BusinessSetup')} fullWidth style={styles.emptyButton} /></View> : null}
+        {!businessAccessLoading && !items.length ? <View style={styles.empty}><MaterialCommunityIcons name="storefront-plus-outline" size={40} color={theme.colors.primary} /><Text style={styles.emptyTitle}>No business profile yet</Text><Text style={styles.emptyText}>Add your first business profile here. You can add more later without creating another account.</Text><Button label="Add Business Profile" onPress={() => navigation.navigate('BusinessSetup')} fullWidth style={styles.emptyButton} /></View> : null}
       </ScrollView>
     </ScreenContainer>
   );

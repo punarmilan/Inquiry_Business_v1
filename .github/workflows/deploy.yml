@@ -1,4 +1,4 @@
-name: CI/CD Pipeline - KaamSaathi
+name: CI/CD Pipeline - InquiryExperts
 
 on:
   push:
@@ -93,8 +93,8 @@ jobs:
           file: ./mobile/backend/Dockerfile
           push: true
           tags: |
-            ${{ env.DOCKERHUB_NAMESPACE }}/kaamsaathi-mobile-backend:${{ github.sha }}
-            ${{ env.DOCKERHUB_NAMESPACE }}/kaamsaathi-mobile-backend:latest
+            ${{ env.DOCKERHUB_NAMESPACE }}/inquiryexperts-mobile-backend:${{ github.sha }}
+            ${{ env.DOCKERHUB_NAMESPACE }}/inquiryexperts-mobile-backend:latest
 
       - name: Build and Push Website Backend
         uses: docker/build-push-action@v7
@@ -103,8 +103,8 @@ jobs:
           file: ./website/backend/Dockerfile
           push: true
           tags: |
-            ${{ env.DOCKERHUB_NAMESPACE }}/kaamsaathi-website-backend:${{ github.sha }}
-            ${{ env.DOCKERHUB_NAMESPACE }}/kaamsaathi-website-backend:latest
+            ${{ env.DOCKERHUB_NAMESPACE }}/inquiryexperts-website-backend:${{ github.sha }}
+            ${{ env.DOCKERHUB_NAMESPACE }}/inquiryexperts-website-backend:latest
 
       - name: Build and Push Website Frontend
         uses: docker/build-push-action@v7
@@ -115,8 +115,8 @@ jobs:
             VITE_API_BASE_URL=https://web-api.inquiry.business
           push: true
           tags: |
-            ${{ env.DOCKERHUB_NAMESPACE }}/kaamsaathi-website-frontend:${{ github.sha }}
-            ${{ env.DOCKERHUB_NAMESPACE }}/kaamsaathi-website-frontend:latest
+            ${{ env.DOCKERHUB_NAMESPACE }}/inquiryexperts-website-frontend:${{ github.sha }}
+            ${{ env.DOCKERHUB_NAMESPACE }}/inquiryexperts-website-frontend:latest
 
       - name: Build and Push Admin Frontend
         uses: docker/build-push-action@v7
@@ -127,18 +127,18 @@ jobs:
             VITE_API_BASE_URL=https://web-api.inquiry.business
           push: true
           tags: |
-            ${{ env.DOCKERHUB_NAMESPACE }}/kaamsaathi-admin-frontend:${{ github.sha }}
-            ${{ env.DOCKERHUB_NAMESPACE }}/kaamsaathi-admin-frontend:latest
+            ${{ env.DOCKERHUB_NAMESPACE }}/inquiryexperts-admin-frontend:${{ github.sha }}
+            ${{ env.DOCKERHUB_NAMESPACE }}/inquiryexperts-admin-frontend:latest
 
       - name: Verify all release images exist
         shell: bash
         run: |
           set -euo pipefail
           for image in \
-            kaamsaathi-mobile-backend \
-            kaamsaathi-website-backend \
-            kaamsaathi-website-frontend \
-            kaamsaathi-admin-frontend; do
+            inquiryexperts-mobile-backend \
+            inquiryexperts-website-backend \
+            inquiryexperts-website-frontend \
+            inquiryexperts-admin-frontend; do
             docker buildx imagetools inspect "${DOCKERHUB_NAMESPACE}/${image}:${GITHUB_SHA}" >/dev/null
           done
 
@@ -237,21 +237,21 @@ jobs:
             # Older releases used hard-coded container_name values. Remove only
             # those exact legacy containers once so Compose can take ownership
             # with project-scoped names; named volumes are intentionally kept.
-            docker compose --project-name kaamsaathi --env-file .env down --remove-orphans || true
+            docker compose --project-name inquiryexperts --env-file .env down --remove-orphans || true
             for legacy_container in \
-              kaamsaathi-mongodb \
-              kaamsaathi-mobile-backend \
-              kaamsaathi-website-backend \
-              kaamsaathi-website-frontend \
-              kaamsaathi-admin-frontend \
-              kaamsaathi-gateway; do
+              inquiryexperts-mongodb \
+              inquiryexperts-mobile-backend \
+              inquiryexperts-website-backend \
+              inquiryexperts-website-frontend \
+              inquiryexperts-admin-frontend \
+              inquiryexperts-gateway; do
               if docker ps -aq --filter "name=^/${legacy_container}$" | grep -q .; then
                 docker rm -f "$legacy_container"
               fi
             done
             # Deploy the exact commit that was built and recreate all services
             # so a cached `latest` container cannot leave stale UI code live.
-            docker compose --project-name kaamsaathi --env-file .env up -d --force-recreate --remove-orphans
+            docker compose --project-name inquiryexperts --env-file .env up -d --force-recreate --remove-orphans
             bash "$APP_DIR/scripts/configure-vps-nginx.sh"
             # nginx (gateway) resolves upstream container names to an IP once at startup
             # and caches it for its whole lifetime. Since its own image never changes,

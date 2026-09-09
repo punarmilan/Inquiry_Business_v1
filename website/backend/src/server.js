@@ -6,7 +6,7 @@ const start = async () => {
   try {
     await connectDB();
     app.listen(env.port, () => {
-      console.log(`KaamSaathi web-backend listening on port ${env.port}`);
+      console.log(`InquiryExperts web-backend listening on port ${env.port}`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);

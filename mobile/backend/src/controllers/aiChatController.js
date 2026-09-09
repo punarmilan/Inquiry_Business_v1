@@ -7,8 +7,8 @@ const getMessages = asyncHandler(async (req, res) => {
 });
 
 const sendMessage = asyncHandler(async (req, res) => {
-  const message = await aiChatService.askAssistant({ userId: req.user._id, text: req.body.text });
-  res.status(201).json({ success: true, message });
+  const { userMessage, assistantMessage } = await aiChatService.askAssistant({ userId: req.user._id, text: req.body.text });
+  res.status(201).json({ success: true, message: assistantMessage, messages: [userMessage, assistantMessage] });
 });
 
 module.exports = { getMessages, sendMessage };

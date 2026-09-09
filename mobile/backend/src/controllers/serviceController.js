@@ -9,8 +9,11 @@ const ApiError = require('../utils/ApiError');
 const { getPagination, paginatedResponse } = require('../utils/pagination');
 const chatService = require('../services/chatService');
 const { notifyUser } = require('../services/notificationService');
-
-const ACTIVE_PROVIDER_BOOKING_STATUSES = ['assigned', 'in_progress'];
+const {
+  acquireProvider,
+  releaseProviderIfIdle,
+  setManualAvailability,
+} = require('../services/providerAvailabilityService');
 
 const supportedServiceCities = () =>
   City.find({ isActive: true, servicesEnabled: true }).select('name state slug').sort({ name: 1 });
@@ -178,15 +181,25 @@ const getBooking = asyncHandler(async (req, res) => {
 });
 
 const cancelBooking = asyncHandler(async (req, res) => {
-  const booking = await ServiceBooking.findOne({ _id: req.params.id, customer: req.user._id });
-  if (!booking) throw new ApiError(404, 'Booking not found', 'BOOKING_NOT_FOUND');
-  if (!['requested', 'confirmed', 'assigned'].includes(booking.status)) {
+  const existingBooking = await ServiceBooking.findOne({ _id: req.params.id, customer: req.user._id });
+  if (!existingBooking) throw new ApiError(404, 'Booking not found', 'BOOKING_NOT_FOUND');
+  if (!['requested', 'confirmed', 'assigned'].includes(existingBooking.status)) {
     throw new ApiError(409, 'This booking can no longer be cancelled', 'BOOKING_CANCELLATION_NOT_ALLOWED');
   }
-  booking.status = 'cancelled';
-  booking.cancellationReason = req.body.reason;
-  booking.statusHistory.push({ status: 'cancelled', by: req.user._id, note: req.body.reason });
-  await booking.save();
+  const booking = await ServiceBooking.findOneAndUpdate(
+    {
+      _id: existingBooking._id,
+      customer: req.user._id,
+      status: existingBooking.status,
+    },
+    {
+      $set: { status: 'cancelled', cancellationReason: req.body.reason },
+      $push: { statusHistory: { status: 'cancelled', at: new Date(), by: req.user._id, note: req.body.reason } },
+    },
+    { new: true, runValidators: true }
+  );
+  if (!booking) throw new ApiError(409, 'This booking can no longer be cancelled', 'BOOKING_CANCELLATION_NOT_ALLOWED');
+  if (booking.worker) await releaseProviderIfIdle(booking.worker);
   res.json({ success: true, booking });
 });
 
@@ -259,14 +272,17 @@ const respondToProviderBooking = asyncHandler(async (req, res) => {
     res.json({ success: true, booking });
     return;
   }
-  if (provider.availability !== 'available') throw new ApiError(409, 'Set your availability to available before accepting', 'PROVIDER_NOT_AVAILABLE');
+  const lockedProvider = await acquireProvider(provider._id);
+  if (!lockedProvider) throw new ApiError(409, 'You already have an active booking or are offline', 'PROVIDER_NOT_AVAILABLE');
   const claimed = await ServiceBooking.findOneAndUpdate(
     { _id: booking._id, worker: null, status: { $in: ['requested', 'confirmed'] }, 'dispatchedProviders': { $elemMatch: { provider: provider._id, status: 'invited' } } },
     { $set: { worker: provider._id, status: 'assigned', 'dispatchedProviders.$[accepted].status': 'accepted', 'dispatchedProviders.$[accepted].respondedAt': new Date(), 'dispatchedProviders.$[others].status': 'already_accepted', 'dispatchedProviders.$[others].respondedAt': new Date() }, $push: { statusHistory: { status: 'assigned', at: new Date(), by: req.user._id, note: 'Accepted by provider' } } },
     { new: true, arrayFilters: [{ 'accepted.provider': provider._id, 'accepted.status': 'invited', 'accepted.expiresAt': { $gt: new Date() } }, { 'others.status': 'invited', 'others.provider': { $ne: provider._id } }] }
   );
-  if (!claimed) throw new ApiError(409, 'Already accepted by another provider', 'BOOKING_ALREADY_ACCEPTED');
-  provider.availability = 'busy'; await provider.save();
+  if (!claimed) {
+    await releaseProviderIfIdle(provider._id);
+    throw new ApiError(409, 'Already accepted by another provider', 'BOOKING_ALREADY_ACCEPTED');
+  }
   const io = req.app.get('io');
   await notifyUser({ io, userId: claimed.customer, type: 'worker_assigned', title: 'Provider assigned', body: `${provider.name} accepted your service request.`, data: { bookingId: claimed._id.toString() } });
   res.json({ success: true, booking: await claimed.populate(['city', 'category', 'customer', 'worker']) });
@@ -274,18 +290,24 @@ const respondToProviderBooking = asyncHandler(async (req, res) => {
 
 const updateProviderBookingStatus = asyncHandler(async (req, res) => {
   const provider = await getProvider(req);
-  const booking = await ServiceBooking.findOne({ _id: req.params.id, worker: provider._id });
-  if (!booking) throw new ApiError(404, 'Assigned booking not found', 'BOOKING_NOT_FOUND');
+  const existingBooking = await ServiceBooking.findOne({ _id: req.params.id, worker: provider._id });
+  if (!existingBooking) throw new ApiError(404, 'Assigned booking not found', 'BOOKING_NOT_FOUND');
   const allowed = { assigned: ['in_progress', 'cancelled'], in_progress: ['completed'] };
-  if (!allowed[booking.status]?.includes(req.body.status)) throw new ApiError(409, 'Invalid provider status transition', 'BOOKING_STATUS_INVALID');
-  booking.status = req.body.status;
-  if (req.body.finalPrice !== undefined) booking.finalPrice = req.body.finalPrice;
-  booking.statusHistory.push({ status: req.body.status, at: new Date(), by: req.user._id, note: req.body.note || '' });
-  await booking.save();
+  if (!allowed[existingBooking.status]?.includes(req.body.status)) throw new ApiError(409, 'Invalid provider status transition', 'BOOKING_STATUS_INVALID');
+  const set = { status: req.body.status };
+  if (req.body.finalPrice !== undefined) set.finalPrice = req.body.finalPrice;
+  const booking = await ServiceBooking.findOneAndUpdate(
+    { _id: existingBooking._id, worker: provider._id, status: existingBooking.status },
+    {
+      $set: set,
+      $push: { statusHistory: { status: req.body.status, at: new Date(), by: req.user._id, note: req.body.note || '' } },
+    },
+    { new: true, runValidators: true }
+  );
+  if (!booking) throw new ApiError(409, 'Booking status changed; refresh and try again', 'BOOKING_STATUS_CONFLICT');
   if (['completed', 'cancelled'].includes(booking.status)) {
-    provider.availability = 'available';
-    if (booking.status === 'completed') provider.completedBookings += 1;
-    await provider.save();
+    if (booking.status === 'completed') await Worker.updateOne({ _id: provider._id }, { $inc: { completedBookings: 1 } });
+    await releaseProviderIfIdle(provider._id);
   }
   const io = req.app.get('io');
   await notifyUser({ io, userId: booking.customer, type: booking.status === 'completed' ? 'booking_completed' : 'provider_booking_status', title: booking.status === 'completed' ? 'Service completed' : 'Service update', body: `Booking #${booking.bookingNumber} is now ${booking.status.replace('_', ' ')}.`, data: { bookingId: booking._id.toString() } });
@@ -294,16 +316,11 @@ const updateProviderBookingStatus = asyncHandler(async (req, res) => {
 
 const updateProviderAvailability = asyncHandler(async (req, res) => {
   const provider = await getProvider(req);
-  const hasActiveBooking = await ServiceBooking.exists({
-    worker: provider._id,
-    status: { $in: ACTIVE_PROVIDER_BOOKING_STATUSES },
-  });
-  if (hasActiveBooking && req.body.availability === 'available') {
-    throw new ApiError(409, 'Finish the active booking before going online again', 'PROVIDER_HAS_ACTIVE_BOOKING');
+  const result = await setManualAvailability(provider._id, req.body.availability);
+  if (!result.provider) {
+    throw new ApiError(409, 'Finish the active booking before changing availability', 'PROVIDER_HAS_ACTIVE_BOOKING');
   }
-  provider.availability = req.body.availability;
-  await provider.save();
-  res.json({ success: true, provider });
+  res.json({ success: true, provider: result.provider });
 });
 
 const openProviderBookingChat = asyncHandler(async (req, res) => {

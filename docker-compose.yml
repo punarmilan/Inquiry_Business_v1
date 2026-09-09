@@ -3,28 +3,53 @@ services:
     image: mongo:6
     restart: always
     environment:
-      MONGO_INITDB_DATABASE: kaamsaathi
+      MONGO_INITDB_DATABASE: inquiryexperts
     volumes:
       - mongo-data:/data/db
     networks:
-      - kaamsaathi-net
+      - inquiryexperts-net
+
+  ollama:
+    image: ollama/ollama:0.33.3
+    restart: always
+    volumes:
+      - ollama-data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks:
+      - inquiryexperts-net
+
+  ollama-model:
+    image: ollama/ollama:0.33.3
+    restart: "no"
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    command: ["pull", "llama3.2:3b"]
+    depends_on:
+      ollama:
+        condition: service_healthy
+    networks:
+      - inquiryexperts-net
 
   mobile-backend:
-    image: ${DOCKERHUB_NAMESPACE:-demonicorpse23}/kaamsaathi-mobile-backend:${IMAGE_TAG:-latest}
+    image: ${DOCKERHUB_NAMESPACE:-demonicorpse23}/inquiryexperts-mobile-backend:${IMAGE_TAG:-latest}
     restart: always
     ports:
       - "5010:5000"
     environment:
       - NODE_ENV=production
       - PORT=5000
-      - MONGO_URI=${MONGO_URI:-mongodb+srv://KaamSaathi:hospital123@kaamsaathi.jf52n0x.mongodb.net/kaamsaathi?retryWrites=true&w=majority}
-      - JWT_ACCESS_SECRET=${MOBILE_JWT_ACCESS_SECRET:-mobile-access-secret-kaamsaathi-prod-2026}
-      - JWT_REFRESH_SECRET=${MOBILE_JWT_REFRESH_SECRET:-mobile-refresh-secret-kaamsaathi-prod-2026}
+      - MONGO_URI=${MONGO_URI:-mongodb+srv://InquiryExperts:hospital123@inquiryexperts.jf52n0x.mongodb.net/inquiryexperts?retryWrites=true&w=majority}
+      - JWT_ACCESS_SECRET=${MOBILE_JWT_ACCESS_SECRET:-mobile-access-secret-inquiryexperts-prod-2026}
+      - JWT_REFRESH_SECRET=${MOBILE_JWT_REFRESH_SECRET:-mobile-refresh-secret-inquiryexperts-prod-2026}
       - JWT_ACCESS_EXPIRES_IN=15m
-      - JWT_REFRESH_EXPIRES_IN=7d
+      - JWT_REFRESH_EXPIRES_IN=30d
       - CORS_ORIGIN=*
       # Server-side Places API key for location search. Injected by the deploy
-      # workflow into /var/www/kaamsaathi/.env from the GitHub secret of the
+      # workflow into /var/www/inquiryexperts/.env from the GitHub secret of the
       # same name — never committed to the repo.
       - GOOGLE_MAPS_SERVER_API_KEY=${GOOGLE_MAPS_SERVER_API_KEY:-}
       # Google/Facebook OAuth login (see authController.js oauthLogin/oauthRegister).
@@ -32,41 +57,46 @@ services:
       - GOOGLE_WEB_CLIENT_ID=${GOOGLE_WEB_CLIENT_ID:-}
       - FACEBOOK_APP_ID=${FACEBOOK_APP_ID:-}
       - FACEBOOK_APP_SECRET=${FACEBOOK_APP_SECRET:-}
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=llama3.2:3b
+    depends_on:
+      ollama-model:
+        condition: service_completed_successfully
     networks:
-      - kaamsaathi-net
+      - inquiryexperts-net
 
   website-backend:
-    image: ${DOCKERHUB_NAMESPACE:-demonicorpse23}/kaamsaathi-website-backend:${IMAGE_TAG:-latest}
+    image: ${DOCKERHUB_NAMESPACE:-demonicorpse23}/inquiryexperts-website-backend:${IMAGE_TAG:-latest}
     restart: always
     ports:
       - "5011:5001"
     environment:
       - NODE_ENV=production
       - PORT=5001
-      - MONGO_URI=${MONGO_URI:-mongodb+srv://KaamSaathi:hospital123@kaamsaathi.jf52n0x.mongodb.net/kaamsaathi?retryWrites=true&w=majority}
-      - JWT_ACCESS_SECRET=${WEB_JWT_ACCESS_SECRET:-web-access-secret-kaamsaathi-prod-2026}
-      - JWT_REFRESH_SECRET=${WEB_JWT_REFRESH_SECRET:-web-refresh-secret-kaamsaathi-prod-2026}
+      - MONGO_URI=${MONGO_URI:-mongodb+srv://InquiryExperts:hospital123@inquiryexperts.jf52n0x.mongodb.net/inquiryexperts?retryWrites=true&w=majority}
+      - JWT_ACCESS_SECRET=${WEB_JWT_ACCESS_SECRET:-web-access-secret-inquiryexperts-prod-2026}
+      - JWT_REFRESH_SECRET=${WEB_JWT_REFRESH_SECRET:-web-refresh-secret-inquiryexperts-prod-2026}
       - JWT_ACCESS_EXPIRES_IN=15m
       - JWT_REFRESH_EXPIRES_IN=7d
       - CORS_ORIGIN=https://admin.inquiry.business,https://inquiry.business
     networks:
-      - kaamsaathi-net
+      - inquiryexperts-net
 
   website-frontend:
-    image: ${DOCKERHUB_NAMESPACE:-demonicorpse23}/kaamsaathi-website-frontend:${IMAGE_TAG:-latest}
+    image: ${DOCKERHUB_NAMESPACE:-demonicorpse23}/inquiryexperts-website-frontend:${IMAGE_TAG:-latest}
     restart: always
     ports:
       - "5012:80"
     networks:
-      - kaamsaathi-net
+      - inquiryexperts-net
 
   admin-frontend:
-    image: ${DOCKERHUB_NAMESPACE:-demonicorpse23}/kaamsaathi-admin-frontend:${IMAGE_TAG:-latest}
+    image: ${DOCKERHUB_NAMESPACE:-demonicorpse23}/inquiryexperts-admin-frontend:${IMAGE_TAG:-latest}
     restart: always
     ports:
       - "5013:80"
     networks:
-      - kaamsaathi-net
+      - inquiryexperts-net
 
   gateway:
     image: nginx:alpine
@@ -81,11 +111,12 @@ services:
       - website-backend
       - mobile-backend
     networks:
-      - kaamsaathi-net
+      - inquiryexperts-net
 
 volumes:
   mongo-data:
+  ollama-data:
 
 networks:
-  kaamsaathi-net:
+  inquiryexperts-net:
     driver: bridge

@@ -61,6 +61,7 @@ export const BookingsPage = () => {
                 w.categories?.some((c) => c._id === b.category?._id) &&
                 w.isActive &&
                 w.verificationStatus === 'verified' &&
+                w.availability === 'available' &&
                 (!b.locality || (w.serviceAreas || []).some((area) => area.trim().replace(/\s+/g, ' ').toLowerCase() === b.locality?.trim().replace(/\s+/g, ' ').toLowerCase()))
             );
             return (
@@ -98,7 +99,7 @@ export const BookingsPage = () => {
                           <option value="" disabled>Select approved providers (Ctrl/Cmd for multiple)</option>
                           {matchingWorkers?.map((w) => (
                             <option key={w._id} value={w._id}>
-                              {w.name} · {w.availability === 'available' ? 'Online' : 'Offline'}
+                              {w.name} · Online
                             </option>
                           ))}
                         </select>

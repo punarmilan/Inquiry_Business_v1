@@ -93,7 +93,7 @@ test('17. bottom navigation gates Post behind an approved business', () => {
   const source = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/navigation/MainTabNavigator.tsx'), 'utf8');
   const labels = [...source.matchAll(/name="(OffersTab|ServicesTab|PostTab|MoreTab|ProfileTab)"/g)].map((match) => match[1]);
   assert.deepEqual(labels, ['OffersTab', 'ServicesTab', 'PostTab', 'MoreTab', 'ProfileTab']);
-  assert.match(source, /const \{ hasApprovedBusiness \} = useApp\(\)/);
+  assert.match(source, /hasApprovedBusiness[^=]*= useApp\(\)/);
   assert.match(source, /hasApprovedBusiness \? <Tab\.Screen name="PostTab"/);
 });
 test('18. city availability selects the active flag used in its response checks', () => {

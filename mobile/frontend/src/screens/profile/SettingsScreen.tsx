@@ -24,7 +24,7 @@ export const SettingsScreen: React.FC<Props> = ({ navigation }) => {
   return (
     <ScreenContainer>
       <View style={styles.header}>
-        <IconButton name="arrow-left" accessibilityLabel="Back" onPress={() => navigation.goBack()} />
+        <IconButton name="arrow-left" accessibilityLabel={t('back')} onPress={() => navigation.goBack()} />
         <Text style={styles.headerTitle}>{t('settings')}</Text>
       </View>
 
@@ -33,7 +33,7 @@ export const SettingsScreen: React.FC<Props> = ({ navigation }) => {
           <View style={styles.settingRow}>
             <View style={styles.settingCopy}>
               <Text style={styles.settingTitle}>{t('language')}</Text>
-              <Text style={styles.settingBody}>Choose app language</Text>
+              <Text style={styles.settingBody}>{t('chooseAppLanguage')}</Text>
             </View>
             <LanguageToggle />
           </View>

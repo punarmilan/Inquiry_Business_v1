@@ -1,7 +1,7 @@
 {
-  "name": "kaamsaathi-backend",
+  "name": "inquiryexperts-backend",
   "version": "1.0.0",
-  "description": "Node.js + Express + MongoDB backend for AnyWork hyperlocal offers and managed services.",
+  "description": "Node.js + Express + MongoDB backend for InquiryExperts hyperlocal offers and managed services.",
   "main": "src/server.js",
   "scripts": {
     "prestart": "node ../../scripts/ensureMongo.js",
@@ -12,7 +12,7 @@
     ,"migrate:hyperlocal-indexes": "node src/scripts/migrateHyperlocalIndexes.js"
   },
   "keywords": [
-    "kaamsaathi",
+    "inquiryexperts",
     "offers",
     "local-services",
     "express",

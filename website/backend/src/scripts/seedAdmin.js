@@ -19,7 +19,7 @@ const run = async () => {
   const { email, password, name } = args;
 
   if (!email || !password || !name || !String(name).trim()) {
-    console.error('Usage: node src/scripts/seedAdmin.js --email=admin@kaamsaathi.com --password=ChangeMe123! --name="Root Admin" [--update=true] [--current-email=old@email.com]');
+    console.error('Usage: node src/scripts/seedAdmin.js --email=admin@inquiryexperts.com --password=ChangeMe123! --name="Root Admin" [--update=true] [--current-email=old@email.com]');
     process.exit(1);
   }
 

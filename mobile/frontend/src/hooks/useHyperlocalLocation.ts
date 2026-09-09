@@ -5,8 +5,21 @@ import * as Location from 'expo-location';
 import { getCityAvailability, listSupportedCities } from '../services/api';
 import type { City } from '../types/hyperlocal';
 
-const STORAGE_KEY = 'anywork_hyperlocal_location';
-const INTRO_KEY = 'anywork_hyperlocal_location_intro_seen';
+const STORAGE_KEY = 'inquiryexperts_hyperlocal_location';
+const INTRO_KEY = 'inquiryexperts_hyperlocal_location_intro_seen';
+const LEGACY_STORAGE_KEY = 'anywork_hyperlocal_location';
+const LEGACY_INTRO_KEY = 'anywork_hyperlocal_location_intro_seen';
+
+const readStoredItem = async (key: string, legacyKey: string): Promise<string | null> => {
+  const current = await AsyncStorage.getItem(key);
+  if (current !== null) return current;
+  const legacy = await AsyncStorage.getItem(legacyKey);
+  if (legacy !== null) {
+    await AsyncStorage.setItem(key, legacy).catch(() => undefined);
+    await AsyncStorage.removeItem(legacyKey).catch(() => undefined);
+  }
+  return legacy;
+};
 
 export interface HyperlocalLocation {
   city: City | null;
@@ -30,7 +43,10 @@ const resolveManualCoordinates = async (city: City, locality?: string) => {
   return fallback;
 };
 
-export const useHyperlocalLocation = ({ autoDetect = false }: { autoDetect?: boolean } = {}) => {
+export const useHyperlocalLocation = ({
+  autoDetect = false,
+  promptOnEmpty = true,
+}: { autoDetect?: boolean; promptOnEmpty?: boolean } = {}) => {
   const [location, setLocation] = useState<HyperlocalLocation | null>(null);
   const [cities, setCities] = useState<City[]>([]);
   const [pickerVisible, setPickerVisible] = useState(false);
@@ -50,6 +66,7 @@ export const useHyperlocalLocation = ({ autoDetect = false }: { autoDetect?: boo
     setLocation(next);
     setPickerVisible(false);
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    await AsyncStorage.removeItem(LEGACY_STORAGE_KEY).catch(() => undefined);
   }, []);
 
   const selectCoordinates = useCallback(async (coordinates: { latitude: number; longitude: number }) => {
@@ -66,7 +83,19 @@ export const useHyperlocalLocation = ({ autoDetect = false }: { autoDetect?: boo
     setLocation(next);
     setPickerVisible(false);
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    await AsyncStorage.removeItem(LEGACY_STORAGE_KEY).catch(() => undefined);
     return { place, availability };
+  }, []);
+
+  const clearLocation = useCallback(async () => {
+    await Promise.all([
+      AsyncStorage.removeItem(STORAGE_KEY),
+      AsyncStorage.removeItem(LEGACY_STORAGE_KEY),
+    ]).catch(() => undefined);
+    setLocation(null);
+    setLocationError(null);
+    setPickerVisible(false);
+    setLoadingLocation(false);
   }, []);
 
   const detect = useCallback(async () => {
@@ -100,9 +129,13 @@ export const useHyperlocalLocation = ({ autoDetect = false }: { autoDetect?: boo
   // stale location in the mounted Services screen. A GPS request is only started
   // when no location exists, and detectingRef still prevents concurrent requests.
   const refreshStoredLocation = useCallback(async () => {
-    const stored = await AsyncStorage.getItem(STORAGE_KEY);
+    const stored = await readStoredItem(STORAGE_KEY, LEGACY_STORAGE_KEY);
     if (!stored) {
       if (autoDetect && !detectingRef.current) await detect();
+      else {
+        setLocation(null);
+        setLoadingLocation(false);
+      }
       return;
     }
     try {
@@ -121,8 +154,8 @@ export const useHyperlocalLocation = ({ autoDetect = false }: { autoDetect?: boo
     (async () => {
       const [cityResponse, stored, introSeen] = await Promise.all([
         listSupportedCities().catch(() => ({ success: true as const, data: [] })),
-        AsyncStorage.getItem(STORAGE_KEY),
-        AsyncStorage.getItem(INTRO_KEY),
+        readStoredItem(STORAGE_KEY, LEGACY_STORAGE_KEY),
+        readStoredItem(INTRO_KEY, LEGACY_INTRO_KEY),
       ]);
       if (!active) return;
       const availableCities = Array.isArray(cityResponse.data) ? cityResponse.data : [];
@@ -136,12 +169,17 @@ export const useHyperlocalLocation = ({ autoDetect = false }: { autoDetect?: boo
               )
             : null;
           if (storedLocation.city && !liveCity) {
-            await AsyncStorage.removeItem(STORAGE_KEY);
+            await Promise.all([
+              AsyncStorage.removeItem(STORAGE_KEY),
+              AsyncStorage.removeItem(LEGACY_STORAGE_KEY),
+            ]).catch(() => undefined);
             setLocation(null);
             if (autoDetect) {
               void detect();
-            } else {
+            } else if (promptOnEmpty) {
               setPickerVisible(true);
+              setLoadingLocation(false);
+            } else {
               setLoadingLocation(false);
             }
             return;
@@ -168,11 +206,17 @@ export const useHyperlocalLocation = ({ autoDetect = false }: { autoDetect?: boo
       }
       if (autoDetect) {
         await AsyncStorage.setItem(INTRO_KEY, '1');
+        await AsyncStorage.removeItem(LEGACY_INTRO_KEY).catch(() => undefined);
         void detect();
+        return;
+      }
+      if (!promptOnEmpty) {
+        setLoadingLocation(false);
         return;
       }
       if (!introSeen) {
         await AsyncStorage.setItem(INTRO_KEY, '1');
+        await AsyncStorage.removeItem(LEGACY_INTRO_KEY).catch(() => undefined);
         Alert.alert(
           'Discover what is near you',
           'Allow location to discover offers and services near you.',
@@ -188,7 +232,7 @@ export const useHyperlocalLocation = ({ autoDetect = false }: { autoDetect?: boo
       }
     })();
     return () => { active = false; };
-  }, [autoDetect, detect]);
+  }, [autoDetect, detect, promptOnEmpty]);
 
-  return { location, cities, pickerVisible, setPickerVisible, chooseManual, selectCoordinates, detect, refreshStoredLocation, loadingLocation, locationError };
+  return { location, cities, pickerVisible, setPickerVisible, chooseManual, selectCoordinates, detect, clearLocation, refreshStoredLocation, loadingLocation, locationError };
 };

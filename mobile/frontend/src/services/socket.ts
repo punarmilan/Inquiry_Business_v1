@@ -9,8 +9,12 @@ let socket: Socket | null = null;
  * login/registration, so this never throws; callers get null on failure.
  */
 export const connectSocket = (accessToken: string): Socket | null => {
-  if (socket?.connected) return socket;
   try {
+    if (socket) {
+      socket.auth = { token: accessToken };
+      if (!socket.connected) socket.connect();
+      return socket;
+    }
     socket = io(API_BASE_URL, {
       auth: { token: accessToken },
       transports: ['websocket'],

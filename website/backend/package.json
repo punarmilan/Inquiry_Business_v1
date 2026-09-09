@@ -1,7 +1,7 @@
 {
-  "name": "kaamsaathi-web-backend",
+  "name": "inquiryexperts-web-backend",
   "version": "1.0.0",
-  "description": "Node.js + Express + MongoDB API for the AnyWork hyperlocal admin dashboard.",
+  "description": "Node.js + Express + MongoDB API for the InquiryExperts hyperlocal admin dashboard.",
   "main": "src/server.js",
   "scripts": {
     "prestart": "node ../../scripts/ensureMongo.js",
@@ -14,7 +14,7 @@
     "seed:demo": "node src/scripts/seedDemoData.js"
   },
   "keywords": [
-    "kaamsaathi",
+    "inquiryexperts",
     "admin",
     "dashboard",
     "express",

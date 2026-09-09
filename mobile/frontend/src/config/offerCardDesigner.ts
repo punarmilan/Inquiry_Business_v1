@@ -30,6 +30,8 @@ export type OfferTemplateElement = {
   content?: string;
   imageUrl?: string;
   src?: string;
+  /** Local sprite avatar layer. Kept as an id so the design remains serializable. */
+  avatarId?: string;
   position?: { x: number; y: number };
   size?: { width: number; height: number };
   x: number;
@@ -337,7 +339,7 @@ export const OFFER_CARD_COLORS = [
 
 export const DEFAULT_OFFER_CARD_DESIGN: OfferCardDesign = {
   templateId: OFFER_CARD_TEMPLATES[0].id,
-  avatarId: OFFER_AVATARS[0].id,
+  avatarId: '',
   primaryColor: OFFER_CARD_TEMPLATES[0].primaryColor,
   secondaryColor: OFFER_CARD_TEMPLATES[0].secondaryColor,
   layout: OFFER_CARD_TEMPLATES[0].layout,

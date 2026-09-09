@@ -1,6 +1,6 @@
-# KaamSaathi Backend
+# InquiryExperts Backend
 
-Node.js + Express + MongoDB API for the KaamSaathi mobile app and future admin panel.
+Node.js + Express + MongoDB API for the InquiryExperts mobile app and future admin panel.
 
 ## Setup
 

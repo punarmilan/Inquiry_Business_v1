@@ -22,7 +22,7 @@ Pushing to `main` or `master` runs the quality gate first and then pauses at the
 To release a tested commit:
 
 1. Push the tested commit to `main` or `master`.
-2. Open **Actions → CI/CD Pipeline - KaamSaathi**.
+2. Open **Actions → CI/CD Pipeline - InquiryExperts**.
 3. Wait for `Quality Gate` to pass.
 4. Approve the `production` environment review when GitHub pauses the workflow.
 

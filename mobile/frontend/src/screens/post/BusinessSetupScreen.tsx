@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -208,13 +208,14 @@ export const BusinessSetupScreen: React.FC<Props> = ({ route, navigation }) => {
 
   return (
     <ScreenContainer>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <View style={styles.top}>
         <Pressable onPress={navigation.goBack} style={styles.back}>
           <MaterialCommunityIcons name="arrow-left" size={24} />
         </Pressable>
         <Text style={styles.title}>{isEditing ? 'Customize Business Profile' : 'Create Business Profile'}</Text>
       </View>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView style={styles.flex} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <Input
           label="Business name *"
           value={name}
@@ -304,6 +305,7 @@ export const BusinessSetupScreen: React.FC<Props> = ({ route, navigation }) => {
         </View>
         <Button label={isEditing ? 'Submit Profile Changes' : 'Submit Business Profile'} onPress={submit} loading={loading} fullWidth />
       </ScrollView>
+      </KeyboardAvoidingView>
       <CityPickerModal
         visible={locationState.pickerVisible}
         cities={locationState.cities.filter((city) => city.offersEnabled)}
@@ -315,6 +317,9 @@ export const BusinessSetupScreen: React.FC<Props> = ({ route, navigation }) => {
 };
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
   top: {
     height: 58,
     backgroundColor: theme.colors.surface,
@@ -334,6 +339,7 @@ const styles = StyleSheet.create({
   content: {
     padding: 18,
     paddingBottom: 100,
+    flexGrow: 1,
   },
   label: {
     ...theme.typography.bodyBold,

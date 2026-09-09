@@ -1,6 +1,6 @@
-# AnyWork Website Frontend
+# InquiryExperts Website Frontend
 
-React + Vite frontend for the public AnyWork website.
+React + Vite frontend for the public InquiryExperts website.
 
 ## Run
 
@@ -14,7 +14,7 @@ npm run dev
 Default URL:
 
 ```text
-https://play.google.com/store/apps/details?id=com.kaamsaathi.app
+https://play.google.com/store/apps/details?id=com.inquiryexperts.app
 ```
 
 Override it with:

@@ -12,7 +12,7 @@ const toNumber = (value, fallback) => {
 module.exports = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: toNumber(process.env.PORT, 5001),
-  mongoUri: process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/kaamsaathi',
+  mongoUri: process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/inquiryexperts',
   jwtAccessSecret: process.env.JWT_ACCESS_SECRET || 'dev-admin-access-secret-change-me',
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || 'dev-admin-refresh-secret-change-me',
   jwtAccessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',

@@ -11,6 +11,7 @@ import { ProviderDashboardScreen } from '../screens/provider/ProviderDashboardSc
 import { ProviderProfileScreen } from '../screens/provider/ProviderProfileScreen';
 import { ChatListScreen } from '../screens/profile/ChatListScreen';
 import { theme } from '../theme';
+import { useApp } from '../context/AppContext';
 
 const Tab = createBottomTabNavigator<ProviderTabParamList>();
 
@@ -22,6 +23,7 @@ const TabBarButton = (props: BottomTabBarButtonProps) => (
 );
 
 export const ProviderTabNavigator: React.FC = () => {
+  const { t } = useApp();
   const insets = useSafeAreaInsets();
   const tabBarStyle = {
     position: 'absolute' as const,
@@ -54,10 +56,10 @@ export const ProviderTabNavigator: React.FC = () => {
         tabBarButton: (props) => <TabBarButton {...props} />,
       }}
     >
-      <Tab.Screen name="ProviderHome" component={ProviderHomeScreen} options={{ tabBarLabel: 'Home', tabBarIcon: ({ color, size, focused }) => <TabIcon name="home-variant" color={color} size={size} focused={focused} /> }} />
-      <Tab.Screen name="ProviderMessages" component={ChatListScreen as React.ComponentType<any>} options={{ tabBarLabel: 'Messages', tabBarIcon: ({ color, size, focused }) => <TabIcon name="message-text-outline" color={color} size={size} focused={focused} /> }} />
-      <Tab.Screen name="ProviderDashboard" component={ProviderDashboardScreen} options={{ tabBarLabel: 'Dashboard', tabBarIcon: ({ color, size, focused }) => <TabIcon name="chart-box-outline" color={color} size={size} focused={focused} /> }} />
-      <Tab.Screen name="ProviderProfile" component={ProviderProfileScreen} options={{ tabBarLabel: 'Profile', tabBarIcon: ({ color, size, focused }) => <TabIcon name="account-circle-outline" color={color} size={size} focused={focused} /> }} />
+      <Tab.Screen name="ProviderHome" component={ProviderHomeScreen} options={{ tabBarLabel: t('navHome'), tabBarIcon: ({ color, size, focused }) => <TabIcon name="home-variant" color={color} size={size} focused={focused} /> }} />
+      <Tab.Screen name="ProviderMessages" component={ChatListScreen as React.ComponentType<any>} options={{ tabBarLabel: t('messages'), tabBarIcon: ({ color, size, focused }) => <TabIcon name="message-text-outline" color={color} size={size} focused={focused} /> }} />
+      <Tab.Screen name="ProviderDashboard" component={ProviderDashboardScreen} options={{ tabBarLabel: t('navDashboard'), tabBarIcon: ({ color, size, focused }) => <TabIcon name="chart-box-outline" color={color} size={size} focused={focused} /> }} />
+      <Tab.Screen name="ProviderProfile" component={ProviderProfileScreen} options={{ tabBarLabel: t('navProfile'), tabBarIcon: ({ color, size, focused }) => <TabIcon name="account-circle-outline" color={color} size={size} focused={focused} /> }} />
     </Tab.Navigator>
   );
 };

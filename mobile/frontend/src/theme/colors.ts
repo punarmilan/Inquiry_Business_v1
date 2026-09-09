@@ -1,4 +1,4 @@
-// AnyWork visual system: clean off-white surfaces, confident teal actions and a warm
+// InquiryExperts visual system: clean off-white surfaces, confident teal actions and a warm
 // orange accent for offers, prices and attention states.
 export const colors = {
   // Primary teal — used for navigation, selected controls and main actions.

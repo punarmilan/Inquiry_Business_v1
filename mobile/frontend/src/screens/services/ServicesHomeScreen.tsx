@@ -21,7 +21,7 @@ type FilterKey = 'location' | 'experience' | 'service' | 'more';
 const normalize = (value: string) => value.trim().toLocaleLowerCase('en-IN');
 
 export const ServicesHomeScreen: React.FC<Props> = ({ navigation }) => {
-  const { accessToken, unreadNotificationCount } = useApp();
+  const { accessToken, unreadNotificationCount, t } = useApp();
   const locationState = useHyperlocalLocation({ autoDetect: true });
   const scrollRef = useRef<ScrollView>(null);
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
@@ -86,7 +86,7 @@ export const ServicesHomeScreen: React.FC<Props> = ({ navigation }) => {
       const response = await toggleSavedProvider(accessToken, providerId);
       setFavorites((current) => response.saved ? (current.includes(providerId) ? current : [...current, providerId]) : current.filter((id) => id !== providerId));
     } catch (error) {
-      Alert.alert('Favourite provider', error instanceof Error ? error.message : 'Could not update favourites.');
+      Alert.alert(t('favouriteProvider'), error instanceof Error ? error.message : t('favouritesUpdateFailed'));
     }
   };
 
@@ -159,46 +159,50 @@ export const ServicesHomeScreen: React.FC<Props> = ({ navigation }) => {
   const additionalProviderItems = allCityProviders.filter((provider) => !visibleProviders.some((visible) => visible._id === provider._id));
   const cityProviderItems = showAllCityProviders ? additionalProviderItems : additionalProviderItems.slice(0, 6);
   const locationItems = showAllLocations ? locationStats : locationStats.slice(0, 5);
-  const currentLocationLabel = selectedLocality && city ? `${selectedLocality}, ${city.name}` : city?.name || 'Choose location';
+  const currentLocationLabel = selectedLocality && city ? `${selectedLocality}, ${city.name}` : city?.name || t('chooseLocation');
 
   return <ScreenContainer>
-    <HyperlocalHeader locationLabel="YOUR LOCATION" cityLabel={currentLocationLabel} onLocationPress={() => locationState.setPickerVisible(true)} onNotifications={() => navigation.navigate('Notifications')} onInbox={() => navigation.navigate('ChatList')} unreadCount={unreadNotificationCount} />
+    <HyperlocalHeader cityLabel={currentLocationLabel} onLocationPress={() => locationState.setPickerVisible(true)} onNotifications={() => navigation.navigate('Notifications')} onInbox={() => navigation.navigate('ChatList')} unreadCount={unreadNotificationCount} />
     <ScrollView ref={scrollRef} refreshControl={<RefreshControl refreshing={loading} onRefresh={load} colors={[theme.colors.primary]} />} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <View style={styles.searchPanel}>
-        <View style={styles.searchRow}><MaterialCommunityIcons name="magnify" size={27} color={theme.colors.textSecondary} /><TextInput value={search} onChangeText={setSearch} placeholder="Search for electricians, plumbers, cleaners..." placeholderTextColor={theme.colors.textMuted} style={styles.searchInput} returnKeyType="search" /><Pressable onPress={() => setActiveFilter('more')} style={styles.filterButton}><MaterialCommunityIcons name="filter-outline" size={21} color={theme.colors.textInverse} /><Text style={styles.filterButtonText}>Filter</Text></Pressable></View>
+        <View style={styles.searchRow}><MaterialCommunityIcons name="magnify" size={27} color={theme.colors.textSecondary} /><TextInput value={search} onChangeText={setSearch} placeholder={t('serviceSearchPlaceholder')} placeholderTextColor={theme.colors.textMuted} style={styles.searchInput} returnKeyType="search" /><Pressable onPress={() => setActiveFilter('more')} style={styles.filterButton}><MaterialCommunityIcons name="filter-outline" size={21} color={theme.colors.textInverse} /><Text style={styles.filterButtonText}>{t('filter')}</Text></Pressable></View>
         <View style={[styles.filterRow, filterStyles.filterRow]}>
-          <FilterButton icon="map-marker-outline" label={selectedLocality || 'Location'} active={Boolean(selectedLocality)} onPress={() => setActiveFilter('location')} />
-          <FilterButton wide icon="briefcase-outline" label={experience ? `${experience}+ yrs` : 'Experience'} active={Boolean(experience)} onPress={() => setActiveFilter('experience')} />
-          <FilterButton icon="view-grid-outline" label={selectedCategory ? categories.find((category) => category._id === selectedCategory)?.name || 'Service' : 'Service'} active={Boolean(selectedCategory)} onPress={() => setActiveFilter('service')} />
-          <FilterButton icon="sort-variant" label={onlineOnly ? 'Online now' : 'More'} active={onlineOnly} onPress={() => setActiveFilter('more')} />
+          <FilterButton icon="map-marker-outline" label={selectedLocality || t('locationFilter')} active={Boolean(selectedLocality)} onPress={() => setActiveFilter('location')} />
+          <FilterButton wide icon="briefcase-outline" label={experience ? `${experience}+ ${t('years')}` : t('experience')} active={Boolean(experience)} onPress={() => setActiveFilter('experience')} />
+          <FilterButton icon="view-grid-outline" label={selectedCategory ? categories.find((category) => category._id === selectedCategory)?.name || t('service') : t('service')} active={Boolean(selectedCategory)} onPress={() => setActiveFilter('service')} />
+          <FilterButton icon="sort-variant" label={onlineOnly ? t('onlineNow') : t('more')} active={onlineOnly} onPress={() => setActiveFilter('more')} />
         </View>
       </View>
 
-      {comingSoon ? <View style={styles.empty}><MaterialCommunityIcons name="map-marker-alert-outline" size={43} color={theme.colors.primary} /><Text style={styles.emptyTitle}>We're coming to your city soon.</Text><Text style={styles.emptyText}>Services are currently available only in selected cities.</Text><Pressable onPress={() => locationState.setPickerVisible(true)} style={styles.choose}><Text style={styles.chooseText}>View available cities</Text></Pressable></View> : null}
+      {comingSoon ? <View style={styles.empty}><MaterialCommunityIcons name="map-marker-alert-outline" size={43} color={theme.colors.primary} /><Text style={styles.emptyTitle}>{t('serviceComingSoon')}</Text><Text style={styles.emptyText}>{t('servicesSelectedCities')}</Text><Pressable onPress={() => locationState.setPickerVisible(true)} style={styles.choose}><Text style={styles.chooseText}>{t('viewAvailableCities')}</Text></Pressable></View> : null}
 
-      <SectionHeading title="Service Providers" onPress={() => setShowAllProviders((value) => !value)} expanded={showAllProviders} />
+      <SectionHeading title={t('serviceProviders')} onPress={() => setShowAllProviders((value) => !value)} expanded={showAllProviders} />
       {loading && !providers.length ? <ActivityIndicator color={theme.colors.primary} style={styles.loader} /> : null}
-      {!loading && !visibleProviders.length ? <View style={[styles.noResults, compactStyles.noResults]}><MaterialCommunityIcons name="account-search-outline" size={28} color={theme.colors.textMuted} /><Text style={styles.noResultsTitle}>No providers match these filters</Text><Text style={styles.noResultsText}>Try another locality, service or availability filter.</Text></View> : null}
+      {!loading && !visibleProviders.length ? <View style={[styles.noResults, compactStyles.noResults]}><MaterialCommunityIcons name="account-search-outline" size={28} color={theme.colors.textMuted} /><Text style={styles.noResultsTitle}>{t('noProvidersMatch')}</Text><Text style={styles.noResultsText}>{t('tryProviderFilters')}</Text></View> : null}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.providerRow}>{providerItems.map((provider) => <ProviderCard key={provider._id} provider={provider} favorite={favorites.includes(provider._id)} onFavorite={() => toggleFavorite(provider._id)} onBook={() => openBooking(provider)} />)}</ScrollView>
 
-      {additionalProviderItems.length ? <><SectionHeading title="All Service Providers" onPress={() => setShowAllCityProviders((value) => !value)} expanded={showAllCityProviders} /><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.providerRow}>{cityProviderItems.map((provider) => <ProviderCard key={provider._id} provider={provider} favorite={favorites.includes(provider._id)} onFavorite={() => toggleFavorite(provider._id)} onBook={() => openBooking(provider)} />)}</ScrollView></> : null}
+      {additionalProviderItems.length ? <><SectionHeading title={t('allServiceProviders')} onPress={() => setShowAllCityProviders((value) => !value)} expanded={showAllCityProviders} /><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.providerRow}>{cityProviderItems.map((provider) => <ProviderCard key={provider._id} provider={provider} favorite={favorites.includes(provider._id)} onFavorite={() => toggleFavorite(provider._id)} onBook={() => openBooking(provider)} />)}</ScrollView></> : null}
 
-      <SectionHeading title="Top Locations" onPress={() => setShowAllLocations((value) => !value)} expanded={showAllLocations} />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.locationRow}>{locationItems.map((item, index) => <Pressable key={item.name} onPress={() => { setSelectedLocality(item.name); scrollRef.current?.scrollTo({ y: 0, animated: true }); }} style={[styles.locationCard, rectangleStyles.locationCard]}><View style={styles.locationIcon}><MaterialCommunityIcons name={index < 2 ? 'map-marker-outline' : 'home-city-outline'} size={27} color={theme.colors.textSecondary} /></View><View><Text style={styles.locationName}>{item.name}</Text><Text style={styles.locationCount}>{item.count} {item.count === 1 ? 'Provider' : 'Providers'}</Text></View></Pressable>)}</ScrollView>
-      <View style={styles.trust}><View style={styles.trustIcon}><MaterialCommunityIcons name="shield-check" size={27} color={theme.colors.textInverse} /></View><View style={styles.flex}><Text style={styles.trustTitle}>Verified & Trusted</Text><Text style={styles.trustText}>All providers are admin verified for your safety and peace of mind.</Text></View></View>
+      <SectionHeading title={t('topLocations')} onPress={() => setShowAllLocations((value) => !value)} expanded={showAllLocations} />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.locationRow}>{locationItems.map((item, index) => <Pressable key={item.name} onPress={() => { setSelectedLocality(item.name); scrollRef.current?.scrollTo({ y: 0, animated: true }); }} style={[styles.locationCard, rectangleStyles.locationCard]}><View style={styles.locationIcon}><MaterialCommunityIcons name={index < 2 ? 'map-marker-outline' : 'home-city-outline'} size={27} color={theme.colors.textSecondary} /></View><View><Text style={styles.locationName}>{item.name}</Text><Text style={styles.locationCount}>{item.count} {item.count === 1 ? t('provider') : t('providers')}</Text></View></Pressable>)}</ScrollView>
+      <View style={styles.trust}><View style={styles.trustIcon}><MaterialCommunityIcons name="shield-check" size={27} color={theme.colors.textInverse} /></View><View style={styles.flex}><Text style={styles.trustTitle}>{t('verifiedTrusted')}</Text><Text style={styles.trustText}>{t('verifiedTrustedBody')}</Text></View></View>
     </ScrollView>
     <CityPickerModal visible={locationState.pickerVisible} cities={locationState.cities.filter((item) => item.servicesEnabled || item.offersEnabled)} onSelect={locationState.chooseManual} onUseCurrentLocation={locationState.detect} currentLocationLoading={locationState.loadingLocation} currentLocationError={locationState.locationError} onClose={() => locationState.setPickerVisible(false)} />
     <Modal visible={Boolean(activeFilter)} transparent animationType="slide" onRequestClose={() => setActiveFilter(null)}><Pressable style={styles.modalBackdrop} onPress={() => setActiveFilter(null)}><Pressable style={styles.modalCard} onPress={(event) => event.stopPropagation()}><View style={styles.modalHandle} /><Text style={styles.modalTitle}>{activeFilter === 'location' ? 'Choose location' : activeFilter === 'experience' ? 'Experience' : activeFilter === 'service' ? 'Choose service' : 'More filters'}</Text>{filterOptions.map((value) => { const label = activeFilter === 'service' ? categories.find((category) => category._id === value)?.name || value : activeFilter === 'experience' ? (value === '0' ? 'Any experience' : `${value}+ years`) : value; return <Pressable key={value} onPress={() => chooseFilter(value)} style={styles.modalOption}><Text style={styles.modalOptionText}>{label}</Text><MaterialCommunityIcons name="chevron-right" size={21} color={theme.colors.textMuted} /></Pressable>; })}</Pressable></Pressable></Modal>
   </ScreenContainer>;
 };
 
-const SectionHeading: React.FC<{ title: string; onPress: () => void; expanded: boolean }> = ({ title, onPress, expanded }) => <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>{title}</Text><Pressable onPress={onPress}><Text style={styles.viewAll}>{expanded ? 'Show less' : 'View all'}</Text></Pressable></View>;
+const SectionHeading: React.FC<{ title: string; onPress: () => void; expanded: boolean }> = ({ title, onPress, expanded }) => {
+  const { t } = useApp();
+  return <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>{title}</Text><Pressable onPress={onPress}><Text style={styles.viewAll}>{expanded ? t('showLess') : t('viewAll')}</Text></Pressable></View>;
+};
 const FilterButton: React.FC<{ icon: keyof typeof MaterialCommunityIcons.glyphMap; label: string; active: boolean; wide?: boolean; onPress: () => void }> = ({ icon, label, active, wide, onPress }) => <Pressable onPress={onPress} style={[styles.filterChip, filterStyles.filterChip, wide && filterStyles.filterChipWide, active && styles.filterChipActive]}><MaterialCommunityIcons name={icon} size={17} color={active ? theme.colors.primary : theme.colors.text} /><Text style={[styles.filterChipText, active && styles.filterChipTextActive]} numberOfLines={1}>{label}</Text><MaterialCommunityIcons name="chevron-down" size={16} color={active ? theme.colors.primary : theme.colors.text} /></Pressable>;
 
 const ProviderCard: React.FC<{ provider: ServiceProvider; favorite: boolean; onFavorite: () => void; onBook: () => void }> = ({ provider, favorite, onFavorite, onBook }) => {
+  const { t } = useApp();
   const category = provider.categories?.[0];
   const localAvatar = getProviderAvatar(provider.name);
-  const availabilityLabel = provider.availability === 'available' ? 'Online' : provider.availability === 'busy' ? 'Busy' : 'Offline';
+  const availabilityLabel = provider.availability === 'available' ? t('online') : provider.availability === 'busy' ? t('busy') : t('offline');
   return <View style={[styles.providerCard, rectangleStyles.providerCard]}><View style={[styles.providerImage, rectangleStyles.providerImage]}>{localAvatar ? <Image source={localAvatar} style={styles.providerPhoto} /> : provider.photoUrl ? <Image source={{ uri: provider.photoUrl }} style={styles.providerPhoto} /> : <View style={styles.providerFallback}><Avatar name={provider.name} size={68} /></View>}<View style={styles.rating}><MaterialCommunityIcons name="star" size={13} color={theme.colors.textInverse} /><Text style={styles.ratingText}>{provider.ratingAverage || 'New'}</Text></View><Pressable onPress={onFavorite} style={styles.favorite}><MaterialCommunityIcons name={favorite ? 'heart' : 'heart-outline'} size={23} color={favorite ? theme.colors.danger : theme.colors.textSecondary} /></Pressable></View><View style={styles.providerDetails}><Text style={styles.providerName} numberOfLines={1}>{provider.name}</Text><Text style={styles.providerService} numberOfLines={1}>{category?.name || 'Service provider'}</Text><Text style={styles.providerLocation} numberOfLines={1}><MaterialCommunityIcons name="map-marker-outline" size={14} color={theme.colors.textMuted} /> {provider.serviceAreas?.[0] || 'Local'} · {availabilityLabel}</Text><Text style={styles.providerMeta}>{provider.experienceYears || 0}+ Years Exp. · {provider.completedBookings || 0}+ Jobs</Text><Pressable disabled={provider.availability === 'busy'} onPress={onBook} style={[styles.bookButton, rectangleStyles.bookButton, provider.availability === 'busy' && styles.bookButtonDisabled]}><Text style={[styles.bookButtonText, provider.availability === 'busy' && styles.bookButtonTextDisabled]}>{provider.availability === 'available' ? 'Book Now' : provider.availability === 'busy' ? 'Busy' : 'Book'}</Text></Pressable></View></View>;
 };
 

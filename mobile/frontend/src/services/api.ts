@@ -104,6 +104,13 @@ let refreshInFlight: { source: TokenPair; promise: Promise<TokenPair> } | null =
 let onRequestStart: (() => void) | null = null;
 let onRequestEnd: (() => void) | null = null;
 
+const TERMINAL_REFRESH_ERROR_CODES = new Set([
+  'REFRESH_TOKEN_INVALID',
+  'REFRESH_TOKEN_INVALID_TYPE',
+  'REFRESH_TOKEN_REVOKED',
+  'USER_INACTIVE',
+]);
+
 export const setAuthTokens = (tokens: TokenPair | null) => {
   currentTokens = tokens;
 };
@@ -204,7 +211,9 @@ async function request<T>(path: string, options: RequestOptions = {}, isRetry = 
         // someone out, just surface the original error and let them retry.
         if (
           refreshError instanceof ApiRequestError &&
-          refreshError.code !== 'AUTH_SESSION_CHANGED' &&
+          refreshError.status === 401 &&
+          !!refreshError.code &&
+          TERMINAL_REFRESH_ERROR_CODES.has(refreshError.code) &&
           authStateAtRequest &&
           currentTokens === authStateAtRequest
         ) {
@@ -370,6 +379,12 @@ export const verifyOtp = (identifier: AuthIdentifier, otp: string, intent: 'logi
   request<{ success: true; user: BackendUser; isNewUser: boolean } & TokenPair>('/auth/verify-otp', {
     method: 'POST',
     body: { ...identifier, otp, intent },
+  });
+
+export const logoutSession = (refreshToken: string) =>
+  request<{ success: true; message: string }>('/auth/logout', {
+    method: 'POST',
+    body: { refreshToken },
   });
 
 export const loginWithPassword = (identifier: AuthIdentifier, password: string) =>
@@ -797,7 +812,7 @@ export const getAiChatMessages = (accessToken: string, query: { limit?: number }
   });
 
 export const sendAiChatMessage = (accessToken: string, text: string) =>
-  request<{ success: true; message: BackendAiChatMessage }>('/ai-chat', {
+  request<{ success: true; message: BackendAiChatMessage; messages: BackendAiChatMessage[] }>('/ai-chat', {
     method: 'POST',
     accessToken,
     body: { text },

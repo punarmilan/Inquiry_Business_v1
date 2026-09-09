@@ -12,8 +12,11 @@ expo-env.d.ts
 # Native
 .kotlin/
 *.apk
+*.aab
 *.orig.*
 *.jks
+*.keystore
+credentials.json
 *.p8
 *.p12
 *.key
@@ -40,6 +43,7 @@ yarn-error.*
 platform-tools/
 platform-tools-latest-windows.zip
 build-apk.log
+.build-tools/
 .serena/
 
 # typescript

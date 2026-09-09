@@ -83,7 +83,7 @@ export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
           previewUrl: templates[0].previewUrl,
           canvas: templates[0].canvas,
           dynamicFields: templates[0].dynamicFields || {},
-          avatarId: templates[0].defaultAvatarId || current.avatarId,
+          avatarId: current.avatarId,
           primaryColor: templates[0].primaryColor,
           secondaryColor: templates[0].secondaryColor,
           layout: templates[0].layout,
@@ -179,7 +179,10 @@ export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
           ],
         );
       } else {
-        Alert.alert('Offer not submitted', error.message);
+        const validationMessage = Array.isArray(error?.details)
+          ? error.details.map((detail: { message?: string }) => detail.message).filter(Boolean).join('\n')
+          : '';
+        Alert.alert('Offer not submitted', validationMessage || error?.message || 'Please check the offer details and try again.');
       }
     } finally {
       setLoading(false);

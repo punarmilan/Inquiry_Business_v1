@@ -12,7 +12,8 @@ import { IllustratedOnboardingPage } from './IllustratedOnboardingPage';
 import { onboardingStyles as styles, ONBOARDING_COLORS } from './OnboardingScreen.styles';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Onboarding'>;
-const ONBOARDING_SEEN_KEY = 'anywork_onboarding_seen_v2';
+const ONBOARDING_SEEN_KEY: string = 'inquiryexperts_onboarding_seen_v2';
+const LEGACY_ONBOARDING_SEEN_KEY: string = 'anywork_onboarding_seen_v2';
 
 export const OnboardingScreen: React.FC<Props> = ({ navigation, route }) => {
   const { t } = useApp();
@@ -48,16 +49,25 @@ export const OnboardingScreen: React.FC<Props> = ({ navigation, route }) => {
 
   useEffect(() => {
     let cancelled = false;
-    AsyncStorage.getItem(ONBOARDING_SEEN_KEY)
-      .then((seen) => {
+    (async () => {
+      try {
+        const seen =
+          (await AsyncStorage.getItem(ONBOARDING_SEEN_KEY)) ??
+          (await AsyncStorage.getItem(LEGACY_ONBOARDING_SEEN_KEY));
+        if (seen !== null && !cancelled && ONBOARDING_SEEN_KEY !== LEGACY_ONBOARDING_SEEN_KEY) {
+          // One-time migration from the legacy key.
+          await AsyncStorage.setItem(ONBOARDING_SEEN_KEY, seen).catch(() => undefined);
+          await AsyncStorage.removeItem(LEGACY_ONBOARDING_SEEN_KEY).catch(() => undefined);
+        }
         if (!cancelled && seen === '1' && !route.params?.force) {
           navigation.replace('PhoneEntry');
         }
-      })
-      .catch(() => undefined)
-      .finally(() => {
+      } catch {
+        // ignore storage errors
+      } finally {
         if (!cancelled) setCheckingFirstLaunch(false);
-      });
+      }
+    })();
     return () => { cancelled = true; };
   }, [navigation, route.params?.force]);
 
@@ -68,6 +78,7 @@ export const OnboardingScreen: React.FC<Props> = ({ navigation, route }) => {
 
   const finishOnboarding = useCallback(async () => {
     await AsyncStorage.setItem(ONBOARDING_SEEN_KEY, '1').catch(() => undefined);
+    await AsyncStorage.removeItem(LEGACY_ONBOARDING_SEEN_KEY).catch(() => undefined);
     navigation.navigate('PhoneEntry');
   }, [navigation]);
 

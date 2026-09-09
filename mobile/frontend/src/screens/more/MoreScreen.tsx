@@ -10,22 +10,9 @@ import { useApp } from '../../context/AppContext';
 import { theme } from '../../theme';
 
 type Props = NativeStackScreenProps<MoreStackParamList, 'MoreHome'>;
-type MoreItem = { label: string; subtitle: string; icon: keyof typeof MaterialCommunityIcons.glyphMap; route?: keyof MoreStackParamList; params?: Record<string, string> };
-
-const commonItems: MoreItem[] = [
-  { label: 'My Bookings', subtitle: 'Track services and assigned professionals', icon: 'clipboard-text-clock-outline', route: 'MyBookings' },
-  { label: 'Saved Offers', subtitle: 'Your favourite nearby deals', icon: 'bookmark-outline', route: 'SavedOffers' },
-  { label: 'Favourite Providers', subtitle: 'Your saved local professionals', icon: 'heart-multiple-outline', route: 'SavedProviders' },
-  { label: 'Payments', subtitle: 'Service and subscription payment status', icon: 'credit-card-outline', route: 'Payments' },
-  { label: 'Notifications', subtitle: 'Bookings, offers and plan updates', icon: 'bell-outline', route: 'Notifications' },
-  { label: 'Messages', subtitle: 'Booking, business and support inbox', icon: 'message-text-outline', route: 'ChatList' },
-  { label: 'Language & Settings', subtitle: 'Language, privacy and preferences', icon: 'translate', route: 'Settings' },
-  { label: 'Help & Support', subtitle: 'About, help and contact', icon: 'lifebuoy', route: 'HelpSupport' },
-  { label: 'Terms & Conditions', subtitle: 'Platform usage terms', icon: 'file-document-outline', route: 'LegalDocument', params: { document: 'terms' } },
-  { label: 'Privacy Policy', subtitle: 'How InquiryExperts protects your data', icon: 'shield-lock-outline', route: 'LegalDocument', params: { document: 'privacy' } },
-];
+type MoreItem = { key: string; label: string; subtitle: string; icon: keyof typeof MaterialCommunityIcons.glyphMap; route?: keyof MoreStackParamList; params?: Record<string, string> };
 export const MoreScreen: React.FC<Props> = ({ navigation }) => {
-  const { businesses, hasApprovedBusiness, refreshBusinesses } = useApp();
+  const { businesses, hasApprovedBusiness, refreshBusinesses, t } = useApp();
   const tabBarHeight = useBottomTabBarHeight();
 
   useFocusEffect(
@@ -35,29 +22,41 @@ export const MoreScreen: React.FC<Props> = ({ navigation }) => {
   );
 
   const businessSubtitle = useMemo(() => {
-    if (hasApprovedBusiness) return 'Approved — manage your offers and plans';
-    if (businesses.some((business) => business.verificationStatus === 'rejected')) return 'Changes requested — update and resubmit';
-    if (businesses.some((business) => business.verificationStatus === 'pending')) return 'Application pending admin approval';
-    return 'Learn how to promote your business and get started';
-  }, [businesses, hasApprovedBusiness]);
+    if (hasApprovedBusiness) return t('businessApprovedSubtitle');
+    if (businesses.some((business) => business.verificationStatus === 'rejected')) return t('businessChangesSubtitle');
+    if (businesses.some((business) => business.verificationStatus === 'pending')) return t('businessPendingSubtitle');
+    return t('businessStartSubtitle');
+  }, [businesses, hasApprovedBusiness, t]);
 
   const items = useMemo<MoreItem[]>(() => {
     const businessItems: MoreItem[] = [];
-    if (businesses.length) businessItems.push({ label: 'Business Profiles', subtitle: 'Add, customize and manage multiple businesses', icon: 'storefront-plus-outline', route: 'MyBusiness' });
+    if (businesses.length) businessItems.push({ key: 'businessProfiles', label: t('businessProfiles'), subtitle: t('businessProfilesSubtitle'), icon: 'storefront-plus-outline', route: 'MyBusiness' });
     if (hasApprovedBusiness) {
       businessItems.push(
-        { label: 'My Offers', subtitle: 'Pending, live and expired offers', icon: 'tag-multiple-outline', route: 'MyOffers' },
-        { label: 'Subscription / Plans', subtitle: 'Quota, billing and plan options', icon: 'crown-outline', route: 'Plans' }
+        { key: 'myOffers', label: t('myOffers'), subtitle: t('myOffersSubtitle'), icon: 'tag-multiple-outline', route: 'MyOffers' },
+        { key: 'plans', label: t('subscriptionPlans'), subtitle: t('subscriptionPlansSubtitle'), icon: 'crown-outline', route: 'Plans' }
       );
     }
+    const commonItems: MoreItem[] = [
+      { key: 'bookings', label: t('myBookings'), subtitle: t('myBookingsSubtitle'), icon: 'clipboard-text-clock-outline', route: 'MyBookings' },
+      { key: 'savedOffers', label: t('savedOffersTitle'), subtitle: t('savedOffersSubtitle'), icon: 'bookmark-outline', route: 'SavedOffers' },
+      { key: 'favProviders', label: t('favouriteProviders'), subtitle: t('favouriteProvidersSubtitle'), icon: 'heart-multiple-outline', route: 'SavedProviders' },
+      { key: 'payments', label: t('payments'), subtitle: t('paymentsSubtitle'), icon: 'credit-card-outline', route: 'Payments' },
+      { key: 'notifications', label: t('notificationsLabel'), subtitle: t('notificationsSubtitle'), icon: 'bell-outline', route: 'Notifications' },
+      { key: 'messages', label: t('messages'), subtitle: t('messagesSubtitle'), icon: 'message-text-outline', route: 'ChatList' },
+      { key: 'settings', label: t('languageSettings'), subtitle: t('languageSettingsSubtitle'), icon: 'translate', route: 'Settings' },
+      { key: 'help', label: t('help'), subtitle: t('helpSubtitle'), icon: 'lifebuoy', route: 'HelpSupport' },
+      { key: 'terms', label: t('termsConditions'), subtitle: t('termsSubtitle'), icon: 'file-document-outline', route: 'LegalDocument', params: { document: 'terms' } },
+      { key: 'privacy', label: t('privacyPolicy'), subtitle: t('privacySubtitle'), icon: 'shield-lock-outline', route: 'LegalDocument', params: { document: 'privacy' } },
+    ];
     return [...businessItems, ...commonItems];
-  }, [businessSubtitle, businesses.length, hasApprovedBusiness]);
+  }, [businesses, hasApprovedBusiness, businessSubtitle, t]);
 
   return (
     <ScreenContainer>
       <View style={styles.header}>
-        <Text style={styles.title}>More</Text>
-        <Text style={styles.subtitle}>Everything else, in one place</Text>
+        <Text style={styles.title}>{t('moreTitle')}</Text>
+        <Text style={styles.subtitle}>{t('moreSubtitle')}</Text>
       </View>
       <ScrollView
         style={styles.scroll}
@@ -67,12 +66,12 @@ export const MoreScreen: React.FC<Props> = ({ navigation }) => {
         <Pressable onPress={() => navigation.navigate('BusinessCenter')} style={({ pressed }) => [styles.businessBanner, pressed && styles.pressed]}>
           <View style={styles.bannerIcon}><MaterialCommunityIcons name="storefront-outline" size={26} color={theme.colors.textInverse} /></View>
           <View style={styles.flex}>
-            <Text style={styles.bannerTitle}>{hasApprovedBusiness ? 'Manage your business' : 'Promote your business'}</Text>
+            <Text style={styles.bannerTitle}>{hasApprovedBusiness ? t('manageBusiness') : t('promoteBusiness')}</Text>
             <Text style={styles.bannerText}>{businessSubtitle}</Text>
           </View>
           <MaterialCommunityIcons name="chevron-right" size={24} color={theme.colors.textInverse} />
         </Pressable>
-        {items.map((item) => <Pressable key={item.label} onPress={() => item.route && (navigation as any).navigate(item.route, item.params)} style={({ pressed }) => [styles.item, pressed && styles.pressed]}><View style={styles.icon}><View pointerEvents="none" style={styles.iconShine} /><MaterialCommunityIcons name={item.icon} size={23} color={theme.colors.primary} /></View><View style={styles.flex}><Text style={styles.label}>{item.label}</Text><Text style={styles.itemSubtitle}>{item.subtitle}</Text></View><MaterialCommunityIcons name="chevron-right" size={22} color={theme.colors.textMuted} /></Pressable>)}
+        {items.map((item) => <Pressable key={item.key} onPress={() => item.route && (navigation as any).navigate(item.route, item.params)} style={({ pressed }) => [styles.item, pressed && styles.pressed]}><View style={styles.icon}><View pointerEvents="none" style={styles.iconShine} /><MaterialCommunityIcons name={item.icon} size={23} color={theme.colors.primary} /></View><View style={styles.flex}><Text style={styles.label}>{item.label}</Text><Text style={styles.itemSubtitle}>{item.subtitle}</Text></View><MaterialCommunityIcons name="chevron-right" size={22} color={theme.colors.textMuted} /></Pressable>)}
       </ScrollView>
     </ScreenContainer>
   );

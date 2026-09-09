@@ -3,6 +3,7 @@ import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../theme';
 import type { City } from '../types/hyperlocal';
+import { useApp } from '../context/AppContext';
 
 export const CityPickerModal: React.FC<{
   visible: boolean;
@@ -12,14 +13,15 @@ export const CityPickerModal: React.FC<{
   currentLocationLoading?: boolean;
   currentLocationError?: string | null;
   onClose: () => void;
-}> = ({ visible, cities, onSelect, onUseCurrentLocation, currentLocationLoading = false, currentLocationError, onClose }) => (
-  <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+}> = ({ visible, cities, onSelect, onUseCurrentLocation, currentLocationLoading = false, currentLocationError, onClose }) => {
+  const { t } = useApp();
+  return <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
     <View style={styles.backdrop}>
       <View style={styles.sheet}>
         <View style={styles.headingRow}>
           <View>
-            <Text style={styles.title}>Select city & area</Text>
-            <Text style={styles.subtitle}>You can change this anytime.</Text>
+            <Text style={styles.title}>{t('selectCityArea')}</Text>
+            <Text style={styles.subtitle}>{t('locationChangeAnytime')}</Text>
           </View>
           <Pressable onPress={onClose} style={styles.close}><MaterialCommunityIcons name="close" size={24} /></Pressable>
         </View>
@@ -27,8 +29,8 @@ export const CityPickerModal: React.FC<{
           <Pressable disabled={currentLocationLoading} onPress={onUseCurrentLocation} style={[styles.currentLocation, currentLocationLoading && styles.currentLocationDisabled]}>
             {currentLocationLoading ? <ActivityIndicator size="small" color={theme.colors.primary} /> : <MaterialCommunityIcons name="crosshairs-gps" size={21} color={theme.colors.primary} />}
             <View style={styles.flex}>
-              <Text style={styles.currentLocationTitle}>{currentLocationLoading ? 'Detecting your location…' : currentLocationError ? 'Try current location again' : 'Use my current location'}</Text>
-              <Text style={styles.currentLocationText}>{currentLocationError || 'Show offers around your exact GPS position'}</Text>
+              <Text style={styles.currentLocationTitle}>{currentLocationLoading ? t('detectingLocation') : currentLocationError ? t('tryCurrentLocationAgain') : t('useCurrentLocation')}</Text>
+              <Text style={styles.currentLocationText}>{currentLocationError || t('currentLocationOfferHint')}</Text>
             </View>
             {!currentLocationLoading && <MaterialCommunityIcons name="chevron-right" size={22} color={theme.colors.primary} />}
           </Pressable>
@@ -52,12 +54,12 @@ export const CityPickerModal: React.FC<{
               ) : null}
             </View>
           ))}
-          {!cities.length && <Text style={styles.empty}>No cities have been enabled yet.</Text>}
+          {!cities.length && <Text style={styles.empty}>{t('noEnabledCities')}</Text>}
         </ScrollView>
       </View>
     </View>
-  </Modal>
-);
+  </Modal>;
+};
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: theme.colors.overlay },

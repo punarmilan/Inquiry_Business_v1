@@ -14,28 +14,29 @@ import type { Offer } from '../../types/hyperlocal';
 import type { OffersStackParamList } from '../../navigation/types';
 import { useApp } from '../../context/AppContext';
 import { theme } from '../../theme';
+import type { TranslationKey } from '../../i18n/translations';
 
 type Props = NativeStackScreenProps<OffersStackParamList, 'OffersHome'>;
 type CategoryIcon = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 type RadiusKm = number;
-const categories: Array<{ label: string; icon?: CategoryIcon; color: string }> = [
-  { label: 'All', color: '#118F91' },
-  { label: 'Food', icon: 'silverware-fork-knife', color: '#12AA78' },
-  { label: 'Hotels', icon: 'office-building-outline', color: '#286BE2' },
-  { label: 'Shopping', icon: 'shopping-outline', color: '#7A56D5' },
-  { label: 'Salon', icon: 'content-cut', color: '#EB4B8B' },
-  { label: 'Fashion', icon: 'hanger', color: '#D866A5' },
-  { label: 'Gym', icon: 'dumbbell', color: '#E18A24' },
-  { label: 'Electronics', icon: 'cellphone', color: '#4E77C8' },
-  { label: 'Entertainment', icon: 'movie-open-outline', color: '#B44B95' },
-  { label: 'More', icon: 'dots-horizontal', color: '#858C91' },
+const categories: Array<{ label: string; translationKey: TranslationKey; icon?: CategoryIcon; color: string }> = [
+  { label: 'All', translationKey: 'allCategories', color: '#118F91' },
+  { label: 'Food', translationKey: 'offerFood', icon: 'silverware-fork-knife', color: '#12AA78' },
+  { label: 'Hotels', translationKey: 'offerHotels', icon: 'office-building-outline', color: '#286BE2' },
+  { label: 'Shopping', translationKey: 'offerShopping', icon: 'shopping-outline', color: '#7A56D5' },
+  { label: 'Salon', translationKey: 'offerSalon', icon: 'content-cut', color: '#EB4B8B' },
+  { label: 'Fashion', translationKey: 'offerFashion', icon: 'hanger', color: '#D866A5' },
+  { label: 'Gym', translationKey: 'offerGym', icon: 'dumbbell', color: '#E18A24' },
+  { label: 'Electronics', translationKey: 'offerElectronics', icon: 'cellphone', color: '#4E77C8' },
+  { label: 'Entertainment', translationKey: 'offerEntertainment', icon: 'movie-open-outline', color: '#B44B95' },
+  { label: 'More', translationKey: 'more', icon: 'dots-horizontal', color: '#858C91' },
 ];
 const primaryCategories = categories.slice(0, 4);
 const filterCategories = categories.filter((item) => item.label !== 'More');
 const moreCategory = categories[categories.length - 1];
 
 export const OffersHomeScreen: React.FC<Props> = ({ navigation }) => {
-  const { accessToken, unreadNotificationCount } = useApp();
+  const { accessToken, unreadNotificationCount, t } = useApp();
   const locationState = useHyperlocalLocation();
   const [offers, setOffers] = useState<Offer[]>([]);
   const [category, setCategory] = useState('All');
@@ -120,7 +121,7 @@ export const OffersHomeScreen: React.FC<Props> = ({ navigation }) => {
     <ScreenContainer edges={['top', 'left', 'right']} backgroundColor="#F8FAFB">
       <StatusBar style="dark" />
       <HyperlocalHeader
-        cityLabel={locationState.location ? `${locationState.location.locality}${locationState.location.city ? `, ${locationState.location.city.name}` : ''}` : 'Choose location'}
+        cityLabel={locationState.location ? `${locationState.location.locality}${locationState.location.city ? `, ${locationState.location.city.name}` : ''}` : t('chooseLocation')}
         onLocationPress={() => locationState.setPickerVisible(true)}
         onNotifications={() => navigation.navigate('Notifications')}
         onInbox={() => navigation.navigate('ChatList')}
@@ -135,10 +136,10 @@ export const OffersHomeScreen: React.FC<Props> = ({ navigation }) => {
           <View style={styles.searchBox}>
             <View pointerEvents="none" style={styles.searchSheen} />
             <MaterialCommunityIcons name="magnify" size={22} color={theme.colors.textMuted} />
-            <TextInput value={search} onChangeText={setSearch} placeholder="Search offers..." placeholderTextColor={theme.colors.textMuted} style={styles.searchInput} multiline={false} returnKeyType="search" />
+            <TextInput value={search} onChangeText={setSearch} placeholder={t('searchOffers')} placeholderTextColor={theme.colors.textMuted} style={styles.searchInput} multiline={false} returnKeyType="search" />
             {search ? <Pressable onPress={() => setSearch('')}><MaterialCommunityIcons name="close-circle" size={20} color={theme.colors.textMuted} /></Pressable> : null}
           </View>
-          <Pressable onPress={openFilter} accessibilityLabel="Open filters" style={({ pressed }) => [styles.filterButton, pressed && styles.filterPressed]}>
+          <Pressable onPress={openFilter} accessibilityLabel={t('openFilters')} style={({ pressed }) => [styles.filterButton, pressed && styles.filterPressed]}>
             <MaterialCommunityIcons name="tune-variant" size={22} color={theme.colors.primary} />
             {filterCount > 0 && <View style={styles.filterBadge}><Text style={styles.filterBadgeText}>{filterCount}</Text></View>}
           </Pressable>
@@ -152,7 +153,7 @@ export const OffersHomeScreen: React.FC<Props> = ({ navigation }) => {
             return <Pressable key={item.label} onPress={() => isMore ? setCategoryExpanded(true) : setCategory(item.label)} style={[styles.category, isSelected && styles.categoryActive]}>
               <View pointerEvents="none" style={styles.categorySheen} />
               {item.icon ? <MaterialCommunityIcons name={item.icon} size={17} color={isSelected ? '#FFFFFF' : item.color} /> : null}
-              <Text style={[styles.categoryText, isSelected && styles.categoryTextActive]}>{item.label}</Text>
+              <Text style={[styles.categoryText, isSelected && styles.categoryTextActive]}>{t(item.translationKey)}</Text>
             </Pressable>;
           })}
         </ScrollView>
@@ -160,9 +161,9 @@ export const OffersHomeScreen: React.FC<Props> = ({ navigation }) => {
         {(comingSoon || (!loading && !offers.length)) && (
           <View style={styles.emptyCard}>
             <MaterialCommunityIcons name="map-marker-alert-outline" size={42} color={theme.colors.primary} />
-            <Text style={styles.emptyTitle}>{comingSoon ? "We're coming to your city soon." : 'No nearby offers right now'}</Text>
-            <Text style={styles.emptyText}>Try another enabled city or check again soon.</Text>
-            <Pressable onPress={() => locationState.setPickerVisible(true)} style={styles.chooseButton}><Text style={styles.chooseText}>See available cities</Text></Pressable>
+            <Text style={styles.emptyTitle}>{comingSoon ? t('offerComingSoon') : t('noNearbyOffers')}</Text>
+            <Text style={styles.emptyText}>{t('tryAnotherEnabledCity')}</Text>
+            <Pressable onPress={() => locationState.setPickerVisible(true)} style={styles.chooseButton}><Text style={styles.chooseText}>{t('seeAvailableCities')}</Text></Pressable>
           </View>
         )}
         {offers.length ? (
@@ -193,15 +194,15 @@ export const OffersHomeScreen: React.FC<Props> = ({ navigation }) => {
           <Pressable style={styles.modalBackdrop} onPress={() => setFilterVisible(false)} />
           <View style={styles.filterSheet}>
             <View style={styles.filterHeader}>
-              <View><Text style={styles.filterTitle}>Filter offers</Text><Text style={styles.filterSubtitle}>Choose category and distance</Text></View>
+              <View><Text style={styles.filterTitle}>{t('filterOffers')}</Text><Text style={styles.filterSubtitle}>{t('chooseCategoryAndDistance')}</Text></View>
               <Pressable onPress={() => setFilterVisible(false)} style={styles.closeButton} accessibilityLabel="Close filters"><MaterialCommunityIcons name="close" size={23} color={theme.colors.text} /></Pressable>
             </View>
-            <Text style={styles.filterSectionTitle}>Search radius</Text>
+            <Text style={styles.filterSectionTitle}>{t('searchRadius')}</Text>
             <View style={styles.filterRadiusRow}>
               {([2, 5, 10, 25] as const).map((radius) => <Pressable key={radius} onPress={() => updateDraftRadius(radius)} style={[styles.filterRadiusOption, draftRadiusKm === radius && styles.filterRadiusOptionActive]}><MaterialCommunityIcons name="map-marker-radius" size={18} color={draftRadiusKm === radius ? '#FFFFFF' : theme.colors.primary} /><Text style={[styles.filterRadiusText, draftRadiusKm === radius && styles.filterRadiusTextActive]}>{radius} KM</Text></Pressable>)}
             </View>
             <View style={styles.customRadiusRow}>
-              <Text style={styles.customRadiusLabel}>Custom radius</Text>
+              <Text style={styles.customRadiusLabel}>{t('customRadius')}</Text>
               <View style={styles.customRadiusInputWrap}><TextInput value={draftRadiusInput} onChangeText={updateDraftRadiusInput} onBlur={() => setDraftRadiusInput(String(draftRadiusKm))} keyboardType="decimal-pad" style={styles.customRadiusInput} maxLength={4} /></View>
               <Text style={styles.customRadiusUnit}>KM</Text>
             </View>
@@ -216,14 +217,14 @@ export const OffersHomeScreen: React.FC<Props> = ({ navigation }) => {
               thumbTintColor={theme.colors.primary}
               style={styles.radiusSlider}
             />
-            <Text style={styles.radiusHint}>Choose between 0.1 KM and 25 KM</Text>
-            <Text style={styles.filterSectionTitle}>Category</Text>
+            <Text style={styles.radiusHint}>{t('radiusRangeHint')}</Text>
+            <Text style={styles.filterSectionTitle}>{t('category')}</Text>
             <View style={styles.filterCategoryWrap}>
-              {filterCategories.map((item) => <Pressable key={item.label} onPress={() => setDraftCategory(item.label)} style={[styles.filterCategoryOption, draftCategory === item.label && styles.filterCategoryOptionActive]}><MaterialCommunityIcons name={item.icon || 'tag-outline'} size={17} color={draftCategory === item.label ? '#FFFFFF' : item.color} /><Text style={[styles.filterCategoryText, draftCategory === item.label && styles.filterCategoryTextActive]}>{item.label}</Text></Pressable>)}
+              {filterCategories.map((item) => <Pressable key={item.label} onPress={() => setDraftCategory(item.label)} style={[styles.filterCategoryOption, draftCategory === item.label && styles.filterCategoryOptionActive]}><MaterialCommunityIcons name={item.icon || 'tag-outline'} size={17} color={draftCategory === item.label ? '#FFFFFF' : item.color} /><Text style={[styles.filterCategoryText, draftCategory === item.label && styles.filterCategoryTextActive]}>{t(item.translationKey)}</Text></Pressable>)}
             </View>
             <View style={styles.filterActions}>
-              <Pressable onPress={resetFilters} style={styles.resetButton}><Text style={styles.resetButtonText}>Reset</Text></Pressable>
-              <Pressable onPress={applyFilters} style={styles.applyButton}><Text style={styles.applyButtonText}>Apply filters</Text><MaterialCommunityIcons name="arrow-right" size={20} color="#FFFFFF" /></Pressable>
+              <Pressable onPress={resetFilters} style={styles.resetButton}><Text style={styles.resetButtonText}>{t('resetFilters')}</Text></Pressable>
+              <Pressable onPress={applyFilters} style={styles.applyButton}><Text style={styles.applyButtonText}>{t('applyFilters')}</Text><MaterialCommunityIcons name="arrow-right" size={20} color="#FFFFFF" /></Pressable>
             </View>
           </View>
         </View>
@@ -233,11 +234,11 @@ export const OffersHomeScreen: React.FC<Props> = ({ navigation }) => {
           <Pressable style={styles.modalBackdrop} onPress={() => setCategoryExpanded(false)} />
           <View style={styles.categoryPopup}>
             <View style={styles.filterHeader}>
-              <View><Text style={styles.filterTitle}>All categories</Text><Text style={styles.filterSubtitle}>Choose an offer type</Text></View>
+              <View><Text style={styles.filterTitle}>{t('allCategories')}</Text><Text style={styles.filterSubtitle}>{t('chooseOfferType')}</Text></View>
               <Pressable onPress={() => setCategoryExpanded(false)} style={styles.closeButton} accessibilityLabel="Close categories"><MaterialCommunityIcons name="close" size={23} color={theme.colors.text} /></Pressable>
             </View>
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.categoryPopupWrap}>
-              {filterCategories.map((item) => <Pressable key={item.label} onPress={() => { setCategory(item.label); setCategoryExpanded(false); }} style={[styles.filterCategoryOption, category === item.label && styles.filterCategoryOptionActive]}><MaterialCommunityIcons name={item.icon || 'tag-outline'} size={18} color={category === item.label ? '#FFFFFF' : item.color} /><Text style={[styles.filterCategoryText, category === item.label && styles.filterCategoryTextActive]}>{item.label}</Text></Pressable>)}
+              {filterCategories.map((item) => <Pressable key={item.label} onPress={() => { setCategory(item.label); setCategoryExpanded(false); }} style={[styles.filterCategoryOption, category === item.label && styles.filterCategoryOptionActive]}><MaterialCommunityIcons name={item.icon || 'tag-outline'} size={18} color={category === item.label ? '#FFFFFF' : item.color} /><Text style={[styles.filterCategoryText, category === item.label && styles.filterCategoryTextActive]}>{t(item.translationKey)}</Text></Pressable>)}
             </ScrollView>
           </View>
         </View>

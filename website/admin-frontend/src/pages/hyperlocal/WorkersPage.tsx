@@ -60,9 +60,12 @@ export const WorkersPage = () => {
     );
 
   const toggleAvailability = (id: string, current: string) =>
+    current === 'busy'
+      ? toast.error('This provider has an active booking and must remain busy.')
+      :
     updateWorker.mutate(
-      { id, payload: { availability: current === 'available' ? 'offline' : current === 'busy' ? 'offline' : 'available' } },
-      { onError: () => toast.error('Failed to update availability.') }
+      { id, payload: { availability: current === 'available' ? 'offline' : 'available' } },
+      { onError: (e: any) => toast.error(e.response?.data?.error?.message || 'Failed to update availability.') }
     );
 
   return (
@@ -162,8 +165,8 @@ export const WorkersPage = () => {
                       Verify
                     </Button>
                   )}
-                  <Button size="sm" variant="outline" onClick={() => toggleAvailability(w._id, w.availability)} disabled={updateWorker.isPending}>
-                    {w.availability === 'available' ? 'Set offline' : w.availability === 'busy' ? 'Set offline' : 'Set available'}
+                  <Button size="sm" variant="outline" onClick={() => toggleAvailability(w._id, w.availability)} disabled={updateWorker.isPending || w.availability === 'busy'}>
+                    {w.availability === 'available' ? 'Set offline' : w.availability === 'busy' ? 'Busy (active booking)' : 'Set available'}
                   </Button>
                   {w.isActive && (
                     <Button

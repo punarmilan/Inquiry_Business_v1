@@ -5,7 +5,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { theme } from '../../theme';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { IconButton } from '../../components/IconButton';
-import { getAiChatMessages, sendAiChatMessage, BackendAiChatMessage } from '../../services/api';
+import { getAiChatMessages, sendAiChatMessage, BackendAiChatMessage, ApiRequestError } from '../../services/api';
 import { useApp } from '../../context/AppContext';
 import { ProfileStackParamList } from '../../navigation/types';
 
@@ -21,6 +21,7 @@ export const AiAssistantScreen: React.FC<Props> = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const listRef = useRef<FlatList>(null);
+  const sendingRef = useRef(false);
 
   // Hide the bottom tab bar while the assistant is open so it can't sit between
   // the input row and the keyboard.
@@ -40,7 +41,8 @@ export const AiAssistantScreen: React.FC<Props> = ({ navigation }) => {
 
   const send = useCallback(async () => {
     const text = draft.trim();
-    if (!text || !accessToken || sending) return;
+    if (!text || !accessToken || sendingRef.current) return;
+    sendingRef.current = true;
     setDraft('');
     setSending(true);
 
@@ -57,24 +59,34 @@ export const AiAssistantScreen: React.FC<Props> = ({ navigation }) => {
 
     try {
       const res = await sendAiChatMessage(accessToken, text);
-      setMessages((prev) => [...prev, res.message]);
-    } catch {
+      setMessages((prev) => [
+        ...prev.filter((message) => message._id !== optimisticUser._id),
+        ...res.messages,
+      ]);
+    } catch (error) {
+      const errorText =
+        error instanceof ApiRequestError && error.code === 'AI_TIMEOUT'
+          ? 'The assistant is taking longer than expected. Please try again.'
+          : error instanceof ApiRequestError && ['AI_UNAVAILABLE', 'AI_MODEL_UNAVAILABLE'].includes(error.code || '')
+            ? 'The AI assistant is temporarily unavailable. Please try again later.'
+            : 'I could not complete that request. Please try again.';
       setMessages((prev) => [
         ...prev,
         {
           _id: `error-${Date.now()}`,
           user: '',
           role: 'assistant',
-          text: 'Sorry, I could not respond right now. Please try again in a moment.',
+          text: errorText,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         },
       ]);
     } finally {
+      sendingRef.current = false;
       setSending(false);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
     }
-  }, [draft, accessToken, sending]);
+  }, [draft, accessToken]);
 
   const renderItem = ({ item }: { item: BackendAiChatMessage }) => {
     const isMe = item.role === 'user';
@@ -94,7 +106,7 @@ export const AiAssistantScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   return (
-    <ScreenContainer edges={['top', 'left', 'right']}>
+    <ScreenContainer edges={['top', 'left', 'right', 'bottom']}>
       <View style={styles.header}>
         <IconButton name="arrow-left" accessibilityLabel="Back" onPress={() => navigation.goBack()} />
         <View style={styles.headerIcon}>
@@ -107,8 +119,7 @@ export const AiAssistantScreen: React.FC<Props> = ({ navigation }) => {
 
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={90}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         {loading ? (
           <View style={styles.loading}>
@@ -151,6 +162,8 @@ export const AiAssistantScreen: React.FC<Props> = ({ navigation }) => {
             style={styles.input}
             multiline
             editable={!sending}
+            maxLength={2000}
+            blurOnSubmit={false}
           />
           <IconButton
             name="send"
@@ -284,9 +297,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: theme.spacing.xs,
     paddingHorizontal: theme.spacing.sm,
-    paddingVertical: theme.spacing.xs,
+    paddingVertical: theme.spacing.sm,
     borderTopWidth: 1,
     borderTopColor: theme.colors.divider,
+    backgroundColor: theme.colors.surface,
   },
   input: {
     flex: 1,

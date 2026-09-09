@@ -40,25 +40,7 @@ const makeBlankCanvas = (): OfferTemplateCanvas => ({
   height: 1350,
   backgroundColor: '#FFFFFF',
   background: { type: 'solid', color: '#FFFFFF' },
-  elements: [{
-    id: 'blank-add-text',
-    type: 'text',
-    key: 'title',
-    field: 'title',
-    text: 'Add text',
-    content: 'Add text',
-    x: 100,
-    y: 180,
-    width: 880,
-    height: 130,
-    zIndex: 2,
-    color: '#9CA3AF',
-    fontSize: 64,
-    fontWeight: '700',
-    textAlign: 'center',
-    textAlignVertical: 'center',
-    editable: true,
-  }],
+  elements: [],
 });
 
 const BLANK_TEMPLATE: OfferCardTemplate = {
@@ -341,7 +323,11 @@ const EditableCanvasText: React.FC<{
   }), [kind, movingText, onOffsetChange, onTransformCommit]);
 
   const handleTap = () => {
-    if (movingText === kind) onToggleMove(kind);
+    if (movingText === kind) {
+      onToggleMove(kind);
+      onEditText(null);
+      return;
+    }
     onEditText(kind);
   };
 
@@ -395,6 +381,9 @@ const TemplateThumbnail: React.FC<{ template: OfferCardTemplate }> = ({ template
       borderColor: element.borderColor || 'transparent',
       borderStyle: element.borderStyle || 'solid',
     } as const;
+    if (element.avatarId) {
+      return <OfferAvatarSprite key={element.id} avatar={findOfferAvatar(element.avatarId)} size={Math.max(1, Math.round(Math.min(element.width, element.height) * scale))} style={frame} />;
+    }
     if (element.type === 'image') return (element.imageUrl || element.src) ? <Image key={element.id} source={{ uri: element.imageUrl || element.src }} style={frame} resizeMode={element.resizeMode === 'stretch' ? 'stretch' : element.resizeMode || 'contain'} /> : null;
     if (element.type === 'shape' || element.type === 'rectangle' || element.type === 'circle' || element.type === 'divider' || element.type === 'line' || element.type === 'group') return <View key={element.id} style={[frame, { backgroundColor: element.backgroundColor || element.color || 'transparent', borderRadius: element.type === 'circle' ? 9999 : frame.borderRadius }]} />;
     const baseFontSize = element.fontSize || 42;
@@ -580,6 +569,11 @@ const CanvasPreview: React.FC<{
       borderColor: element.borderColor || styleValue('borderColor', 'transparent'),
       borderStyle: element.borderStyle || styleValue('borderStyle', 'solid'),
     } as const;
+    if (element.avatarId) {
+      const avatarElement = findOfferAvatar(element.avatarId);
+      const avatarNode = <OfferAvatarSprite avatar={avatarElement} size={Math.max(1, Math.round(Math.min(element.width, element.height) * posterScale))} style={StyleSheet.absoluteFill} />;
+      return <MovablePosterElement key={element.id} style={layer} baseTransform={rotationTransform(element.rotation)} onSelect={() => onSelectImage(element.id)} onTransformCommit={(scale, rotation) => { onResizeElement(element.id, scale); if (Math.abs(rotation) > 0.1) onRotateElement(element.id, rotation); }} onCommit={(delta) => onMoveElement(element.id, { x: delta.x / Math.max(posterScale, 0.01), y: delta.y / Math.max(posterScale, 0.01) })}>{avatarNode}</MovablePosterElement>;
+    }
     if (element.type === 'image') {
       const elementImage = imageFor(element);
       const imageNode = elementImage ? <Image source={{ uri: elementImage }} style={[StyleSheet.absoluteFill, borderStyle]} resizeMode={element.resizeMode || 'contain'} /> : <View style={[StyleSheet.absoluteFill, borderStyle, { backgroundColor: element.backgroundColor || 'transparent' }]} />;
@@ -628,7 +622,7 @@ const CanvasPreview: React.FC<{
         <EditableCanvasText kind="description" text={description} placeholder="Your offer description appears here." style={[styles.canvasDescription, { fontSize: bodySize, fontWeight: (design.customizations?.descriptionFontWeight || '600') as '500' | '600' | '700' | '800' | '900', fontStyle: (design.customizations?.descriptionFontStyle || design.fontStyle || 'normal') as 'normal' | 'italic', textAlign: (design.customizations?.descriptionTextAlign || textAlign) as 'left' | 'center' | 'right', color: String(design.customizations?.descriptionColor || 'rgba(255,255,255,0.95)'), letterSpacing: Number(design.customizations?.descriptionLetterSpacing || 0), textDecorationLine: (design.customizations?.descriptionTextDecoration || 'none') as 'none' | 'underline' | 'line-through', textTransform: (design.customizations?.descriptionTextTransform || 'none') as 'none' | 'uppercase' | 'lowercase' | 'capitalize' }]} numberOfLines={3} editingText={editingText} movingText={movingText} offset={textOffsets.description} onEditText={(kind) => { if (kind) onSelectTextElement('$description'); onEditText(kind); }} onToggleMove={onToggleMove} onChangeText={onChangeText} onOffsetChange={onOffsetChange} />
         <Text style={styles.canvasPrice}>Add price next</Text>
       </View>
-      {!source && avatar ? <Image source={avatar.source} style={[styles.canvasAvatar, design.layout === 'left' && styles.canvasAvatarLeft, design.layout === 'center' && styles.canvasAvatarCenter]} /> : null}
+      {design.templateId === 'custom' && !source && avatar ? <OfferAvatarSprite avatar={avatar} size={175} style={[styles.canvasAvatar, design.layout === 'left' && styles.canvasAvatarLeft, design.layout === 'center' && styles.canvasAvatarCenter]} /> : null}
     </LinearGradient>
   );
 
@@ -660,7 +654,9 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
   const [imageUrls, setImageUrls] = useState<string[]>([]);
-  const [cardDesign, setCardDesign] = useState<OfferCardDesign>(() => designMode === 'custom' ? makeBlankDesign() : DEFAULT_OFFER_CARD_DESIGN);
+  // Start every new design on a truly empty canvas. Templates are choices,
+  // not implicit content, and avatars are added as explicit layers.
+  const [cardDesign, setCardDesign] = useState<OfferCardDesign>(() => makeBlankDesign());
   const [activeTool, setActiveTool] = useState<EditorTool>(designMode === 'custom' ? 'text' : 'templates');
   const [templateCategory, setTemplateCategory] = useState('All');
   const templateScrollRef = useRef<ScrollView>(null);
@@ -713,7 +709,6 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
     listOfferTemplates().then((response) => {
       const nextTemplates = Array.isArray(response.data) ? response.data.map(toOfferCardTemplate) : [];
       setTemplates(nextTemplates);
-      if (nextTemplates[0]) setCardDesign((current) => current.templateId === DEFAULT_OFFER_CARD_DESIGN.templateId ? ({ ...current, templateId: nextTemplates[0].id, templateVersion: nextTemplates[0].version, templateSource: 'admin', previewUrl: nextTemplates[0].previewUrl, canvas: nextTemplates[0].canvas, dynamicFields: nextTemplates[0].dynamicFields || {}, avatarId: nextTemplates[0].defaultAvatarId || current.avatarId, primaryColor: nextTemplates[0].primaryColor, secondaryColor: nextTemplates[0].secondaryColor, layout: nextTemplates[0].layout }) : current);
     }).catch(() => {});
   }, [designMode]);
 
@@ -884,14 +879,14 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
       const canvas = current.canvas || makeCanvasFromDesign(current);
       const zIndex = Math.max(...canvas.elements.map((element) => element.zIndex || 0), 0) + 1;
       const element: OfferTemplateElement = {
-        id, type: 'text', text: 'New text', content: 'New text', x: Math.round(canvas.width * 0.1), y: Math.round(canvas.height * 0.22),
-        width: Math.round(canvas.width * 0.8), height: Math.round(canvas.height * 0.1), zIndex, color: '#FFFFFF', fontSize: 58,
+        id, type: 'text', text: '', content: '', x: Math.round(canvas.width * 0.1), y: Math.round(canvas.height * 0.22),
+        width: Math.round(canvas.width * 0.8), height: Math.round(canvas.height * 0.1), zIndex, color: '#111827', fontSize: 58,
         fontWeight: '700', textAlign: 'center', textAlignVertical: 'center', editable: true,
       };
       return { ...current, canvas: { ...canvas, elements: [...canvas.elements, element] } };
     });
     setSelectedTextElementId(id);
-    setPosterTextValues((current) => ({ ...current, [id]: 'New text' }));
+    setPosterTextValues((current) => ({ ...current, [id]: '' }));
   }, []);
   const addShapeLayer = useCallback((type: 'rectangle' | 'circle') => {
     const id = `custom-shape-${Date.now()}`;
@@ -1003,13 +998,34 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
     setSelectedImageId(null);
   };
 
-  const selectBlankAvatar = (avatarId: string) => {
-    if (cardDesign.templateId !== 'custom') {
-      Alert.alert('Start blank to add avatars', 'Choose Start blank first, then add an avatar to your canvas.');
-      return;
-    }
-    setCardDesign((current) => ({ ...current, avatarId }));
-    setAvatarSelected(true);
+  const addAvatarToCanvas = (avatarId: string) => {
+    const id = `avatar-layer-${avatarId}-${Date.now()}`;
+    setCardDesign((current) => {
+      const canvas = current.canvas || makeCanvasFromDesign(current);
+      const avatarCount = canvas.elements.filter((element) => Boolean(element.avatarId)).length;
+      const size = Math.round(Math.min(canvas.width, canvas.height) * 0.26);
+      const column = avatarCount % 3;
+      const row = Math.floor(avatarCount / 3) % 2;
+      const x = Math.max(0, Math.min(canvas.width - size, 70 + column * 350));
+      const y = Math.max(0, Math.min(canvas.height - size, 390 + row * 360));
+      const element: OfferTemplateElement = {
+        id,
+        type: 'image',
+        avatarId,
+        x,
+        y,
+        width: size,
+        height: size,
+        zIndex: Math.max(...canvas.elements.map((item) => item.zIndex || 0), 0) + 1,
+        editable: true,
+        resizeMode: 'contain',
+      };
+      return { ...current, avatarId: '', canvas: { ...canvas, elements: [...canvas.elements, element] } };
+    });
+    setSelectedImageId(id);
+    setSelectedStickerId(null);
+    setSelectedShapeId(null);
+    setAvatarSelected(false);
   };
 
   const continueToDetails = () => {
@@ -1062,7 +1078,7 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
     setAvatarSelected(false);
     setSelectedTextElementId(template.canvas?.elements.find((element) => element.editable !== false && isTextElement(element))?.id || '$title');
     setAvatarOffset({ x: 0, y: 0 });
-    setCardDesign((current) => ({ ...current, templateId: template.id, templateVersion: template.version, templateSource: template.source || 'system', previewUrl: template.previewUrl, canvas: template.canvas, dynamicFields: template.dynamicFields || {}, avatarId: template.id === 'custom' ? '' : (template.defaultAvatarId || current.avatarId), primaryColor: template.primaryColor, secondaryColor: template.secondaryColor, layout: template.layout }));
+    setCardDesign((current) => ({ ...current, templateId: template.id, templateVersion: template.version, templateSource: template.source || 'system', previewUrl: template.previewUrl, canvas: template.canvas, dynamicFields: template.dynamicFields || {}, avatarId: '', primaryColor: template.primaryColor, secondaryColor: template.secondaryColor, layout: template.layout }));
   };
 
   const selectBlankTemplate = () => {
@@ -1074,7 +1090,7 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
     setSelectedStickerId(null);
     setSelectedImageId(null);
     setAvatarSelected(false);
-    setSelectedTextElementId('blank-add-text');
+    setSelectedTextElementId('$title');
     setAvatarOffset({ x: 0, y: 0 });
     setAvatarScale(1);
     setImageUrls([]);
@@ -1082,12 +1098,16 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
   };
 
   const renderTextPanel = () => {
-    const minimumFontSize = selectedTextElement ? 12 : selectedTextPrefix === 'description' ? 11 : 16;
-    const maximumFontSize = selectedTextElement ? 200 : selectedTextPrefix === 'description' ? 28 : 56;
+    const minimumFontSize = selectedTextElement ? 8 : selectedTextPrefix === 'description' ? 11 : 16;
+    const maximumFontSize = selectedTextElement ? 320 : selectedTextPrefix === 'description' ? 48 : 96;
     return <View>
       <View style={styles.panelHeadingRow}><View style={styles.flex}><Text style={styles.panelTitle}>Text editor</Text><Text style={styles.panelHint}>Select a layer, edit its copy and style it independently.</Text></View><Pressable onPress={addTextLayer} style={styles.compactAction}><MaterialCommunityIcons name="format-text-variant-outline" size={16} color={theme.colors.primary} /><Text style={styles.compactActionText}>Add text</Text></Pressable></View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.layerPicker}>{textEditorLayers.map((layer) => <Pressable key={layer.id} onPress={() => setSelectedTextElementId(layer.id)} style={[styles.layerChip, selectedTextElementId === layer.id && styles.layerChipActive]}><Text numberOfLines={1} style={[styles.layerChipText, selectedTextElementId === layer.id && styles.layerChipTextActive]}>{layer.label}</Text></Pressable>)}</ScrollView>
       <TextInput value={selectedTextValue} onChangeText={(value) => changeCanvasText(selectedTextKind, value)} multiline placeholder="Type your text" placeholderTextColor={theme.colors.textMuted} style={[styles.textInput, styles.editorTextInput]} />
+      <Pressable onPress={() => { Keyboard.dismiss(); setEditingText(null); toggleMoveText(selectedTextKind); }} style={[styles.moveTextButton, movingText === selectedTextKind && styles.moveTextButtonActive]}>
+        <MaterialCommunityIcons name={movingText === selectedTextKind ? 'check-circle-outline' : 'gesture-swipe'} size={17} color={movingText === selectedTextKind ? theme.colors.textInverse : theme.colors.primary} />
+        <Text style={[styles.moveTextButtonText, movingText === selectedTextKind && styles.moveTextButtonTextActive]}>{movingText === selectedTextKind ? 'Done moving text' : 'Move selected text on canvas'}</Text>
+      </Pressable>
       <View style={styles.controlLabelRow}><Text style={styles.inputLabel}>Font size</Text><Text style={styles.controlValue}>{Math.round(selectedTextSettings.fontSize)} px</Text></View>
       <Slider style={styles.fullSlider} minimumValue={minimumFontSize} maximumValue={maximumFontSize} step={1} value={selectedTextSettings.fontSize} onValueChange={(value) => updateSelectedTextStyle({ fontSize: value })} minimumTrackTintColor={theme.colors.primary} maximumTrackTintColor={theme.colors.border} thumbTintColor={theme.colors.primary} />
       <Text style={styles.inputLabel}>Weight</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.choiceRow}>{FONT_WEIGHT_OPTIONS.map((option) => <Pressable key={option.value} onPress={() => updateSelectedTextStyle({ fontWeight: option.value })} style={[styles.choice, selectedTextSettings.fontWeight === option.value && styles.choiceActive]}><Text style={[styles.choiceText, { fontWeight: option.value }]}>{option.label}</Text></Pressable>)}</ScrollView>
@@ -1105,7 +1125,7 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
 
   const renderStickerPanel = () => <View>
     <Text style={styles.panelTitle}>Stickers & avatars</Text><Text style={styles.panelHint}>Images and stickers move with one finger. Use two fingers to resize or rotate.</Text>
-    <Text style={styles.inputLabel}>Your avatars</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.stickerScroll}>{OFFER_AVATARS.map((avatarOption) => <Pressable key={avatarOption.id} onPress={() => selectBlankAvatar(avatarOption.id)} style={[styles.avatarChoice, cardDesign.avatarId === avatarOption.id && styles.avatarChoiceActive]}><OfferAvatarSprite avatar={avatarOption} size={54} /><Text numberOfLines={1} style={styles.stickerName}>{avatarOption.name.replace('Avatar ', '#')}</Text></Pressable>)}</ScrollView>
+    <Text style={styles.inputLabel}>Your avatars</Text><Text style={styles.panelHint}>Tap an avatar to add it. You can add multiple avatars to any template.</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.stickerScroll}>{OFFER_AVATARS.map((avatarOption) => <Pressable key={avatarOption.id} onPress={() => addAvatarToCanvas(avatarOption.id)} style={styles.avatarChoice}><OfferAvatarSprite avatar={avatarOption} size={54} /><Text numberOfLines={1} style={styles.stickerName}>{avatarOption.name.replace('Avatar ', '#')}</Text></Pressable>)}</ScrollView>
     <Text style={styles.inputLabel}>Admin stickers</Text>{stickers.length ? <View style={styles.stickerGrid}>{stickers.map((sticker) => <Pressable key={sticker._id} onPress={() => addStickerToCanvas(sticker)} style={styles.stickerTile}>{sticker.kind === 'image' && sticker.imageUrl ? <Image source={{ uri: sticker.imageUrl }} style={styles.stickerImage} resizeMode="contain" /> : <Text style={styles.stickerEmoji}>{sticker.emoji || '★'}</Text>}<Text numberOfLines={1} style={styles.stickerName}>{sticker.name}</Text></Pressable>)}</View> : <View style={styles.emptySticker}><MaterialCommunityIcons name="sticker-outline" size={22} color={theme.colors.textMuted} /><Text style={styles.panelHint}>Admin stickers will appear here.</Text></View>}
   </View>;
 
@@ -1176,7 +1196,7 @@ const styles = StyleSheet.create({
   panelImageWrap: { height: 104, marginTop: 9, borderRadius: 13, overflow: 'hidden', backgroundColor: theme.colors.surfaceAlt }, panelImage: { width: '100%', height: '100%' }, panelImageButton: { position: 'absolute', left: 9, bottom: 8, flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(0,0,0,0.64)', borderRadius: 99, paddingHorizontal: 10, paddingVertical: 6 }, panelImageButtonText: { ...theme.typography.tiny, color: theme.colors.textInverse, fontWeight: '800' }, removeImage: { position: 'absolute', right: 9, top: 8, width: 31, height: 31, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.surface }, uploadBox: { minHeight: 98, marginTop: 9, borderRadius: 13, borderWidth: 1.5, borderStyle: 'dashed', borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight, alignItems: 'center', justifyContent: 'center' }, uploadTitle: { ...theme.typography.bodyBold, color: theme.colors.primary, marginTop: 4 },
   colorScroll: { gap: 10, paddingVertical: 14 }, colorTile: { width: 40, height: 40, borderRadius: 20, padding: 3, borderWidth: 2, borderColor: 'transparent' }, colorTileActive: { borderColor: theme.colors.text }, colorSwatch: { flex: 1, borderRadius: 99 }, inputLabel: { ...theme.typography.tiny, color: theme.colors.textSecondary, fontWeight: '800', marginTop: 8, marginBottom: 4 }, textInput: { minHeight: 39, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 9, paddingHorizontal: 10, paddingVertical: 8, color: theme.colors.text, fontSize: 14, backgroundColor: theme.colors.background }, multiline: { minHeight: 47, textAlignVertical: 'top' }, choiceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 }, choice: { minHeight: 33, flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 9, paddingHorizontal: 9, justifyContent: 'center' }, choiceActive: { borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight }, choiceText: { ...theme.typography.tiny, color: theme.colors.textSecondary, fontWeight: '800' },
   flex: { flex: 1 }, panelHeadingRow: { flexDirection: 'row', alignItems: 'center', gap: 10 }, compactAction: { minHeight: 34, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, borderRadius: 9, borderWidth: 1, borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight }, compactActionText: { ...theme.typography.tiny, color: theme.colors.primaryDark, fontWeight: '900' }, shapeAddButton: { minHeight: 38, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: theme.colors.primary, borderRadius: 9, paddingHorizontal: 11, backgroundColor: theme.colors.primaryLight },
-  layerPicker: { gap: 7, paddingVertical: 9 }, layerChip: { maxWidth: 130, minHeight: 32, justifyContent: 'center', borderRadius: 9, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.background, paddingHorizontal: 10 }, layerChipActive: { borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight }, layerChipText: { ...theme.typography.tiny, color: theme.colors.textSecondary, textTransform: 'capitalize' }, layerChipTextActive: { color: theme.colors.primaryDark, fontWeight: '900' }, editorTextInput: { minHeight: 52, textAlignVertical: 'top' },
+  layerPicker: { gap: 7, paddingVertical: 9 }, layerChip: { maxWidth: 130, minHeight: 32, justifyContent: 'center', borderRadius: 9, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.background, paddingHorizontal: 10 }, layerChipActive: { borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight }, layerChipText: { ...theme.typography.tiny, color: theme.colors.textSecondary, textTransform: 'capitalize' }, layerChipTextActive: { color: theme.colors.primaryDark, fontWeight: '900' }, editorTextInput: { minHeight: 52, textAlignVertical: 'top' }, moveTextButton: { minHeight: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8, borderRadius: 9, borderWidth: 1, borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight, paddingHorizontal: 10 }, moveTextButtonActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primaryDark }, moveTextButtonText: { ...theme.typography.tiny, color: theme.colors.primaryDark, fontWeight: '900' }, moveTextButtonTextActive: { color: theme.colors.textInverse },
   controlLabelRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }, controlValue: { ...theme.typography.tiny, color: theme.colors.primary, fontWeight: '900', marginBottom: 4 }, sliderRow: { flexDirection: 'row', alignItems: 'center', gap: 5 }, slider: { flex: 1, height: 34 }, fullSlider: { width: '100%', height: 34 }, stepButton: { width: 32, height: 32, borderRadius: 9, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.background }, rotationHint: { flex: 1, textAlign: 'center', color: theme.colors.textMuted, fontSize: 10, lineHeight: 13 }, iconChoice: { width: 44, minHeight: 34, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.colors.border, borderRadius: 9 }, textColorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 }, textColorChoice: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#CBD0D8' }, textColorChoiceActive: { borderWidth: 3, borderColor: theme.colors.primary },
   selectedStickerBar: { minHeight: 54, marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 7, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight, paddingHorizontal: 10, paddingVertical: 7 }, selectedStickerTitle: { ...theme.typography.caption, color: theme.colors.primaryDark, fontWeight: '900' }, stickerEditButton: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border }, stickerDeleteButton: { borderColor: '#F8B4B4' }, optionalLabel: { color: theme.colors.textMuted, fontWeight: '600' },
   selectedElementFrame: { zIndex: 1000, borderWidth: 1.5, borderColor: '#FFFFFF', borderStyle: 'dashed' }, canvasElementControl: { position: 'absolute', top: 4, width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(17,24,39,0.88)', borderWidth: 1, borderColor: '#FFFFFF' }, canvasElementControlLeft: { left: 4 }, canvasElementControlRight: { right: 4 }, canvasElementControlBottomLeft: { left: 4, top: undefined, bottom: 4 }, canvasElementControlBottomRight: { right: 4, top: undefined, bottom: 4 }, canvasElementDelete: { left: '50%', marginLeft: -14, top: undefined, bottom: 4, backgroundColor: 'rgba(185,28,28,0.9)' },

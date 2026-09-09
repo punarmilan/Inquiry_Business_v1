@@ -5,7 +5,7 @@ const { spawn } = require('child_process');
 
 const repoRoot = path.resolve(__dirname, '..');
 const backendRoot = process.cwd();
-const defaultMongoUri = 'mongodb://127.0.0.1:27017/kaamsaathi';
+const defaultMongoUri = 'mongodb://127.0.0.1:27017/inquiryexperts';
 const mongoUri =
   readEnvValue(path.join(backendRoot, '.env.local'), 'MONGO_URI') ||
   readEnvValue(path.join(backendRoot, '.env'), 'MONGO_URI') ||

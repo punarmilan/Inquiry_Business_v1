@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-backup_dir="/var/backups/kaamsaathi-nginx/$(date -u +%Y%m%d%H%M%S)"
+backup_dir="/var/backups/inquiryexperts-nginx/$(date -u +%Y%m%d%H%M%S)"
 sudo mkdir -p "$backup_dir"
 
 mapfile -t config_files < <(

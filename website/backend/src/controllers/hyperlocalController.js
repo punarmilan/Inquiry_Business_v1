@@ -18,6 +18,11 @@ const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { getPagination, paginatedResponse } = require('../utils/pagination');
 const { isStrongPassword, PASSWORD_POLICY_MESSAGE } = require('../validators/password.validator');
+const {
+  acquireProvider,
+  releaseProviderIfIdle,
+  setManualAvailability,
+} = require('../services/providerAvailabilityService');
 
 // No socket server on this service — this only persists the notification for the mobile
 // app to pick up on its next fetch, unlike mobile-backend's notifyUser which also pushes
@@ -213,14 +218,20 @@ const updateWorker = asyncHandler(async (req, res) => {
     worker.city = req.body.cityId;
   }
   if (req.body.categoryIds) worker.categories = req.body.categoryIds;
-  ['name', 'photoUrl', 'experienceYears', 'serviceAreas', 'availability', 'isActive', 'verificationStatus', 'internalNotes'].forEach(
+  if (req.body.availability !== undefined) {
+    const result = await setManualAvailability(worker._id, req.body.availability);
+    if (!result.provider) {
+      throw new ApiError(409, 'A provider with an active booking must remain busy', 'PROVIDER_HAS_ACTIVE_BOOKING');
+    }
+  }
+  ['name', 'photoUrl', 'experienceYears', 'serviceAreas', 'isActive', 'verificationStatus', 'internalNotes'].forEach(
     (key) => req.body[key] !== undefined && (worker[key] = req.body[key])
   );
   await worker.save();
   const userUpdate = { name: worker.name, isActive: worker.isActive };
   if (req.body.password) userUpdate.passwordHash = await bcrypt.hash(req.body.password, 12);
   await User.updateOne({ _id: worker.user }, { $set: userUpdate });
-  res.json({ success: true, worker });
+  res.json({ success: true, worker: await Worker.findById(worker._id).select('+internalNotes') });
 });
 const deleteWorker = asyncHandler(async (req, res) => {
   const worker = await Worker.findByIdAndUpdate(
@@ -420,18 +431,29 @@ const listBookings = asyncHandler(async (req, res) => {
   res.json({ success: true, ...(await paginated({ model: ServiceBooking, filter, query: req.query, populate: ['customer', 'city', 'category', 'worker'] })) });
 });
 const assignWorker = asyncHandler(async (req, res) => {
-  const [booking, worker] = await Promise.all([ServiceBooking.findById(req.params.id), Worker.findById(req.body.workerId)]);
+  const booking = await ServiceBooking.findById(req.params.id);
   if (!booking) throw new ApiError(404, 'Booking not found', 'BOOKING_NOT_FOUND');
-  if (!worker || !worker.isActive || worker.verificationStatus !== 'verified' || worker.availability !== 'available' ||
-      String(worker.city) !== String(booking.city) || !worker.categories.map(String).includes(String(booking.category))) {
+  const worker = await acquireProvider(req.body.workerId, {
+    city: booking.city,
+    categories: booking.category,
+  });
+  if (!worker) {
     throw new ApiError(422, 'Worker must be verified, available, and match booking city/category', 'WORKER_ASSIGNMENT_INVALID');
   }
-  booking.worker = worker._id; booking.status = 'assigned';
-  booking.statusHistory.push({ status: 'assigned', at: new Date(), by: req.admin._id });
-  await booking.save();
-  worker.availability = 'busy'; await worker.save();
-  notifyUser({ userId: booking.customer, type: 'worker_assigned', title: 'Worker assigned', body: `${worker.name} has been assigned to your booking.`, data: { bookingId: booking._id.toString() } });
-  res.json({ success: true, booking });
+  const claimed = await ServiceBooking.findOneAndUpdate(
+    { _id: booking._id, worker: null, status: { $in: ['requested', 'confirmed'] } },
+    {
+      $set: { worker: worker._id, status: 'assigned' },
+      $push: { statusHistory: { status: 'assigned', at: new Date(), by: req.admin._id } },
+    },
+    { new: true, runValidators: true }
+  );
+  if (!claimed) {
+    await releaseProviderIfIdle(worker._id);
+    throw new ApiError(409, 'This booking is no longer available for assignment', 'BOOKING_ALREADY_ASSIGNED');
+  }
+  notifyUser({ userId: claimed.customer, type: 'worker_assigned', title: 'Worker assigned', body: `${worker.name} has been assigned to your booking.`, data: { bookingId: claimed._id.toString() } });
+  res.json({ success: true, booking: claimed });
 });
 
 const forwardBooking = asyncHandler(async (req, res) => {
@@ -439,9 +461,7 @@ const forwardBooking = asyncHandler(async (req, res) => {
   if (!booking) throw new ApiError(404, 'Booking not found', 'BOOKING_NOT_FOUND');
   if (!['requested', 'confirmed'].includes(booking.status) || booking.worker) throw new ApiError(409, 'This booking is no longer open for provider responses', 'BOOKING_NOT_OPEN');
   const requestedIds = Array.isArray(req.body.workerIds) ? req.body.workerIds : [];
-  // Offline providers can receive a request and accept it after switching Online.
-  // Availability is checked again when the provider accepts the job.
-  const workers = await Worker.find({ _id: { $in: requestedIds }, city: booking.city._id, categories: booking.category._id, isActive: true, verificationStatus: 'verified' }).select('_id name user serviceAreas availability');
+  const workers = await Worker.find({ _id: { $in: requestedIds }, city: booking.city._id, categories: booking.category._id, isActive: true, verificationStatus: 'verified', availability: 'available' }).select('_id name user serviceAreas availability');
   const locality = normalizeArea(booking.locality);
   // Older bookings may not have a locality because the area selector was added
   // later. Let admin route those legacy bookings by city/category and show the
@@ -467,19 +487,27 @@ const forwardBooking = asyncHandler(async (req, res) => {
   res.json({ success: true, booking });
 });
 const updateBookingStatus = asyncHandler(async (req, res) => {
-  const booking = await ServiceBooking.findById(req.params.id);
-  if (!booking) throw new ApiError(404, 'Booking not found', 'BOOKING_NOT_FOUND');
+  const existingBooking = await ServiceBooking.findById(req.params.id);
+  if (!existingBooking) throw new ApiError(404, 'Booking not found', 'BOOKING_NOT_FOUND');
   const allowed = {
     requested: ['confirmed', 'cancelled'], confirmed: ['cancelled'], assigned: ['in_progress', 'cancelled'],
     in_progress: ['completed'], completed: [], cancelled: [],
   };
-  if (!allowed[booking.status]?.includes(req.body.status)) throw new ApiError(409, 'Invalid booking status transition', 'BOOKING_STATUS_INVALID');
-  booking.status = req.body.status;
-  if (req.body.finalPrice !== undefined) booking.finalPrice = req.body.finalPrice;
-  booking.statusHistory.push({ status: req.body.status, at: new Date(), by: req.admin._id, note: req.body.note || '' });
-  await booking.save();
+  if (!allowed[existingBooking.status]?.includes(req.body.status)) throw new ApiError(409, 'Invalid booking status transition', 'BOOKING_STATUS_INVALID');
+  const set = { status: req.body.status };
+  if (req.body.finalPrice !== undefined) set.finalPrice = req.body.finalPrice;
+  const booking = await ServiceBooking.findOneAndUpdate(
+    { _id: existingBooking._id, status: existingBooking.status },
+    {
+      $set: set,
+      $push: { statusHistory: { status: req.body.status, at: new Date(), by: req.admin._id, note: req.body.note || '' } },
+    },
+    { new: true, runValidators: true }
+  );
+  if (!booking) throw new ApiError(409, 'Booking status changed; refresh and try again', 'BOOKING_STATUS_CONFLICT');
   if (booking.worker && ['completed', 'cancelled'].includes(booking.status)) {
-    await Worker.updateOne({ _id: booking.worker }, { $set: { availability: 'available' }, ...(booking.status === 'completed' ? { $inc: { completedBookings: 1 } } : {}) });
+    if (booking.status === 'completed') await Worker.updateOne({ _id: booking.worker }, { $inc: { completedBookings: 1 } });
+    await releaseProviderIfIdle(booking.worker);
   }
   if (booking.status === 'confirmed') {
     notifyUser({ userId: booking.customer, type: 'booking_confirmed', title: 'Booking confirmed', body: `Booking #${booking.bookingNumber || booking._id} has been confirmed.`, data: { bookingId: booking._id.toString() } });

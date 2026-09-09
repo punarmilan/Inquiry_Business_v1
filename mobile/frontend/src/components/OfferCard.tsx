@@ -122,6 +122,14 @@ const PosterLayers: React.FC<{ offer: Offer; canvas: OfferTemplateCanvas; previe
           borderColor: element.borderColor || value('borderColor', 'transparent'),
           borderStyle: element.borderStyle || value('borderStyle', 'solid'),
         } as any;
+        if (element.avatarId) {
+          const avatar = findOfferAvatar(element.avatarId);
+          const avatarSize = Math.max(1, Math.round(Math.min(
+            surfaceWidth * (element.width / canvas.width),
+            surfaceWidth * (element.height / canvas.height),
+          )));
+          return <OfferAvatarSprite key={element.id} avatar={avatar} size={avatarSize} style={layer} />;
+        }
         if (element.type === 'image') {
           const uri = posterImage(offer, element);
           return uri ? <Image key={element.id} source={{ uri }} style={layer} resizeMode={element.resizeMode === 'stretch' ? 'stretch' : element.resizeMode || value('objectFit', 'contain')} /> : null;
@@ -158,7 +166,7 @@ export const OfferCard: React.FC<{
   variant?: 'standard' | 'hero';
 }> = ({ offer, onPress, onSave, compact, variant = 'standard' }) => {
   const business = (offer.businessDocument || offer.business) as Business;
-  const selectedAvatar = offer.cardDesign ? findOfferAvatar(offer.cardDesign.avatarId) : null;
+  const selectedAvatar = offer.cardDesign?.avatarId ? findOfferAvatar(offer.cardDesign.avatarId) : null;
   const titleAlign = offer.cardDesign?.textAlign || (offer.cardDesign?.layout === 'center' ? 'center' : 'left');
   const titleFontSize = offer.cardDesign?.titleFontSize || 30;
   const descriptionFontSize = offer.cardDesign?.descriptionFontSize || 16;

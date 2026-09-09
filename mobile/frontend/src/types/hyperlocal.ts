@@ -99,6 +99,7 @@ export type OfferTemplateElement = {
   content?: string;
   imageUrl?: string;
   src?: string;
+  avatarId?: string;
   position?: { x: number; y: number };
   size?: { width: number; height: number };
   x: number;

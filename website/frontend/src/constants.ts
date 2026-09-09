@@ -1,7 +1,7 @@
 import type { NavItem } from './types';
 
 export const PLAY_STORE_URL =
-  import.meta.env.VITE_PLAY_STORE_URL || 'https://play.google.com/store/apps/details?id=com.kaamsaathi.app';
+  import.meta.env.VITE_PLAY_STORE_URL || 'https://play.google.com/store/apps/details?id=com.inquiryexperts.app';
 
 export const navItems: NavItem[] = [
   { label: 'Home', path: '/' },

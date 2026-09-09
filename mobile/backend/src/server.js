@@ -19,7 +19,7 @@ const start = async () => {
     app.set('io', io);
 
     httpServer.listen(env.port, () => {
-      console.log(`KaamSaathi backend listening on port ${env.port}`);
+      console.log(`InquiryExperts backend listening on port ${env.port}`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);

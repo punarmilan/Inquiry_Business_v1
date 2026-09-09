@@ -96,7 +96,7 @@ export const OfferCardDesigner: React.FC<Props> = ({ design, onChange, title, de
   const selectedTemplate = design.templateId === 'custom'
     ? customTemplate
     : availableTemplates.find((template) => template.id === design.templateId) || availableTemplates[0] || OFFER_CARD_TEMPLATES[0];
-  const selectedAvatar = findOfferAvatar(design.avatarId);
+  const selectedAvatar = design.avatarId ? findOfferAvatar(design.avatarId) : null;
   const copyStyles: Record<OfferCardLayout, object> = {
     right: styles.previewCopyRight,
     left: styles.previewCopyLeft,
@@ -132,7 +132,7 @@ export const OfferCardDesigner: React.FC<Props> = ({ design, onChange, title, de
           <Text style={[styles.previewDescription, { fontSize: design.descriptionFontSize || 16, fontStyle: design.fontStyle || 'normal', textAlign: design.textAlign || 'left' }]} numberOfLines={2}>{description || 'Your custom offer message appears here.'}</Text>
           <Text style={styles.previewPrice}>{price ? `\u20B9${Number(price).toLocaleString('en-IN')}` : 'Add offer price'}</Text>
         </View>
-        <OfferAvatarSprite avatar={selectedAvatar} size={AVATAR_SIZES[design.layout]} style={[styles.previewAvatar, avatarStyles[design.layout]]} />
+        {selectedAvatar ? <OfferAvatarSprite avatar={selectedAvatar} size={AVATAR_SIZES[design.layout]} style={[styles.previewAvatar, avatarStyles[design.layout]]} /> : null}
       </LinearGradient>
 
       {mode === 'templates' ? <>
@@ -160,7 +160,7 @@ export const OfferCardDesigner: React.FC<Props> = ({ design, onChange, title, de
                 previewUrl: template.previewUrl,
                 canvas: template.canvas,
                 dynamicFields: template.dynamicFields || {},
-                avatarId: template.defaultAvatarId || design.avatarId,
+                avatarId: design.avatarId,
                 primaryColor: template.primaryColor,
                 secondaryColor: template.secondaryColor,
                 layout: template.layout,

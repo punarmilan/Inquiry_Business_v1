@@ -28,6 +28,7 @@ import {
   listNotifications as apiListNotifications,
   markNotificationRead as apiMarkNotificationRead,
   markAllNotificationsRead as apiMarkAllNotificationsRead,
+  logoutSession as apiLogoutSession,
   setAuthTokens,
   setAuthHandlers,
   getAuthTokens,
@@ -35,6 +36,7 @@ import {
 import { categories as fallbackCategories, categoryGroups as fallbackCategoryGroups } from '../data/categories';
 import { RemoteSettings, fetchRemoteSettings } from '../services/settings';
 import { connectSocket, disconnectSocket, getSocket } from '../services/socket';
+import { clearSessionTokens, loadSessionTokens, saveSessionTokens } from '../services/sessionStorage';
 
 // expo-notifications throws just from being imported under plain Expo Go on Android
 // (SDK 53+) — its remote-push setup runs as a module-level side effect with no opt-out.
@@ -70,8 +72,6 @@ if (Notifications) {
     }).catch(() => {});
   }
 }
-
-const TOKENS_STORAGE_KEY = 'kaamsaathi_tokens';
 
 type ProfilePayload = {
   name: string;
@@ -198,6 +198,9 @@ interface AppContextValue {
 }
 
 const AppContext = createContext<AppContextValue | undefined>(undefined);
+const LANGUAGE_STORAGE_KEY = 'inquiryexperts_lang';
+const LEGACY_LANGUAGE_STORAGE_KEY = 'kaamsaathi_lang';
+const isLanguage = (value: string | null): value is Language => value === 'en' || value === 'hi';
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [language, setLanguageState] = useState<Language>('en');
@@ -245,11 +248,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const setLanguage = useCallback((lang: Language) => {
     setLanguageState(lang);
-    AsyncStorage.setItem('kaamsaathi_lang', lang).catch(() => {});
+    AsyncStorage.setItem(LANGUAGE_STORAGE_KEY, lang).catch(() => {});
+    AsyncStorage.removeItem(LEGACY_LANGUAGE_STORAGE_KEY).catch(() => {});
   }, []);
 
   const t = useCallback(
-    (key: TranslationKey) => translations[language][key] ?? translations.en[key] ?? key,
+    (key: TranslationKey) => {
+      const selected = translations[language] as Partial<Record<TranslationKey, string>>;
+      return selected[key] || translations.en[key];
+    },
     [language]
   );
 
@@ -258,7 +265,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAuthIdentifierType(identifier.email ? 'email' : 'phone');
     setPendingRegistrationProfile(null);
     const res = await apiLoginWithPassword(identifier, password);
-    setTokens({ accessToken: res.accessToken, refreshToken: res.refreshToken });
+    const nextTokens = { accessToken: res.accessToken, refreshToken: res.refreshToken };
+    setAuthTokens(nextTokens);
+    setTokens(nextTokens);
     const user = toUser(res.user);
     setCurrentUser(user);
     try {
@@ -277,7 +286,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const res = await apiOauthLogin(provider, token);
     setAuthIdentifierValue(res.user.email || '');
     setAuthIdentifierType('email');
-    setTokens({ accessToken: res.accessToken, refreshToken: res.refreshToken });
+    const nextTokens = { accessToken: res.accessToken, refreshToken: res.refreshToken };
+    setAuthTokens(nextTokens);
+    setTokens(nextTokens);
     const user = toUser(res.user);
     setCurrentUser(user);
     try {
@@ -296,7 +307,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const res = await apiOauthRegister(provider, token, phone, email, accountType);
     setAuthIdentifierValue(phone);
     setAuthIdentifierType('phone');
-    setTokens({ accessToken: res.accessToken, refreshToken: res.refreshToken });
+    const nextTokens = { accessToken: res.accessToken, refreshToken: res.refreshToken };
+    setAuthTokens(nextTokens);
+    setTokens(nextTokens);
     const user = toUser(res.user);
     setCurrentUser(user);
     try {
@@ -333,7 +346,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const identifier: AuthIdentifier =
         authIdentifierType === 'email' ? { email: authIdentifierValue } : { phone: authIdentifierValue };
       const res = await apiVerifyOtp(identifier, otp, intent);
-      setTokens({ accessToken: res.accessToken, refreshToken: res.refreshToken });
+      const nextTokens = { accessToken: res.accessToken, refreshToken: res.refreshToken };
+      setAuthTokens(nextTokens);
+      setTokens(nextTokens);
 
       let user = toUser(res.user);
       setCurrentUser(user);
@@ -532,8 +547,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Clear the API client's module-level session before any pending request can
     // refresh or restore the old credentials. The persistence write below is
     // intentionally synchronous from the auth flow's perspective as well.
+    const refreshToken = getAuthTokens()?.refreshToken;
+    if (refreshToken) apiLogoutSession(refreshToken).catch(() => {});
     setAuthTokens(null);
-    AsyncStorage.removeItem(TOKENS_STORAGE_KEY).catch(() => {});
+    clearSessionTokens().catch(() => {});
     disconnectSocket();
     setIsAuthenticated(false);
     setNeedsRegistration(false);
@@ -559,7 +576,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     setAuthHandlers({
-      onTokensRefreshed: (fresh) => setTokens(fresh),
+      onTokensRefreshed: (fresh) => {
+        setTokens(fresh);
+        connectSocket(fresh.accessToken);
+      },
       onAuthExpired: () => logout(),
     });
   }, [logout]);
@@ -570,9 +590,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     if (isBootstrapping) return;
     if (tokens) {
-      AsyncStorage.setItem(TOKENS_STORAGE_KEY, JSON.stringify(tokens)).catch(() => {});
+      saveSessionTokens(tokens).catch(() => {});
     } else {
-      AsyncStorage.removeItem(TOKENS_STORAGE_KEY).catch(() => {});
+      clearSessionTokens().catch(() => {});
     }
   }, [tokens, isBootstrapping]);
 
@@ -582,9 +602,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let cancelled = false;
     (async () => {
       try {
-        const stored = await AsyncStorage.getItem(TOKENS_STORAGE_KEY);
-        if (!stored || cancelled) return;
-        const parsed = JSON.parse(stored) as TokenPair;
+        const [parsed, savedLanguage, legacyLanguage] = await Promise.all([
+          loadSessionTokens(),
+          AsyncStorage.getItem(LANGUAGE_STORAGE_KEY),
+          AsyncStorage.getItem(LEGACY_LANGUAGE_STORAGE_KEY),
+        ]);
+        const effectiveLanguage = savedLanguage ?? legacyLanguage;
+        if (!cancelled && isLanguage(effectiveLanguage)) {
+          setLanguageState(effectiveLanguage);
+          if (!savedLanguage && legacyLanguage) {
+            AsyncStorage.setItem(LANGUAGE_STORAGE_KEY, legacyLanguage).catch(() => {});
+            AsyncStorage.removeItem(LEGACY_LANGUAGE_STORAGE_KEY).catch(() => {});
+          }
+        }
+        if (!parsed || cancelled) return;
         setAuthTokens(parsed);
 
         const res = await apiGetProfile(parsed.accessToken);
@@ -606,7 +637,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // Nothing restorable (never logged in, or the refresh token itself has expired) —
         // clear anything stale so we don't keep retrying it on every future launch.
         setAuthTokens(null);
-        await AsyncStorage.removeItem(TOKENS_STORAGE_KEY).catch(() => {});
+        await clearSessionTokens().catch(() => {});
       } finally {
         if (!cancelled) setIsBootstrapping(false);
       }

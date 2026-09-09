@@ -82,8 +82,10 @@ export type MoreStackParamList = {
 
 export type ProfileStackParamList = {
   ProfileMain: undefined;
+  SavedLocations: undefined;
   Settings: undefined;
   HelpSupport: undefined;
+  Faq: undefined;
   AiAssistant: undefined;
   EditProfile: { section?: ProfileEditSection } | undefined;
   Wallet: undefined;
@@ -92,6 +94,7 @@ export type ProfileStackParamList = {
   ChatList: undefined;
   ChatThread: ChatThreadParams;
   MyBusiness: undefined;
+  BusinessSetup: { businessId?: string } | undefined;
   Plans: { businessId?: string } | undefined;
   SavedOffers: undefined;
 };
