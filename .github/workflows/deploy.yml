@@ -249,6 +249,17 @@ jobs:
                 docker rm -f "$legacy_container"
               fi
             done
+            # Stale containers from manual runs or older compose projects keep
+            # neither our project name nor the legacy names above, but still
+            # hold our deployment ports (e.g. 5013). Free only those ports.
+            for deploy_port in 5010 5011 5012 5013 8088; do
+              stale_holders=$(docker ps -q --filter "publish=${deploy_port}" || true)
+              if [ -n "$stale_holders" ]; then
+                echo "Removing stale container(s) holding port ${deploy_port}: ${stale_holders}"
+                # shellcheck disable=SC2086
+                docker rm -f $stale_holders
+              fi
+            done
             # Deploy the exact commit that was built and recreate all services
             # so a cached `latest` container cannot leave stale UI code live.
             docker compose --project-name inquiryexperts --env-file .env up -d --force-recreate --remove-orphans
