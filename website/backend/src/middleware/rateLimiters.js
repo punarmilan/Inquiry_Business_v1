@@ -6,6 +6,9 @@ const globalLimiter = rateLimit({
   limit: env.rateLimitMax,
   standardHeaders: true,
   legacyHeaders: false,
+  // Manual-QA bypass. Active only when env.rateLimitDisabled is true, which
+  // the config allows solely outside production.
+  skip: (req) => env.rateLimitDisabled === true,
 });
 
 module.exports = { globalLimiter };

@@ -39,6 +39,12 @@ const serviceBookingSchema = new mongoose.Schema(
     worker: { type: mongoose.Schema.Types.ObjectId, ref: 'Worker', default: null, index: true },
     dispatchedProviders: { type: [providerDispatchSchema], default: [] },
     address: { type: String, required: true, trim: true, maxlength: 300 },
+    addressDetails: {
+      houseNo: { type: String, trim: true, maxlength: 120, default: '' },
+      streetAddress: { type: String, trim: true, maxlength: 200, default: '' },
+      area: { type: String, trim: true, maxlength: 120, default: '' },
+      city: { type: String, trim: true, maxlength: 120, default: '' },
+    },
     locality: { type: String, trim: true, maxlength: 120, default: '' },
     location: { type: geoPointSchema, required: true },
     scheduleType: { type: String, enum: ['now', 'later'], required: true },

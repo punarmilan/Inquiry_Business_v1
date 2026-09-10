@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useMemo, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { AppState, Platform } from 'react-native';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -10,6 +10,7 @@ import {
   BackendNotification,
   TokenPair,
   AuthIdentifier,
+  ApiRequestError,
   listCategories as apiListCategories,
   loginWithPassword as apiLoginWithPassword,
   oauthLogin as apiOauthLogin,
@@ -441,6 +442,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => subscription.remove();
   }, [tokens, refreshBusinesses]);
 
+  const fetchNotificationsInFlight = useRef(false);
+  const notificationRetryAt = useRef(0);
+
   const fetchNotifications = useCallback(async () => {
     if (!tokens) {
       setNotifications([]);
@@ -448,6 +452,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setNotificationError(null);
       return;
     }
+    // Block repeated taps/focus events while a request is pending, and respect
+    // the server's Retry-After cooldown after a real 429 instead of hammering it.
+    if (fetchNotificationsInFlight.current) return;
+    if (Date.now() < notificationRetryAt.current) return;
+    fetchNotificationsInFlight.current = true;
     setNotificationError(null);
     try {
       const res = await apiListNotifications(tokens.accessToken, { limit: 50 });
@@ -459,8 +468,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       setNotifications(res.data);
       setUnreadNotificationCount(Number.isFinite(res.unreadCount) ? Math.max(0, res.unreadCount) : 0);
+      notificationRetryAt.current = 0;
     } catch (error) {
-      setNotificationError(error instanceof Error ? error.message : 'Could not load notifications.');
+      const retryAfterSeconds = error instanceof ApiRequestError ? error.retryAfterSeconds : undefined;
+      if (error instanceof ApiRequestError && error.status === 429 && typeof retryAfterSeconds === 'number') {
+        notificationRetryAt.current = Date.now() + retryAfterSeconds * 1000;
+        setNotificationError(`Too many requests. Try again in ${retryAfterSeconds}s.`);
+      } else {
+        notificationRetryAt.current = 0;
+        setNotificationError(error instanceof Error ? error.message : 'Could not load notifications.');
+      }
+    } finally {
+      fetchNotificationsInFlight.current = false;
     }
   }, [tokens]);
 

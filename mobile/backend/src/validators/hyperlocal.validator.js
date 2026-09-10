@@ -1,4 +1,11 @@
-const { Joi, objectId, pagination, phone } = require('./common');
+const { Joi, objectId, pagination, indianPhone } = require('./common');
+
+const addressDetails = Joi.object({
+  houseNo: Joi.string().trim().allow('').max(120),
+  streetAddress: Joi.string().trim().allow('').max(200),
+  area: Joi.string().trim().allow('').max(120),
+  city: Joi.string().trim().allow('').max(120),
+});
 
 const coordinates = {
   latitude: Joi.number().min(-90).max(90).required(),
@@ -29,9 +36,10 @@ const businessPayload = Joi.object({
   coverImageUrl: businessImageUrl.allow(''),
   address: Joi.string().trim().min(3).max(300).required(),
   locality: Joi.string().trim().allow('').max(120),
+  addressDetails,
   ...coordinates,
-  phone: phone.required(),
-  whatsapp: phone.allow(''),
+  phone: indianPhone.required(),
+  whatsapp: indianPhone.allow(''),
   email: Joi.string().trim().email().allow('').max(200),
   website: Joi.string().trim().uri().allow('').max(2048),
 });
@@ -86,9 +94,10 @@ const offerPayload = Joi.object({
   expiresAt: Joi.date().iso().greater(Joi.ref('startsAt')).required(),
   address: Joi.string().trim().min(3).max(300).required(),
   locality: Joi.string().trim().allow('').max(120),
+  addressDetails,
   ...coordinates,
-  phone: phone.allow(''),
-  whatsapp: phone.allow(''),
+  phone: indianPhone.allow(''),
+  whatsapp: indianPhone.allow(''),
   terms: Joi.string().trim().allow('').max(3000),
 });
 
@@ -146,6 +155,7 @@ const createBookingSchema = Joi.object({
     workerId: objectId,
     address: Joi.string().trim().min(3).max(300).required(),
     locality: Joi.string().trim().allow('').max(120),
+    addressDetails,
     ...coordinates,
     scheduleType: Joi.string().valid('now', 'later').required(),
     scheduledFor: Joi.date().iso().required(),

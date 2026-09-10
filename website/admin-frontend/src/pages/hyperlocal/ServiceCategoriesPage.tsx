@@ -129,21 +129,20 @@ export const ServiceCategoriesPage = () => {
                   <Button variant="outline" onClick={() => edit(item)}>
                     Edit
                   </Button>
-                  {item.isActive && (
-                    <Button
-                      variant="destructive"
-                      onClick={() => {
-                        if (!window.confirm(`Delete ${item.name}? Existing bookings will be preserved.`)) return;
-                        deleteCategory.mutate(item._id, {
-                          onSuccess: () => toast.success('Service category deleted.'),
-                          onError: (e: any) => toast.error(e.response?.data?.error?.message || 'Failed to delete category.'),
-                        });
-                      }}
-                      disabled={deleteCategory.isPending}
-                    >
-                      Delete
-                    </Button>
-                  )}
+                  {item.isActive && <Button variant="outline" onClick={() => updateCategory.mutate({ id: item._id, payload: { isActive: false } }, { onSuccess: () => toast.success('Service category deactivated.'), onError: (e: any) => toast.error(e.response?.data?.error?.message || 'Failed to deactivate category.') })} disabled={updateCategory.isPending}>Deactivate</Button>}
+                  <Button
+                    variant="destructive"
+                    onClick={() => {
+                      if (!window.confirm(`Permanently delete ${item.name}? This cannot be undone and will be blocked if related records exist.`)) return;
+                      deleteCategory.mutate(item._id, {
+                        onSuccess: () => toast.success('Service category permanently deleted.'),
+                        onError: (e: any) => toast.error(e.response?.data?.error?.message || 'Failed to delete category.'),
+                      });
+                    }}
+                    disabled={deleteCategory.isPending}
+                  >
+                    Hard Delete
+                  </Button>
                 </div>
               </CardContent>
             </Card>

@@ -11,6 +11,7 @@ const ServiceBooking = require('../models/ServiceBooking');
 const Worker = require('../models/Worker');
 const Payment = require('../models/Payment');
 const asyncHandler = require('../utils/asyncHandler');
+const env = require('../config/env');
 
 const startOfToday = () => {
   const d = new Date();
@@ -38,7 +39,10 @@ const getStats = asyncHandler(async (_req, res) => {
     Subscription.countDocuments({ status: 'active', startsAt: { $lte: now }, endsAt: { $gte: now } }),
     ServiceBooking.countDocuments(),
     Worker.countDocuments({ isActive: true }),
-    Payment.aggregate([{ $match: { status: 'verified' } }, { $group: { _id: null, total: { $sum: '$amount' } } }]),
+    Promise.all([
+      Payment.aggregate([{ $match: { status: 'verified', type: { $in: ['subscription', 'service'] } } }, { $group: { _id: null, total: { $sum: { $cond: [{ $eq: ['$type', 'subscription'] }, '$amount', { $multiply: ['$amount', env.platformCommissionRate] }] } } } }]),
+      Transaction.aggregate([{ $match: { status: 'completed' } }, { $group: { _id: null, total: { $sum: '$platformCommission' } } }]),
+    ]),
   ]);
 
   res.json({
@@ -52,7 +56,7 @@ const getStats = asyncHandler(async (_req, res) => {
       activeSubscriptions,
       serviceBookings,
       activeWorkers,
-      totalRevenue: revenueAgg[0]?.total ?? 0,
+      totalRevenue: (revenueAgg[0][0]?.total ?? 0) + (revenueAgg[1][0]?.total ?? 0),
     },
   });
 });
@@ -68,15 +72,16 @@ const getRevenueSeries = asyncHandler(async (req, res) => {
     ? req.query.granularity
     : 'daily';
   const format = GRANULARITY_FORMATS[granularity];
+  const inclusiveDateTo = req.query.dateTo ? new Date(req.query.dateTo) : null;
+  if (inclusiveDateTo) inclusiveDateTo.setUTCHours(23, 59, 59, 999);
 
-  const match = { status: 'completed' };
+  const match = { status: 'completed', date: { $type: 'date' } };
   if (req.query.dateFrom || req.query.dateTo) {
-    match.date = {};
     if (req.query.dateFrom) match.date.$gte = new Date(req.query.dateFrom);
-    if (req.query.dateTo) match.date.$lte = new Date(req.query.dateTo);
+    if (inclusiveDateTo) match.date.$lte = inclusiveDateTo;
   }
 
-  const series = await Transaction.aggregate([
+  const transactionSeries = await Transaction.aggregate([
     { $match: match },
     {
       $group: {
@@ -89,14 +94,28 @@ const getRevenueSeries = asyncHandler(async (req, res) => {
     { $sort: { _id: 1 } },
   ]);
 
+  const paymentDateMatch = { $type: 'date' };
+  if (req.query.dateFrom) paymentDateMatch.$gte = new Date(req.query.dateFrom);
+  if (inclusiveDateTo) paymentDateMatch.$lte = inclusiveDateTo;
+  const paymentSeries = await Payment.aggregate([
+    { $match: { status: 'verified', type: { $in: ['subscription', 'service'] } } },
+    { $addFields: { metricDate: { $ifNull: ['$verifiedAt', '$createdAt'] } } },
+    { $match: { metricDate: paymentDateMatch } },
+    { $group: { _id: { $dateToString: { format, date: '$metricDate' } }, commission: { $sum: { $cond: [{ $eq: ['$type', 'subscription'] }, '$amount', { $multiply: ['$amount', env.platformCommissionRate] }] } }, volume: { $sum: '$amount' }, count: { $sum: 1 } } },
+  ]);
+  const byPeriod = new Map();
+  [...transactionSeries, ...paymentSeries].forEach((row) => {
+    const current = byPeriod.get(row._id) || { period: row._id, commission: 0, volume: 0, count: 0 };
+    current.commission += row.commission || 0;
+    current.volume += row.volume || 0;
+    current.count += row.count || 0;
+    byPeriod.set(row._id, current);
+  });
+  const series = [...byPeriod.values()].sort((a, b) => a.period.localeCompare(b.period));
+
   res.json({
     success: true,
-    series: series.map((row) => ({
-      period: row._id,
-      commission: row.commission,
-      volume: row.volume,
-      count: row.count,
-    })),
+    series,
   });
 });
 

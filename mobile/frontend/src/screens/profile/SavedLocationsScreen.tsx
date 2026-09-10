@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScreenContainer } from '../../components/ScreenContainer';
@@ -13,14 +13,20 @@ type Props = NativeStackScreenProps<ProfileStackParamList, 'SavedLocations'>;
 export const SavedLocationsScreen: React.FC<Props> = ({ navigation }) => {
   const locationState = useHyperlocalLocation({ promptOnEmpty: false });
   const location = locationState.location;
+  const locations = locationState.savedLocations.length ? locationState.savedLocations : location ? [location] : [];
+  const isActiveLocation = (item: NonNullable<typeof location>) => {
+    if (!location) return false;
+    return item.city?._id === location.city?._id && item.locality.trim().toLocaleLowerCase('en-IN') === location.locality.trim().toLocaleLowerCase('en-IN');
+  };
 
-  const removeLocation = () => {
+  const removeLocation = (target: typeof location) => {
+    if (!target) return;
     Alert.alert(
       'Delete saved location?',
       'Nearby offers and services will ask you to choose a location again.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => void locationState.clearLocation() },
+        { text: 'Delete', style: 'destructive', onPress: () => void locationState.removeSavedLocation(target).then(() => locations.length === 1 ? locationState.clearLocation() : undefined) },
       ]
     );
   };
@@ -43,35 +49,32 @@ export const SavedLocationsScreen: React.FC<Props> = ({ navigation }) => {
         <View style={styles.center}>
           <ActivityIndicator color={theme.colors.primary} />
         </View>
-      ) : location ? (
-        <View style={styles.content}>
+      ) : locations.length ? (
+        <ScrollView contentContainerStyle={styles.content}>
           <Text style={styles.sectionLabel}>DISCOVERY LOCATION</Text>
-          <View style={styles.card}>
+          {locations.map((item) => <Pressable key={`${item.city?._id || 'gps'}:${item.locality}`} onPress={() => void locationState.selectSavedLocation(item)} style={[styles.card, isActiveLocation(item) && styles.activeCard]}>
             <View style={styles.iconWrap}>
               <MaterialCommunityIcons
-                name={location.source === 'gps' ? 'crosshairs-gps' : 'map-marker-outline'}
+                name={item.source === 'gps' ? 'crosshairs-gps' : 'map-marker-outline'}
                 size={25}
                 color={theme.colors.primary}
               />
             </View>
             <View style={styles.copy}>
-              <Text style={styles.locationName}>{location.locality}</Text>
+              <Text style={styles.locationName}>{item.locality}</Text>
               <Text style={styles.locationMeta}>
-                {[location.city?.name, location.city?.state].filter(Boolean).join(', ') || 'Current location'}
+                {[item.city?.name, item.city?.state].filter(Boolean).join(', ') || 'Current location'}
               </Text>
-              <Text style={styles.locationSource}>{location.source === 'gps' ? 'Saved from GPS' : 'Selected manually'}</Text>
+              <Text style={styles.locationSource}>{isActiveLocation(item) ? 'Active discovery location' : item.source === 'gps' ? 'Saved from GPS' : 'Selected manually'}</Text>
             </View>
-          </View>
+            <Pressable onPress={() => removeLocation(item)} hitSlop={10}><MaterialCommunityIcons name="delete-outline" size={20} color={theme.colors.danger} /></Pressable>
+          </Pressable>)}
           <Text style={styles.help}>This same location is used to find nearby offers and services.</Text>
           <Pressable onPress={() => locationState.setPickerVisible(true)} style={styles.primaryAction} accessibilityRole="button">
-            <MaterialCommunityIcons name="pencil-outline" size={19} color={theme.colors.textInverse} />
-            <Text style={styles.primaryActionText}>Change location</Text>
+            <MaterialCommunityIcons name="plus" size={19} color={theme.colors.textInverse} />
+            <Text style={styles.primaryActionText}>Add location</Text>
           </Pressable>
-          <Pressable onPress={removeLocation} style={styles.deleteAction} accessibilityRole="button">
-            <MaterialCommunityIcons name="delete-outline" size={20} color={theme.colors.danger} />
-            <Text style={styles.deleteActionText}>Delete location</Text>
-          </Pressable>
-        </View>
+        </ScrollView>
       ) : (
         <View style={styles.center}>
           <View style={styles.emptyIcon}>
@@ -105,7 +108,8 @@ const styles = StyleSheet.create({
   title: { ...theme.typography.h3, color: theme.colors.text },
   content: { flex: 1, padding: 18 },
   sectionLabel: { ...theme.typography.tiny, color: theme.colors.textMuted, fontWeight: '900', letterSpacing: 1.1, marginBottom: 9 },
-  card: { flexDirection: 'row', alignItems: 'center', gap: 13, padding: 17, borderRadius: 19, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
+  card: { flexDirection: 'row', alignItems: 'center', gap: 13, padding: 17, borderRadius: 19, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface, marginBottom: 9 },
+  activeCard: { borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight },
   iconWrap: { width: 50, height: 50, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.primaryLight },
   copy: { flex: 1 },
   locationName: { ...theme.typography.bodyBold, color: theme.colors.text },

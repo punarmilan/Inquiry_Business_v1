@@ -4,8 +4,9 @@ import { fetchStats, fetchRevenueSeries, type RevenueSeriesFilters } from '@/api
 export const useDashboardStats = () =>
   useQuery({ queryKey: ['dashboard', 'stats'], queryFn: fetchStats });
 
-export const useRevenueSeries = (filters: RevenueSeriesFilters) =>
+export const useRevenueSeries = (filters: RevenueSeriesFilters, enabled = true) =>
   useQuery({
     queryKey: ['dashboard', 'revenue', filters],
     queryFn: () => fetchRevenueSeries(filters),
+    enabled,
   });

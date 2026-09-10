@@ -18,6 +18,7 @@ const payloadFromBody = (body) => ({
   coverImageUrl: body.coverImageUrl,
   address: body.address,
   locality: body.locality,
+  addressDetails: body.addressDetails,
   location:
     body.longitude === undefined
       ? undefined

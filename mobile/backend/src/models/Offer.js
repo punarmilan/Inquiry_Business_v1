@@ -65,6 +65,12 @@ const offerSchema = new mongoose.Schema(
     startsAt: { type: Date, required: true, index: true },
     expiresAt: { type: Date, required: true, index: true },
     address: { type: String, required: true, trim: true, maxlength: 300 },
+    addressDetails: {
+      houseNo: { type: String, trim: true, maxlength: 120, default: '' },
+      streetAddress: { type: String, trim: true, maxlength: 200, default: '' },
+      area: { type: String, trim: true, maxlength: 120, default: '' },
+      city: { type: String, trim: true, maxlength: 120, default: '' },
+    },
     locality: { type: String, trim: true, maxlength: 120, default: '' },
     location: { type: geoPointSchema, required: true },
     phone: { type: String, trim: true, maxlength: 24, default: '' },

@@ -17,6 +17,7 @@ const schema = new mongoose.Schema(
     worker: { type: mongoose.Schema.Types.ObjectId, ref: 'Worker' },
     dispatchedProviders: { type: [providerDispatchSchema], default: [] },
     address: String, locality: String,
+    addressDetails: { houseNo: String, streetAddress: String, area: String, city: String },
     location: { type: { type: String }, coordinates: [Number] }, scheduleType: String, scheduledFor: Date,
     problemDescription: String, priceEstimate: Number, finalPrice: Number,
     status: { type: String, enum: ['requested', 'confirmed', 'assigned', 'in_progress', 'completed', 'cancelled'] },

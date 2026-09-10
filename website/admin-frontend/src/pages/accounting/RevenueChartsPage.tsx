@@ -24,7 +24,13 @@ type Granularity = 'daily' | 'weekly' | 'monthly';
 
 export const RevenueChartsPage = () => {
   const [granularity, setGranularity] = useState<Granularity>('daily');
-  const { data: series, isLoading } = useRevenueSeries({ granularity });
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const rangeInvalid = Boolean(dateFrom && dateTo && dateFrom > dateTo);
+  const { data: series, isLoading, isFetching, isError, refetch } = useRevenueSeries(
+    { granularity, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined },
+    !rangeInvalid,
+  );
 
   return (
     <div>
@@ -37,6 +43,13 @@ export const RevenueChartsPage = () => {
           <TabsTrigger value="monthly">Monthly</TabsTrigger>
         </TabsList>
       </Tabs>
+      <div className="mb-4 flex flex-wrap gap-3">
+        <label className="text-sm">From <input className="ml-2 h-10 rounded-md border border-input bg-background px-3" type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></label>
+        <label className="text-sm">To <input className="ml-2 h-10 rounded-md border border-input bg-background px-3" type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} /></label>
+        <button className="h-10 rounded-md border border-input bg-background px-3 text-sm" type="button" onClick={() => { setDateFrom(''); setDateTo(''); }}>Clear dates</button>
+        <button className="h-10 rounded-md border border-input bg-background px-3 text-sm disabled:opacity-50" type="button" disabled={rangeInvalid || isFetching} onClick={() => void refetch()}>{isFetching ? 'Refreshing…' : 'Refresh'}</button>
+      </div>
+      {rangeInvalid && <p className="mb-4 text-sm text-destructive">From date must be before or equal to To date.</p>}
 
       <Card>
         <CardHeader>
@@ -45,7 +58,11 @@ export const RevenueChartsPage = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
+          {rangeInvalid ? (
+            <p className="text-sm text-muted-foreground">Choose a valid date range to load analytics.</p>
+          ) : isError ? (
+            <div className="flex items-center gap-3"><p className="text-sm text-destructive">Analytics could not be loaded.</p><button className="rounded-md border border-input px-3 py-1.5 text-sm" type="button" onClick={() => void refetch()}>Retry</button></div>
+          ) : isLoading ? (
             <p className="text-sm text-muted-foreground">Loading…</p>
           ) : !series?.length ? (
             <p className="text-sm text-muted-foreground">No transactions in this range yet.</p>

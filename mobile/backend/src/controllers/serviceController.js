@@ -123,7 +123,7 @@ const createBooking = asyncHandler(async (req, res) => {
     }
   }
   const scheduledFor = req.body.scheduleType === 'now' ? new Date() : new Date(req.body.scheduledFor);
-  if (req.body.scheduleType === 'later' && scheduledFor <= new Date()) {
+  if (req.body.scheduleType === 'later' && (!Number.isFinite(scheduledFor.getTime()) || scheduledFor <= new Date())) {
     throw new ApiError(422, 'Scheduled time must be in the future', 'INVALID_SCHEDULE_TIME');
   }
   const booking = await ServiceBooking.create({
@@ -133,6 +133,7 @@ const createBooking = asyncHandler(async (req, res) => {
     category: category._id,
     address: req.body.address,
     locality: requestedLocality,
+    addressDetails: req.body.addressDetails,
     location: { type: 'Point', coordinates: [Number(req.body.longitude), Number(req.body.latitude)] },
     scheduleType: req.body.scheduleType,
     scheduledFor,

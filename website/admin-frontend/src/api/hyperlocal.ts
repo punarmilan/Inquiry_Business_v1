@@ -2,7 +2,7 @@ import client from './client';
 import type { Paginated } from '@/types';
 
 export interface CityRecord { _id: string; name: string; state: string; slug: string; center: { coordinates: [number, number] }; serviceRadiusKm: number; localities: string[]; isActive: boolean; offersEnabled: boolean; servicesEnabled: boolean; }
-export interface BusinessRecord { _id: string; name: string; category: string; phone: string; address: string; verificationStatus: string; verificationSubmittedAt?: string; verifiedAt?: string | null; verificationNote?: string; isActive: boolean; owner?: { name?: string; phone: string }; city?: CityRecord; }
+export interface BusinessRecord { _id: string; name: string; category: string; description?: string; logoUrl?: string; coverImageUrl?: string; phone: string; whatsapp?: string; email?: string; website?: string; address: string; locality?: string; addressDetails?: { houseNo?: string; streetAddress?: string; area?: string; city?: string }; verificationStatus: string; verificationSubmittedAt?: string; verifiedAt?: string | null; verificationNote?: string; isActive: boolean; owner?: { name?: string; phone: string }; city?: CityRecord; }
 export interface OfferRecord { _id: string; title: string; status: string; offerPrice: number; originalPrice: number; isFeatured: boolean; expiresAt: string; moderationReason?: string; business?: BusinessRecord; city?: CityRecord; }
 export interface PlanRecord { _id: string; name: string; code: string; description: string; price: number; billingPeriod: string; durationDays: number; offerPostingLimit: number; maximumActiveOffers: number; featuredOfferAllowance: number; imagesPerOffer: number; analyticsAccess: boolean; priorityRanking: number; verificationBenefit: boolean; isActive: boolean; sortOrder: number; }
 export interface CategoryRecord { _id: string; name: string; slug: string; description: string; icon: string; imageUrl: string; basePrice: number; priceUnit: string; cityAvailability: CityRecord[]; isActive: boolean; sortOrder: number; }
@@ -27,6 +27,7 @@ export interface TemplateStickerRecord {
   _id: string; name: string; slug: string; kind: 'image' | 'emoji'; imageUrl?: string; emoji?: string;
   sortOrder: number; isActive: boolean; createdAt?: string; updatedAt?: string;
 }
+export interface TemplateAssetRecord { _id: string; name: string; mimeType: string; size: number; url: string; storage?: 'cloudinary'; }
 
 const base = '/hyperlocal';
 export const listCities = () => client.get<{ data: CityRecord[] }>(`${base}/cities`).then((r) => r.data.data);
@@ -50,8 +51,10 @@ export const updateWorker = (id: string, payload: unknown) => client.put(`${base
 export const deleteWorker = (id: string) => client.delete(`${base}/workers/${id}`).then((r) => r.data.worker);
 export const listBusinesses = (params: object = {}) => client.get<Paginated<BusinessRecord>>(`${base}/businesses`, { params }).then((r) => r.data);
 export const moderateBusiness = (id: string, payload: unknown) => client.patch(`${base}/businesses/${id}/moderation`, payload).then((r) => r.data.business);
+export const hardDeleteBusiness = (id: string) => client.delete(`${base}/businesses/${id}`).then((r) => r.data.deletedId as string);
 export const listOffers = (params: object = {}) => client.get<Paginated<OfferRecord>>(`${base}/offers`, { params }).then((r) => r.data);
 export const moderateOffer = (id: string, payload: unknown) => client.patch(`${base}/offers/${id}/moderation`, payload).then((r) => r.data.offer);
+export const hardDeleteOffer = (id: string) => client.delete(`${base}/offers/${id}`).then((r) => r.data.deletedId as string);
 export const listOfferTemplates = () => client.get<{ data: OfferTemplateRecord[] }>(`${base}/offer-templates`).then((r) => r.data.data);
 export const createOfferTemplate = (payload: unknown) => client.post(`${base}/offer-templates`, payload).then((r) => r.data.template);
 export const updateOfferTemplate = (id: string, payload: unknown) => client.put(`${base}/offer-templates/${id}`, payload).then((r) => r.data.template);
@@ -60,7 +63,8 @@ export const listTemplateStickers = () => client.get<{ data: TemplateStickerReco
 export const createTemplateSticker = (payload: unknown) => client.post(`${base}/stickers`, payload).then((r) => r.data.sticker as TemplateStickerRecord);
 export const updateTemplateSticker = (id: string, payload: unknown) => client.put(`${base}/stickers/${id}`, payload).then((r) => r.data.sticker as TemplateStickerRecord);
 export const deleteTemplateSticker = (id: string) => client.delete(`${base}/stickers/${id}`).then((r) => r.data.sticker as TemplateStickerRecord);
-export const uploadTemplateAsset = (dataUrl: string, name?: string) => client.post(`${base}/template-assets`, { dataUrl, name }).then((r) => r.data.asset as { _id: string; name: string; mimeType: string; size: number; url: string });
+export const uploadTemplateAsset = (dataUrl: string, name?: string) => client.post(`${base}/template-assets`, { dataUrl, name }).then((r) => r.data.asset as TemplateAssetRecord);
+export const deleteTemplateAsset = (id: string) => client.delete(`${base}/template-assets/${encodeURIComponent(id)}`).then((r) => r.data.asset as { _id: string });
 export const listBookings = (params: object = {}) => client.get<Paginated<BookingRecord>>(`${base}/bookings`, { params }).then((r) => r.data);
 export const assignWorker = (id: string, workerId: string) => client.patch(`${base}/bookings/${id}/assign`, { workerId }).then((r) => r.data.booking);
 export const forwardBooking = (id: string, workerIds: string[]) => client.patch(`${base}/bookings/${id}/forward`, { workerIds }).then((r) => r.data.booking);

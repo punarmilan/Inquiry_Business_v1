@@ -15,7 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { useOffersList, useModerateOffer } from '@/hooks/useHyperlocal';
+import { useHardDeleteOffer, useOffersList, useModerateOffer } from '@/hooks/useHyperlocal';
 import type { OfferRecord } from '@/api/hyperlocal';
 
 const STATUS_TABS = ['pending_review', 'approved', 'rejected', 'live', 'expired', 'suspended', 'featured'];
@@ -23,12 +23,13 @@ const STATUS_TABS = ['pending_review', 'approved', 'rejected', 'live', 'expired'
 export const OffersPage = () => {
   const [status, setStatus] = useState('pending_review');
   const [page, setPage] = useState(1);
-  const [confirmAction, setConfirmAction] = useState<{ offer: OfferRecord; action: 'approve' | 'suspend' | 'restore' | 'feature' | 'unfeature' } | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ offer: OfferRecord; action: 'approve' | 'suspend' | 'hard_delete' | 'restore' | 'feature' | 'unfeature' } | null>(null);
   const [rejectTarget, setRejectTarget] = useState<OfferRecord | null>(null);
   const [reason, setReason] = useState('');
 
   const { data, isLoading } = useOffersList({ status, page, limit: 20 });
   const moderateOffer = useModerateOffer();
+  const hardDeleteOffer = useHardDeleteOffer();
 
   const runAction = (offer: OfferRecord, action: string, extra: Record<string, unknown> = {}) => {
     moderateOffer.mutate(
@@ -94,14 +95,9 @@ export const OffersPage = () => {
                 </Button>
               </>
             )}
-            {offer.status === 'approved' && (
+            {offer.status !== 'suspended' && (
               <Button size="sm" variant="destructive" onClick={() => setConfirmAction({ offer, action: 'suspend' })}>
-                Delete
-              </Button>
-            )}
-            {!['approved', 'suspended'].includes(offer.status) && (
-              <Button size="sm" variant="destructive" onClick={() => setConfirmAction({ offer, action: 'suspend' })}>
-                Delete
+                Soft Delete
               </Button>
             )}
             {offer.status === 'suspended' && (
@@ -109,6 +105,7 @@ export const OffersPage = () => {
                 Restore
               </Button>
             )}
+            <Button size="sm" variant="destructive" onClick={() => setConfirmAction({ offer, action: 'hard_delete' })}>Hard Delete</Button>
             <Button
               size="sm"
               variant="outline"
@@ -125,6 +122,7 @@ export const OffersPage = () => {
   const confirmCopy: Record<string, { title: string; description: string; destructive?: boolean }> = {
     approve: { title: 'Approve this offer?', description: 'It will become visible to nearby customers when its selected start date arrives.' },
     suspend: { title: 'Delete this offer?', description: 'It will be deactivated and removed from customer discovery. You can restore it later.', destructive: true },
+    hard_delete: { title: 'Permanently delete this offer?', description: 'This removes only this offer and its saved/report references. It cannot be undone.', destructive: true },
     restore: { title: 'Restore this offer?', description: 'It will become visible to nearby customers again if it is within its active dates and 10 KM range.' },
     feature: { title: 'Feature this offer for 7 days?', description: 'It will be ranked higher among eligible nearby offers, without bypassing the 10 KM radius.' },
     unfeature: { title: 'Remove featured placement?', description: 'The offer stays live but loses priority ranking.' },
@@ -168,9 +166,13 @@ export const OffersPage = () => {
         description={confirmAction ? confirmCopy[confirmAction.action].description : ''}
         destructive={confirmAction ? confirmCopy[confirmAction.action].destructive : false}
         confirmLabel="Confirm"
-        loading={moderateOffer.isPending}
+        loading={moderateOffer.isPending || hardDeleteOffer.isPending}
         onConfirm={() => {
           if (!confirmAction) return;
+          if (confirmAction.action === 'hard_delete') {
+            hardDeleteOffer.mutate(confirmAction.offer._id, { onSuccess: () => { toast.success('Offer permanently deleted.'); setConfirmAction(null); }, onError: (e: any) => toast.error(e.response?.data?.error?.message || 'Failed to permanently delete offer.') });
+            return;
+          }
           const extra =
             confirmAction.action === 'feature'
               ? { featuredUntil: new Date(Date.now() + 7 * 86400000).toISOString(), priorityRank: 10 }

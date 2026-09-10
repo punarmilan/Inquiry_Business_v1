@@ -152,9 +152,22 @@ export interface WalletTransaction {
 
 export interface Report {
   _id: string;
-  targetType: 'job' | 'user';
+  targetType: 'job' | 'user' | 'business' | 'offer' | 'service_booking';
   targetId: string;
-  reporterId: string | { _id: string; name?: string; phone: string };
+  target?: {
+    _id: string;
+    title?: string;
+    name?: string;
+    phone?: string;
+    bookingNumber?: string;
+    category?: string;
+    locality?: string;
+    status?: string;
+    verificationStatus?: string;
+    isActive?: boolean;
+    scheduledFor?: string;
+  } | null;
+  reporterId: string | { _id: string; name?: string; phone: string } | null;
   reason: string;
   description?: string;
   status: 'pending' | 'approved' | 'rejected';

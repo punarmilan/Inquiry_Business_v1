@@ -14,6 +14,7 @@ import type { Business, City } from '../../types/hyperlocal';
 import type { PostStackParamList } from '../../navigation/types';
 import { useApp } from '../../context/AppContext';
 import { theme } from '../../theme';
+import { isValidIndianPhoneDigits, sanitizeIndianPhoneInput, toIndianPhone } from '../../utils/phoneValidation';
 
 type Props = NativeStackScreenProps<PostStackParamList, 'BusinessSetup'>;
 type RequiredField = 'name' | 'category' | 'city' | 'pin' | 'address' | 'phone';
@@ -38,6 +39,7 @@ export const BusinessSetupScreen: React.FC<Props> = ({ route, navigation }) => {
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
   const [shopImage, setShopImage] = useState('');
+  const [houseNo, setHouseNo] = useState('');
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState(currentUser?.phone || '');
   const [whatsapp, setWhatsapp] = useState('');
@@ -58,9 +60,10 @@ export const BusinessSetupScreen: React.FC<Props> = ({ route, navigation }) => {
       setCategory(item.category);
       setDescription(item.description || '');
       setShopImage(item.coverImageUrl || item.logoUrl || '');
-      setAddress(item.address);
-      setPhone(item.phone);
-      setWhatsapp(item.whatsapp || '');
+      setHouseNo(item.addressDetails?.houseNo || '');
+      setAddress(item.addressDetails?.streetAddress || item.address);
+      setPhone(sanitizeIndianPhoneInput(item.phone).digits);
+      setWhatsapp(sanitizeIndianPhoneInput(item.whatsapp || '').digits);
       setEmail(item.email || '');
       setWebsite(item.website || '');
       setCoordinates({ latitude: item.location.coordinates[1], longitude: item.location.coordinates[0] });
@@ -125,7 +128,7 @@ export const BusinessSetupScreen: React.FC<Props> = ({ route, navigation }) => {
       setCoordinates(coords);
       clearError('pin');
       if (detectedAddress) {
-        setAddress(detectedAddress);
+        setAddress([place?.street, place?.district].filter(Boolean).join(', ') || detectedAddress);
         clearError('address');
       }
 
@@ -159,8 +162,8 @@ export const BusinessSetupScreen: React.FC<Props> = ({ route, navigation }) => {
     if (!category.trim()) nextErrors.category = 'Category is required.';
     if (!selectedCity || !selectedCity.offersEnabled) nextErrors.city = 'Select a city where Offers are enabled.';
     if (!selectedCoordinates) nextErrors.pin = 'Add the exact business location pin.';
-    if (!address.trim()) nextErrors.address = 'Exact business address is required.';
-    if (!phone.trim()) nextErrors.phone = 'Phone number is required.';
+    if (!address.trim()) nextErrors.address = 'Street address is required.';
+    if (!isValidIndianPhoneDigits(phone)) nextErrors.phone = 'Enter exactly 10 digits.';
 
     if (Object.keys(nextErrors).length) {
       setErrors(nextErrors);
@@ -179,11 +182,12 @@ export const BusinessSetupScreen: React.FC<Props> = ({ route, navigation }) => {
         description: description.trim(),
         logoUrl: shopImage.trim(),
         coverImageUrl: shopImage.trim(),
-        address: address.trim(),
+        address: [houseNo.trim(), address.trim(), selected?.locality || existingBusiness?.locality, selectedCity!.name].filter(Boolean).join(', ').slice(0, 300),
+        addressDetails: { houseNo: houseNo.trim(), streetAddress: address.trim(), area: selected?.locality || existingBusiness?.locality || '', city: selectedCity!.name },
         locality: selected?.locality || existingBusiness?.locality,
         ...selectedCoordinates!,
-        phone: phone.trim(),
-        whatsapp: whatsapp.trim(),
+        phone: toIndianPhone(phone)!,
+        whatsapp: whatsapp ? toIndianPhone(whatsapp) || whatsapp : '',
         email: email.trim(),
         website: website.trim(),
       };
@@ -200,7 +204,10 @@ export const BusinessSetupScreen: React.FC<Props> = ({ route, navigation }) => {
         ]);
       }
     } catch (error: any) {
-      Alert.alert('Business not created', error.message);
+      const validationMessage = Array.isArray(error?.details)
+        ? error.details.map((detail: { message?: string }) => detail.message).filter(Boolean).join('\n')
+        : '';
+      Alert.alert(isEditing ? 'Business not updated' : 'Business not created', validationMessage || error?.message || 'Please check the profile details and try again.');
     } finally {
       setLoading(false);
     }
@@ -243,6 +250,7 @@ export const BusinessSetupScreen: React.FC<Props> = ({ route, navigation }) => {
           {shopImage ? <Image source={{ uri: shopImage }} style={styles.shopImage} resizeMode="cover" /> : <View style={styles.imagePlaceholder}><MaterialCommunityIcons name="camera-plus-outline" size={30} color={theme.colors.primary} /><Text style={styles.imagePlaceholderText}>Add your shop image</Text></View>}
           <View style={styles.imageOverlay}><MaterialCommunityIcons name="pencil-outline" size={16} color={theme.colors.textInverse} /><Text style={styles.imageOverlayText}>{shopImage ? 'Change image' : 'Choose image'}</Text></View>
         </Pressable>
+        {shopImage ? <Pressable onPress={() => setShopImage('')} style={styles.removeImage} accessibilityRole="button"><MaterialCommunityIcons name="delete-outline" size={17} color={theme.colors.danger} /><Text style={styles.removeImageText}>Remove shop image</Text></Pressable> : null}
         <Text style={styles.imageHint}>This image appears on your business profile and is reviewed with the profile.</Text>
 
         <Text style={styles.label}>City & area *</Text>
@@ -260,8 +268,9 @@ export const BusinessSetupScreen: React.FC<Props> = ({ route, navigation }) => {
         </Pressable>
         {errors.city ? <Text style={styles.error}>{errors.city}</Text> : null}
 
+        <Input label="House No." value={houseNo} onChangeText={setHouseNo} placeholder="House / shop number" />
         <Input
-          label="Exact business address *"
+          label="Street Address *"
           value={address}
           onChangeText={(value) => {
             setAddress(value);
@@ -269,6 +278,7 @@ export const BusinessSetupScreen: React.FC<Props> = ({ route, navigation }) => {
           }}
           error={errors.address}
           multiline
+          textAlignVertical="top"
         />
         <Button
           label={coordinates ? 'Location pin added' : 'Pin exact location'}
@@ -290,13 +300,14 @@ export const BusinessSetupScreen: React.FC<Props> = ({ route, navigation }) => {
           label="Phone *"
           value={phone}
           onChangeText={(value) => {
-            setPhone(value);
+            setPhone(sanitizeIndianPhoneInput(value).digits);
             clearError('phone');
           }}
           error={errors.phone}
           keyboardType="phone-pad"
+          maxLength={10}
         />
-        <Input label="WhatsApp" value={whatsapp} onChangeText={setWhatsapp} keyboardType="phone-pad" />
+        <Input label="WhatsApp" value={whatsapp} onChangeText={(value) => setWhatsapp(sanitizeIndianPhoneInput(value).digits)} keyboardType="phone-pad" maxLength={10} />
         <Input label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
         <Input label="Website (optional)" value={website} onChangeText={setWebsite} autoCapitalize="none" />
         <View style={styles.approvalNote}>
@@ -387,6 +398,8 @@ const styles = StyleSheet.create({
   imageOverlay: { position: 'absolute', right: 10, bottom: 10, flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 99 },
   imageOverlayText: { ...theme.typography.tiny, color: theme.colors.textInverse, fontWeight: '800' },
   imageHint: { ...theme.typography.tiny, color: theme.colors.textMuted, marginBottom: 16 },
+  removeImage: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-end', marginBottom: 8, paddingVertical: 4 },
+  removeImageText: { ...theme.typography.tiny, color: theme.colors.danger, fontWeight: '800' },
   approvalNote: { flexDirection: 'row', gap: 10, backgroundColor: theme.colors.secondaryLight, borderRadius: 15, padding: 14, marginBottom: 18 },
   approvalText: { flex: 1, ...theme.typography.caption, color: theme.colors.textSecondary, lineHeight: 18 },
 });

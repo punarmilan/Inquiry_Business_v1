@@ -25,8 +25,16 @@ const toTrustProxy = (value, fallback) => {
   return Number.isFinite(parsed) ? parsed : value;
 };
 
+/**
+ * Testing bypass for repeated manual QA. Active ONLY outside production, so
+ * an accidentally-set variable can never weaken production rate limiting.
+ */
+const isRateLimitDisabled = (nodeEnv, flag) => nodeEnv !== 'production' && flag === 'true';
+
+const nodeEnv = process.env.NODE_ENV || 'development';
+
 module.exports = {
-  nodeEnv: process.env.NODE_ENV || 'development',
+  nodeEnv,
   port: toNumber(process.env.PORT, 5000),
   mongoUri: process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/inquiryexperts',
   jwtAccessSecret: process.env.JWT_ACCESS_SECRET || 'dev-access-secret-change-me',
@@ -41,6 +49,7 @@ module.exports = {
   trustProxy: toTrustProxy(process.env.TRUST_PROXY, 1),
   rateLimitWindowMs: toNumber(process.env.RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000),
   rateLimitMax: toNumber(process.env.RATE_LIMIT_MAX, 100),
+  rateLimitDisabled: isRateLimitDisabled(nodeEnv, process.env.DISABLE_RATE_LIMIT),
   loginRateLimitWindowMs: toNumber(process.env.LOGIN_RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000),
   loginRateLimitMax: toNumber(process.env.LOGIN_RATE_LIMIT_MAX, 10),
   otpRateLimitWindowMs: toNumber(process.env.OTP_RATE_LIMIT_WINDOW_MS, 10 * 60 * 1000),
@@ -53,3 +62,5 @@ module.exports = {
   facebookAppId: process.env.FACEBOOK_APP_ID || '',
   facebookAppSecret: process.env.FACEBOOK_APP_SECRET || '',
 };
+
+module.exports.isRateLimitDisabled = isRateLimitDisabled;

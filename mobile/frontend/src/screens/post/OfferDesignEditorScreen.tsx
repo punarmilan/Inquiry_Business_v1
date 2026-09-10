@@ -707,7 +707,9 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
   useEffect(() => {
     if (designMode !== 'templates') return;
     listOfferTemplates().then((response) => {
-      const nextTemplates = Array.isArray(response.data) ? response.data.map(toOfferCardTemplate) : [];
+      const nextTemplates = Array.isArray(response.data)
+        ? response.data.filter((template) => template && typeof template === 'object').map(toOfferCardTemplate)
+        : [];
       setTemplates(nextTemplates);
     }).catch(() => {});
   }, [designMode]);

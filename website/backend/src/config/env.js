@@ -9,8 +9,16 @@ const toNumber = (value, fallback) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+/**
+ * Testing bypass for repeated manual QA. Active ONLY outside production, so
+ * an accidentally-set variable can never weaken production rate limiting.
+ */
+const isRateLimitDisabled = (nodeEnv, flag) => nodeEnv !== 'production' && flag === 'true';
+
+const nodeEnv = process.env.NODE_ENV || 'development';
+
 module.exports = {
-  nodeEnv: process.env.NODE_ENV || 'development',
+  nodeEnv,
   port: toNumber(process.env.PORT, 5001),
   mongoUri: process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/inquiryexperts',
   jwtAccessSecret: process.env.JWT_ACCESS_SECRET || 'dev-admin-access-secret-change-me',
@@ -21,5 +29,8 @@ module.exports = {
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   rateLimitWindowMs: toNumber(process.env.RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000),
   rateLimitMax: toNumber(process.env.RATE_LIMIT_MAX, 200),
+  rateLimitDisabled: isRateLimitDisabled(nodeEnv, process.env.DISABLE_RATE_LIMIT),
   platformCommissionRate: Number(process.env.PLATFORM_COMMISSION_RATE) || 0.1,
 };
+
+module.exports.isRateLimitDisabled = isRateLimitDisabled;

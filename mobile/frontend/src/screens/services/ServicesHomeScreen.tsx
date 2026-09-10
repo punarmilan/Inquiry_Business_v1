@@ -132,7 +132,7 @@ export const ServicesHomeScreen: React.FC<Props> = ({ navigation }) => {
     const providerCategory = provider?.categories?.find((item) => categories.some((category) => category._id === item._id));
     const category = providerCategory ? categories.find((item) => item._id === providerCategory._id) : categories.find((item) => item._id === selectedCategory) || categories[0];
     if (!category || !cityId) return;
-    navigation.navigate('BookService', { categoryId: category._id, categoryName: category.name, basePrice: category.basePrice, cityId, availableAreas, providerId: provider?._id });
+    navigation.navigate('BookService', { categoryId: category._id, categoryName: category.name, basePrice: category.basePrice, cityId, cityName: locationState.location?.city?.name, availableAreas, providerId: provider?._id });
   };
 
   const chooseFilter = (value: string) => {

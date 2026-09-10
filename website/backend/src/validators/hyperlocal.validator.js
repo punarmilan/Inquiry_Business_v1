@@ -2,6 +2,7 @@ const { Joi, objectId, pagination } = require('./common');
 const { passwordPolicy } = require('./password.validator');
 
 const idParams = Joi.object({ id: objectId.required() });
+const deleteById = Joi.object({ body: Joi.object({}), query: Joi.object({}), params: idParams });
 const list = Joi.object({
   query: Joi.object({ ...pagination, status: Joi.string().trim().max(40), cityId: objectId, search: Joi.string().trim().max(120) }),
 });
@@ -149,6 +150,9 @@ const templatePayload = Joi.object({
 });
 const templateCreate = Joi.object({ body: templatePayload });
 const templateUpdate = Joi.object({ params: idParams, body: templatePayload.fork(Object.keys(templatePayload.describe().keys), (s) => s.optional()).min(1) });
+const templateAssetDelete = Joi.object({
+  params: Joi.object({ id: Joi.string().pattern(/^(?:[a-fA-F0-9]{24}|cld_[A-Za-z0-9_-]{1,400})$/).required() }),
+});
 
 const stickerPayload = Joi.object({
   name: Joi.string().trim().min(2).max(80).required(),
@@ -200,5 +204,6 @@ const providerApplicationReject = Joi.object({
 
 module.exports = {
   idParams, list, cityCreate, cityUpdate, workerCreate, workerUpdate, categoryCreate, categoryUpdate,
-  businessModerate, offerModerate, templateCreate, templateUpdate, stickerCreate, stickerUpdate, planCreate, planUpdate, assignWorker, forwardBooking, bookingStatus, verifyPayment, refundPayment, providerApplicationApprove, providerApplicationReject,
+  businessModerate, offerModerate, templateCreate, templateUpdate, templateAssetDelete, stickerCreate, stickerUpdate, planCreate, planUpdate, assignWorker, forwardBooking, bookingStatus, verifyPayment, refundPayment, providerApplicationApprove, providerApplicationReject,
 };
+module.exports.deleteById = deleteById;

@@ -94,6 +94,10 @@ export const useModerateBusiness = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['businesses'] }),
   });
 };
+export const useHardDeleteBusiness = () => {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: api.hardDeleteBusiness, onSuccess: () => qc.invalidateQueries({ queryKey: ['businesses'] }) });
+};
 
 // ---- Offers ----
 export const useOffersList = (filters: object) =>
@@ -104,6 +108,10 @@ export const useModerateOffer = () => {
     mutationFn: ({ id, payload }: { id: string; payload: unknown }) => api.moderateOffer(id, payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['offers'] }),
   });
+};
+export const useHardDeleteOffer = () => {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: api.hardDeleteOffer, onSuccess: () => qc.invalidateQueries({ queryKey: ['offers'] }) });
 };
 
 // ---- Offer templates ----

@@ -46,7 +46,7 @@ export type OffersStackParamList = {
 
 export type ServicesStackParamList = {
   ServicesHome: undefined;
-  BookService: { categoryId: string; categoryName: string; basePrice: number; cityId: string; availableAreas?: string[]; providerId?: string };
+  BookService: { categoryId: string; categoryName: string; basePrice: number; cityId: string; cityName?: string; availableAreas?: string[]; providerId?: string };
   MyBookings: undefined;
   BookingDetails: { bookingId: string };
   Notifications: undefined;

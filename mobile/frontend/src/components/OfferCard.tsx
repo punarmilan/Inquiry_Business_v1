@@ -162,9 +162,10 @@ export const OfferCard: React.FC<{
   offer: Offer;
   onPress: () => void;
   onSave?: () => void;
+  saved?: boolean;
   compact?: boolean;
   variant?: 'standard' | 'hero';
-}> = ({ offer, onPress, onSave, compact, variant = 'standard' }) => {
+}> = ({ offer, onPress, onSave, saved = false, compact, variant = 'standard' }) => {
   const business = (offer.businessDocument || offer.business) as Business;
   const selectedAvatar = offer.cardDesign?.avatarId ? findOfferAvatar(offer.cardDesign.avatarId) : null;
   const titleAlign = offer.cardDesign?.textAlign || (offer.cardDesign?.layout === 'center' ? 'center' : 'left');
@@ -269,8 +270,8 @@ export const OfferCard: React.FC<{
           <Text style={styles.expiry}>{expiryLabel(offer.expiresAt)}</Text>
         </View>
         <View style={styles.actions}>
-          <Pressable onPress={(event) => { event.stopPropagation(); onSave?.(); }} style={styles.action}>
-            <MaterialCommunityIcons name="bookmark-outline" size={19} color={theme.colors.primary} /><Text style={styles.actionText}>Save</Text>
+          <Pressable onPress={(event) => { event.stopPropagation(); onSave?.(); }} style={[styles.action, saved && { backgroundColor: theme.colors.primaryLight }]}>
+            <MaterialCommunityIcons name={saved ? 'bookmark' : 'bookmark-outline'} size={19} color={theme.colors.primary} /><Text style={styles.actionText}>{saved ? 'Saved' : 'Save'}</Text>
           </Pressable>
           <Pressable onPress={(event) => { event.stopPropagation(); Share.share({ message: `${offer.title} - \u20B9${offer.offerPrice}` }); }} style={styles.action}>
             <MaterialCommunityIcons name="share-variant-outline" size={19} color={theme.colors.primary} /><Text style={styles.actionText}>Share</Text>

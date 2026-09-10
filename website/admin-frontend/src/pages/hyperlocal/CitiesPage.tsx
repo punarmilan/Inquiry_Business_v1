@@ -389,20 +389,23 @@ export const CitiesPage = () => {
                       <MapPinned className="h-4 w-4" /> Edit coverage
                     </Button>
                     {city.isActive && (
-                      <Button
-                        variant="destructive"
-                        onClick={() => {
-                          if (!window.confirm(`Delete ${city.name}? It will be deactivated and existing history will be preserved.`)) return;
-                          deleteCity.mutate(city._id, {
-                            onSuccess: () => toast.success('City deleted.'),
-                            onError: (error: any) => toast.error(error.response?.data?.error?.message || 'Failed to delete city.'),
-                          });
-                        }}
-                        disabled={deleteCity.isPending}
-                      >
-                        Delete
+                      <Button variant="outline" onClick={() => updateCity.mutate({ id: city._id, payload: { isActive: false } }, { onSuccess: () => toast.success('City deactivated.'), onError: (error: any) => toast.error(error.response?.data?.error?.message || 'Failed to deactivate city.') })} disabled={updateCity.isPending}>
+                        Deactivate
                       </Button>
                     )}
+                    <Button
+                      variant="destructive"
+                      onClick={() => {
+                        if (!window.confirm(`Permanently delete ${city.name}? This cannot be undone and will be blocked if related records exist.`)) return;
+                        deleteCity.mutate(city._id, {
+                          onSuccess: () => toast.success('City permanently deleted.'),
+                          onError: (error: any) => toast.error(error.response?.data?.error?.message || 'Failed to delete city.'),
+                        });
+                      }}
+                      disabled={deleteCity.isPending}
+                    >
+                      Hard Delete
+                    </Button>
                   </div>
                 </CardContent>
               </Card>

@@ -5,6 +5,7 @@ const schema = new mongoose.Schema(
     city: { type: mongoose.Schema.Types.ObjectId, ref: 'City', required: true },
     name: String, slug: String, category: String, description: String, logoUrl: String, coverImageUrl: String,
     address: String, locality: String,
+    addressDetails: { houseNo: String, streetAddress: String, area: String, city: String },
     location: { type: { type: String }, coordinates: [Number] },
     phone: String, whatsapp: String, email: String, website: String,
     verificationStatus: { type: String, enum: ['pending', 'verified', 'rejected', 'suspended'], default: 'pending' },

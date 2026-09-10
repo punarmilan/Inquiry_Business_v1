@@ -6,6 +6,7 @@ import { getCityAvailability, listSupportedCities } from '../services/api';
 import type { City } from '../types/hyperlocal';
 
 const STORAGE_KEY = 'inquiryexperts_hyperlocal_location';
+const SAVED_LOCATIONS_KEY = 'inquiryexperts_saved_locations';
 const INTRO_KEY = 'inquiryexperts_hyperlocal_location_intro_seen';
 const LEGACY_STORAGE_KEY = 'anywork_hyperlocal_location';
 const LEGACY_INTRO_KEY = 'anywork_hyperlocal_location_intro_seen';
@@ -20,6 +21,12 @@ const readStoredItem = async (key: string, legacyKey: string): Promise<string | 
   }
   return legacy;
 };
+
+// Repeat GPS + reverse-geocode + availability calls inside this window reuse
+// the last fix instead of hitting the device and the server again. Explicit
+// user taps and failure retries always go fresh (failures never update the
+// timestamp below).
+const LOCATION_REUSE_WINDOW_MS = 30_000;
 
 export interface HyperlocalLocation {
   city: City | null;
@@ -48,11 +55,28 @@ export const useHyperlocalLocation = ({
   promptOnEmpty = true,
 }: { autoDetect?: boolean; promptOnEmpty?: boolean } = {}) => {
   const [location, setLocation] = useState<HyperlocalLocation | null>(null);
+  const [savedLocations, setSavedLocations] = useState<HyperlocalLocation[]>([]);
   const [cities, setCities] = useState<City[]>([]);
   const [pickerVisible, setPickerVisible] = useState(false);
   const [loadingLocation, setLoadingLocation] = useState(true);
   const [locationError, setLocationError] = useState<string | null>(null);
   const detectingRef = useRef(false);
+  const lastGpsAtRef = useRef(0);
+
+  const persistLocation = useCallback(async (next: HyperlocalLocation) => {
+    const raw = await AsyncStorage.getItem(SAVED_LOCATIONS_KEY);
+    let saved: HyperlocalLocation[] = [];
+    try { saved = raw ? JSON.parse(raw) : []; } catch { saved = []; }
+    if (!Array.isArray(saved)) saved = [];
+    const key = `${next.city?._id || ''}:${next.locality.trim().toLocaleLowerCase('en-IN')}`;
+    const updated = [next, ...saved.filter((item) => `${item.city?._id || ''}:${String(item.locality || '').trim().toLocaleLowerCase('en-IN')}` !== key)];
+    setSavedLocations(updated);
+    await Promise.all([
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)),
+      AsyncStorage.setItem(SAVED_LOCATIONS_KEY, JSON.stringify(updated)),
+      AsyncStorage.removeItem(LEGACY_STORAGE_KEY),
+    ]);
+  }, []);
 
   const chooseManual = useCallback(async (city: City, locality?: string) => {
     setLocationError(null);
@@ -65,9 +89,8 @@ export const useHyperlocalLocation = ({
     };
     setLocation(next);
     setPickerVisible(false);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    await AsyncStorage.removeItem(LEGACY_STORAGE_KEY).catch(() => undefined);
-  }, []);
+    await persistLocation(next);
+  }, [persistLocation]);
 
   const selectCoordinates = useCallback(async (coordinates: { latitude: number; longitude: number }) => {
     const [place, availability] = await Promise.all([
@@ -82,10 +105,30 @@ export const useHyperlocalLocation = ({
     };
     setLocation(next);
     setPickerVisible(false);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    await AsyncStorage.removeItem(LEGACY_STORAGE_KEY).catch(() => undefined);
+    setLocationError(null);
+    await persistLocation(next);
     return { place, availability };
-  }, []);
+  }, [persistLocation]);
+
+  const selectSavedLocation = useCallback(async (next: HyperlocalLocation) => {
+    setLocation(next);
+    setPickerVisible(false);
+    setLocationError(null);
+    await persistLocation(next);
+  }, [persistLocation]);
+
+  const removeSavedLocation = useCallback(async (target: HyperlocalLocation) => {
+    const key = `${target.city?._id || ''}:${target.locality.trim().toLocaleLowerCase('en-IN')}`;
+    const updated = savedLocations.filter((item) => `${item.city?._id || ''}:${item.locality.trim().toLocaleLowerCase('en-IN')}` !== key);
+    setSavedLocations(updated);
+    await AsyncStorage.setItem(SAVED_LOCATIONS_KEY, JSON.stringify(updated));
+    if (location && `${location.city?._id || ''}:${location.locality.trim().toLocaleLowerCase('en-IN')}` === key) {
+      const next = updated[0] || null;
+      setLocation(next);
+      if (next) await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      else await AsyncStorage.removeItem(STORAGE_KEY);
+    }
+  }, [location, savedLocations]);
 
   const clearLocation = useCallback(async () => {
     await Promise.all([
@@ -98,8 +141,27 @@ export const useHyperlocalLocation = ({
     setLoadingLocation(false);
   }, []);
 
-  const detect = useCallback(async () => {
+  const detect = useCallback(async (opts?: { force?: boolean }) => {
     if (detectingRef.current) return;
+    // A fresh fix already exists: reuse it instead of firing GPS +
+    // reverse-geocode + availability requests all over again.
+    if (!opts?.force && Date.now() - lastGpsAtRef.current < LOCATION_REUSE_WINDOW_MS) {
+      const stored = await readStoredItem(STORAGE_KEY, LEGACY_STORAGE_KEY);
+      if (stored) {
+        try {
+          const saved = JSON.parse(stored) as HyperlocalLocation;
+          if (saved.city && Number.isFinite(saved.latitude) && Number.isFinite(saved.longitude)) {
+            setLocation(saved);
+            setLocationError(null);
+            setPickerVisible(false);
+            setLoadingLocation(false);
+            return;
+          }
+        } catch {
+          // Fall through to a fresh detection below.
+        }
+      }
+    }
     detectingRef.current = true;
     setLocationError(null);
     setLoadingLocation(true);
@@ -113,6 +175,7 @@ export const useHyperlocalLocation = ({
       const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       const coordinates = { latitude: position.coords.latitude, longitude: position.coords.longitude };
       await selectCoordinates(coordinates);
+      lastGpsAtRef.current = Date.now();
       // A GPS selection replaces the manual city-centre fallback. This keeps
       // the offer feed anchored to the user's real 10 KM discovery area.
     } catch (error) {
@@ -152,14 +215,19 @@ export const useHyperlocalLocation = ({
   useEffect(() => {
     let active = true;
     (async () => {
-      const [cityResponse, stored, introSeen] = await Promise.all([
+      const [cityResponse, stored, introSeen, storedLocations] = await Promise.all([
         listSupportedCities().catch(() => ({ success: true as const, data: [] })),
         readStoredItem(STORAGE_KEY, LEGACY_STORAGE_KEY),
         readStoredItem(INTRO_KEY, LEGACY_INTRO_KEY),
+        AsyncStorage.getItem(SAVED_LOCATIONS_KEY),
       ]);
       if (!active) return;
       const availableCities = Array.isArray(cityResponse.data) ? cityResponse.data : [];
       setCities(availableCities);
+      try {
+        const parsed = storedLocations ? JSON.parse(storedLocations) : [];
+        if (Array.isArray(parsed)) setSavedLocations(parsed);
+      } catch { setSavedLocations([]); }
       if (stored) {
         try {
           const storedLocation = JSON.parse(stored) as HyperlocalLocation;
@@ -186,6 +254,10 @@ export const useHyperlocalLocation = ({
           }
           const saved = liveCity ? { ...storedLocation, city: liveCity } : storedLocation;
           setLocation(saved);
+          if (!storedLocations) {
+            setSavedLocations([saved]);
+            await AsyncStorage.setItem(SAVED_LOCATIONS_KEY, JSON.stringify([saved]));
+          }
           if (liveCity && liveCity._id !== storedLocation.city?._id) {
             await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
           }
@@ -222,7 +294,7 @@ export const useHyperlocalLocation = ({
           'Allow location to discover offers and services near you.',
           [
             { text: 'Choose city manually', onPress: () => { setPickerVisible(true); setLoadingLocation(false); } },
-            { text: 'Allow location', onPress: detect },
+            { text: 'Allow location', onPress: () => { void detect(); } },
           ],
           { cancelable: false }
         );
@@ -234,5 +306,5 @@ export const useHyperlocalLocation = ({
     return () => { active = false; };
   }, [autoDetect, detect, promptOnEmpty]);
 
-  return { location, cities, pickerVisible, setPickerVisible, chooseManual, selectCoordinates, detect, clearLocation, refreshStoredLocation, loadingLocation, locationError };
+  return { location, savedLocations, cities, pickerVisible, setPickerVisible, chooseManual, selectCoordinates, selectSavedLocation, removeSavedLocation, detect, clearLocation, refreshStoredLocation, loadingLocation, locationError };
 };

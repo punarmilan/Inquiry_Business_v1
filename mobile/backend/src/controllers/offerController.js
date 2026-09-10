@@ -229,6 +229,7 @@ const createOffer = asyncHandler(async (req, res) => {
       expiresAt: templateResult.payload.expiresAt,
       address: templateResult.payload.address,
       locality: templateResult.payload.locality,
+      addressDetails: templateResult.payload.addressDetails,
       location: { type: 'Point', coordinates: [Number(req.body.longitude), Number(req.body.latitude)] },
       phone: templateResult.payload.phone,
       whatsapp: templateResult.payload.whatsapp,
@@ -266,7 +267,7 @@ const updateOffer = asyncHandler(async (req, res) => {
     throw new ApiError(422, 'Offer price cannot exceed original price', 'INVALID_OFFER_PRICE');
   }
   const templateResult = await applyTemplateRules(req.body.cardDesign || offer.cardDesign, req.body, offer);
-  const allowed = ['title', 'description', 'category', 'originalPrice', 'offerPrice', 'discountPercentage', 'imageUrls', 'cardDesign', 'startsAt', 'expiresAt', 'address', 'locality', 'phone', 'whatsapp', 'terms'];
+  const allowed = ['title', 'description', 'category', 'originalPrice', 'offerPrice', 'discountPercentage', 'imageUrls', 'cardDesign', 'startsAt', 'expiresAt', 'address', 'locality', 'addressDetails', 'phone', 'whatsapp', 'terms'];
   allowed.forEach((key) => templateResult.payload[key] !== undefined && (offer[key] = key === 'cardDesign' ? templateResult.cardDesign : templateResult.payload[key]));
   if (req.body.longitude !== undefined) offer.location = { type: 'Point', coordinates: [Number(req.body.longitude), Number(req.body.latitude)] };
   // Any content change must be reviewed again before the revised offer is

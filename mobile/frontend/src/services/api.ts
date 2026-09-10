@@ -66,12 +66,14 @@ export class ApiRequestError extends Error {
   status: number;
   code?: string;
   details?: { path: string; message: string }[];
+  retryAfterSeconds?: number;
 
-  constructor(status: number, message: string, code?: string, details?: { path: string; message: string }[]) {
+  constructor(status: number, message: string, code?: string, details?: { path: string; message: string }[], retryAfterSeconds?: number) {
     super(message);
     this.status = status;
     this.code = code;
     this.details = details;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 
@@ -186,6 +188,21 @@ const refreshAccessToken = async (): Promise<TokenPair> => {
   return promise;
 };
 
+// Reads the server's Retry-After hint (seconds) from a 429 response so callers
+// can back off instead of hammering a limited endpoint. Falls back to the
+// structured `details.retryAfterSeconds` our backend also sends.
+const parseRetryAfterSeconds = (header: string | null | undefined, details: unknown): number | undefined => {
+  const fromHeader = header != null ? Number.parseInt(header, 10) : NaN;
+  if (Number.isFinite(fromHeader) && fromHeader >= 0) return fromHeader;
+  const fromDetails =
+    typeof details === 'object' && details !== null
+      ? (details as { retryAfterSeconds?: unknown }).retryAfterSeconds
+      : undefined;
+  return typeof fromDetails === 'number' && Number.isFinite(fromDetails) && fromDetails >= 0
+    ? fromDetails
+    : undefined;
+};
+
 async function request<T>(path: string, options: RequestOptions = {}, isRetry = false): Promise<T> {
   if (!isRetry) onRequestStart?.();
   try {
@@ -226,7 +243,8 @@ async function request<T>(path: string, options: RequestOptions = {}, isRetry = 
       res.status,
       errorMessage ?? data.message ?? 'Something went wrong',
       code,
-      data.error?.details
+      data.error?.details,
+      parseRetryAfterSeconds(res.headers?.get?.('Retry-After'), data.error?.details)
     );
   }
 
@@ -1001,6 +1019,7 @@ export const listMyOffers = (accessToken: string) =>
 export type OfferPayload = {
   businessId: string; title: string; description: string; category: string; originalPrice: number; offerPrice: number;
   discountPercentage: number; imageUrls: string[]; startsAt: string; expiresAt: string; address: string; locality?: string;
+  addressDetails?: { houseNo?: string; streetAddress?: string; area?: string; city?: string };
   latitude: number; longitude: number; phone?: string; whatsapp?: string; terms?: string; cardDesign?: OfferCardDesign;
 };
 
@@ -1021,13 +1040,13 @@ export const getBusinessDetails = (businessId: string) =>
 
 export const createBusiness = (accessToken: string, payload: {
   name: string; cityId: string; category: string; description?: string; logoUrl?: string; coverImageUrl?: string;
-  address: string; locality?: string; latitude: number; longitude: number; phone: string; whatsapp?: string;
+  address: string; locality?: string; addressDetails?: { houseNo?: string; streetAddress?: string; area?: string; city?: string }; latitude: number; longitude: number; phone: string; whatsapp?: string;
   email?: string; website?: string;
 }) => request<{ success: true; business: Business }>('/businesses', { method: 'POST', accessToken, body: payload });
 
 export const updateBusiness = (accessToken: string, businessId: string, payload: {
   name?: string; cityId?: string; category?: string; description?: string; logoUrl?: string; coverImageUrl?: string;
-  address?: string; locality?: string; latitude?: number; longitude?: number; phone?: string; whatsapp?: string;
+  address?: string; locality?: string; addressDetails?: { houseNo?: string; streetAddress?: string; area?: string; city?: string }; latitude?: number; longitude?: number; phone?: string; whatsapp?: string;
   email?: string; website?: string;
 }) => request<{ success: true; business: Business }>(`/businesses/${businessId}`, { method: 'PUT', accessToken, body: payload });
 
@@ -1101,7 +1120,7 @@ export const toggleSavedProvider = (accessToken: string, providerId: string) =>
   request<{ success: true; saved: boolean }>(`/services/providers/${providerId}/save`, { method: 'POST', accessToken });
 
 export const createServiceBooking = (accessToken: string, payload: {
-  cityId: string; categoryId: string; workerId?: string; address: string; locality?: string; latitude: number; longitude: number;
+  cityId: string; categoryId: string; workerId?: string; address: string; locality?: string; addressDetails?: { houseNo?: string; streetAddress?: string; area?: string; city?: string }; latitude: number; longitude: number;
   scheduleType: 'now' | 'later'; scheduledFor: string; problemDescription?: string;
 }) => request<{ success: true; booking: ServiceBooking }>('/services/bookings', { method: 'POST', accessToken, body: payload });
 

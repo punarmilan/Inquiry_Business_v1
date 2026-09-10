@@ -19,10 +19,12 @@ const STATUS_OPTIONS = ['pending', 'approved', 'rejected', 'all'];
 
 export const ReportsQueuePage = () => {
   const [status, setStatus] = useState('pending');
+  const [targetType, setTargetType] = useState('all');
   const [page, setPage] = useState(1);
 
-  const { data, isLoading } = useReportsList({
+  const { data, isLoading, isFetching, isError, refetch } = useReportsList({
     status: status === 'all' ? undefined : status,
+    targetType: targetType === 'all' ? undefined : targetType,
     page,
     limit: 20,
   });
@@ -31,6 +33,20 @@ export const ReportsQueuePage = () => {
 
   const columns: ColumnDef<Report>[] = [
     { id: 'type', header: 'Type', cell: ({ row }) => <span className="capitalize">{row.original.targetType}</span> },
+    {
+      id: 'target',
+      header: 'Reported item',
+      cell: ({ row }) => {
+        const report = row.original;
+        const label = report.target?.title || report.target?.name || report.target?.bookingNumber || report.target?.phone;
+        return (
+          <div>
+            <p className="font-medium">{label || 'Removed item'}</p>
+            <p className="text-xs text-muted-foreground">{report.target?.status || report.target?.verificationStatus || report.targetId}</p>
+          </div>
+        );
+      },
+    },
     { accessorKey: 'reason', header: 'Reason' },
     {
       id: 'description',
@@ -46,6 +62,7 @@ export const ReportsQueuePage = () => {
       header: 'Reported By',
       cell: ({ row }) => {
         const reporter = row.original.reporterId;
+        if (!reporter) return 'Removed user';
         return typeof reporter === 'object' ? reporter.name || reporter.phone : reporter;
       },
     },
@@ -64,6 +81,7 @@ export const ReportsQueuePage = () => {
             <Button
               variant="outline"
               size="sm"
+              disabled={approveReport.isPending || rejectReport.isPending}
               onClick={() =>
                 approveReport.mutate(row.original._id, {
                   onSuccess: () => toast.success('Report approved.'),
@@ -76,6 +94,7 @@ export const ReportsQueuePage = () => {
             <Button
               variant="destructive"
               size="sm"
+              disabled={approveReport.isPending || rejectReport.isPending}
               onClick={() =>
                 rejectReport.mutate(row.original._id, {
                   onSuccess: () => toast.success('Report rejected.'),
@@ -92,9 +111,9 @@ export const ReportsQueuePage = () => {
 
   return (
     <div>
-      <PageHeader title="Reported Content Queue" description="Review flagged jobs and users." />
+      <PageHeader title="Reported Content Queue" description="Review content reported by app users." />
 
-      <div className="mb-4">
+      <div className="mb-4 flex gap-3">
         <Select
           value={status}
           onValueChange={(v) => {
@@ -113,17 +132,29 @@ export const ReportsQueuePage = () => {
             ))}
           </SelectContent>
         </Select>
+        <Select value={targetType} onValueChange={(value) => { setTargetType(value); setPage(1); }}>
+          <SelectTrigger className="w-48"><SelectValue placeholder="Content type" /></SelectTrigger>
+          <SelectContent>
+            {['all', 'job', 'user', 'business', 'offer', 'service_booking'].map((type) => <SelectItem key={type} value={type} className="capitalize">{type.replace('_', ' ')}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Button variant="outline" onClick={() => void refetch()} disabled={isFetching}>
+          {isFetching ? 'Refreshing…' : 'Refresh'}
+        </Button>
       </div>
+
+      {!isLoading && !isError && <p className="mb-3 text-sm text-muted-foreground">{data?.pagination.total ?? 0} report(s)</p>}
 
       <DataTable
         columns={columns}
         data={data?.data ?? []}
         isLoading={isLoading}
         page={page}
-        pageCount={data?.pagination.pages ?? 1}
+        pageCount={Math.max(data?.pagination.pages ?? 1, 1)}
         onPageChange={setPage}
         emptyMessage="No reports in this filter."
       />
+      {isError && <div className="mt-3 flex items-center gap-3"><p className="text-sm text-destructive">Reports could not be loaded.</p><Button size="sm" variant="outline" onClick={() => void refetch()}>Retry</Button></div>}
     </div>
   );
 };

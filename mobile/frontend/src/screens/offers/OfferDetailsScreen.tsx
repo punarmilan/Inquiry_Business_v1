@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { OfferCard } from '../../components/OfferCard';
-import { getOfferDetails, recordOfferEvent, submitReport, toggleSavedOffer } from '../../services/api';
+import { getOfferDetails, listSavedOffers, recordOfferEvent, submitReport, toggleSavedOffer } from '../../services/api';
 import type { Offer, Business } from '../../types/hyperlocal';
 import type { OffersStackParamList } from '../../navigation/types';
 import { useApp } from '../../context/AppContext';
@@ -16,13 +17,20 @@ type Props = NativeStackScreenProps<OffersStackParamList, 'OfferDetails'>;
 export const OfferDetailsScreen: React.FC<Props> = ({ route, navigation }) => {
   const { accessToken } = useApp();
   const [offer, setOffer] = useState<Offer | null>(null);
+  const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    getOfferDetails(route.params.offerId, route.params.latitude == null ? undefined : { latitude: route.params.latitude, longitude: route.params.longitude! })
-      .then((response) => setOffer(response.offer))
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    setLoading(true);
+    Promise.all([
+      getOfferDetails(route.params.offerId, route.params.latitude == null ? undefined : { latitude: route.params.latitude, longitude: route.params.longitude! }),
+      accessToken ? listSavedOffers(accessToken).catch(() => ({ data: [] })) : Promise.resolve({ data: [] as Offer[] }),
+    ])
+      .then(([response, savedResponse]) => { if (active) { setOffer(response.offer); setSaved(savedResponse.data.some((item) => item._id === route.params.offerId)); } })
       .catch((error) => Alert.alert('Offer unavailable', error.message))
-      .finally(() => setLoading(false));
-  }, [route.params]);
+      .finally(() => active && setLoading(false));
+    return () => { active = false; };
+  }, [accessToken, route.params.offerId, route.params.latitude, route.params.longitude]));
 
   if (loading) return <ScreenContainer style={styles.center}><ActivityIndicator color={theme.colors.primary} /></ScreenContainer>;
   if (!offer) return <ScreenContainer style={styles.center}><Text>Offer not found.</Text></ScreenContainer>;
@@ -61,7 +69,7 @@ export const OfferDetailsScreen: React.FC<Props> = ({ route, navigation }) => {
           <Action icon="directions" label="Directions" onPress={() => trackAndOpen('directions', `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`)} />
           <Action icon="phone-outline" label="Call" onPress={() => trackAndOpen('call', `tel:${offer.phone || business.phone}`)} />
           {(offer.whatsapp || business.whatsapp) ? <Action icon="whatsapp" label="WhatsApp" onPress={() => trackAndOpen('whatsapp', `https://wa.me/${(offer.whatsapp || business.whatsapp || '').replace(/\D/g, '')}`)} /> : null}
-          <Action icon="bookmark-outline" label="Save" onPress={() => accessToken && toggleSavedOffer(accessToken, offer._id).then((result) => Alert.alert(result.saved ? 'Saved' : 'Removed', result.saved ? 'Offer added to Saved Offers.' : 'Offer removed from Saved Offers.'))} />
+          <Action icon={saved ? 'bookmark' : 'bookmark-outline'} label={saved ? 'Saved' : 'Save'} active={saved} onPress={() => accessToken && toggleSavedOffer(accessToken, offer._id).then((result) => { setSaved(result.saved); Alert.alert(result.saved ? 'Saved' : 'Removed', result.saved ? 'Offer added to Saved Offers.' : 'Offer removed from Saved Offers.'); }).catch((error) => Alert.alert('Could not update Saved Offers', error.message))} />
         </View>
         <Pressable onPress={() => {
           if (!accessToken) return;
@@ -75,7 +83,7 @@ export const OfferDetailsScreen: React.FC<Props> = ({ route, navigation }) => {
 };
 
 const Info = ({ title, body, icon }: { title: string; body: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }) => <View style={styles.info}><MaterialCommunityIcons name={icon} size={22} color={theme.colors.secondary} /><View style={styles.flex}><Text style={styles.infoTitle}>{title}</Text><Text style={styles.infoBody}>{body}</Text></View></View>;
-const Action = ({ icon, label, onPress }: { icon: keyof typeof MaterialCommunityIcons.glyphMap; label: string; onPress: () => void }) => <Pressable onPress={onPress} style={styles.action}><MaterialCommunityIcons name={icon} size={23} color={theme.colors.primary} /><Text style={styles.actionLabel}>{label}</Text></Pressable>;
+const Action = ({ icon, label, onPress, active = false }: { icon: keyof typeof MaterialCommunityIcons.glyphMap; label: string; onPress: () => void; active?: boolean }) => <Pressable onPress={onPress} style={[styles.action, active && { backgroundColor: theme.colors.primaryLight, borderColor: theme.colors.primary }]}><MaterialCommunityIcons name={icon} size={23} color={theme.colors.primary} /><Text style={styles.actionLabel}>{label}</Text></Pressable>;
 
 const styles = StyleSheet.create({
   center: { alignItems: 'center', justifyContent: 'center' }, topbar: { height: 58, backgroundColor: theme.colors.surface, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10 }, icon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, topTitle: { flex: 1, ...theme.typography.h3, color: theme.colors.text },

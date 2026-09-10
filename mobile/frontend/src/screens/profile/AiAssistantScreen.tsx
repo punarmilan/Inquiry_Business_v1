@@ -119,7 +119,7 @@ export const AiAssistantScreen: React.FC<Props> = ({ navigation }) => {
 
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         {loading ? (
           <View style={styles.loading}>
@@ -134,6 +134,8 @@ export const AiAssistantScreen: React.FC<Props> = ({ navigation }) => {
             renderItem={renderItem}
             contentContainerStyle={styles.listContent}
             onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             ListEmptyComponent={
               <View style={styles.empty}>
                 <MaterialCommunityIcons name="robot-happy-outline" size={40} color={theme.colors.textMuted} />

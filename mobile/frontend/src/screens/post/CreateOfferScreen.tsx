@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import * as Location from 'expo-location';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -7,12 +8,14 @@ import { ScreenContainer } from '../../components/ScreenContainer';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { OfferCardDesigner } from '../../components/OfferCardDesigner';
+import { OfferCard } from '../../components/OfferCard';
 import { createOffer, listMyBusinesses, listOfferTemplates, updateOffer, type OfferPayload } from '../../services/api';
 import { DEFAULT_OFFER_CARD_DESIGN, resolveOfferCardLayout, toOfferCardTemplate, type OfferCardDesign, type OfferCardTemplate } from '../../config/offerCardDesigner';
 import type { Business } from '../../types/hyperlocal';
 import type { PostStackParamList } from '../../navigation/types';
 import { useApp } from '../../context/AppContext';
 import { theme } from '../../theme';
+import { sanitizeIndianPhoneInput, toIndianPhone } from '../../utils/phoneValidation';
 
 type Props = NativeStackScreenProps<PostStackParamList, 'CreateOffer'>;
 type DatePickerTarget = 'start' | 'expiry' | null;
@@ -22,20 +25,22 @@ const formatOfferDate = (date: Date) =>
 
 export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
   const { accessToken } = useApp();
-  const existingOffer = route.params.offer;
+  const scrollRef = useRef<ScrollView>(null);
+  const params = route.params || ({} as PostStackParamList['CreateOffer']);
+  const existingOffer = params.offer;
   const isEditing = Boolean(existingOffer);
-  const designMode = route.params.designMode || 'templates';
-  const hasDesignDraft = Boolean(route.params.initialDesign && !isEditing);
+  const designMode = params.designMode || 'templates';
+  const hasDesignDraft = Boolean(params.initialDesign && !isEditing);
   const [business, setBusiness] = useState<Business | null>(null);
-  const [title, setTitle] = useState(existingOffer?.title || route.params.initialTitle || '');
-  const [description, setDescription] = useState(existingOffer?.description || route.params.initialDescription || '');
-  const [category, setCategory] = useState(existingOffer?.category || route.params.initialCategory || '');
+  const [title, setTitle] = useState(existingOffer?.title || params.initialTitle || '');
+  const [description, setDescription] = useState(existingOffer?.description || params.initialDescription || '');
+  const [category, setCategory] = useState(existingOffer?.category || params.initialCategory || '');
   const [originalPrice, setOriginalPrice] = useState(existingOffer ? String(existingOffer.originalPrice) : '');
   const [offerPrice, setOfferPrice] = useState(existingOffer ? String(existingOffer.offerPrice) : '');
   const [cardDesign, setCardDesign] = useState<OfferCardDesign>(() => existingOffer?.cardDesign
     ? { ...DEFAULT_OFFER_CARD_DESIGN, ...existingOffer.cardDesign, layout: resolveOfferCardLayout(existingOffer.cardDesign) }
-    : route.params.initialDesign
-      ? { ...DEFAULT_OFFER_CARD_DESIGN, ...route.params.initialDesign, layout: resolveOfferCardLayout(route.params.initialDesign) }
+    : params.initialDesign
+      ? { ...DEFAULT_OFFER_CARD_DESIGN, ...params.initialDesign, layout: resolveOfferCardLayout(params.initialDesign) }
     : designMode === 'custom'
       ? { ...DEFAULT_OFFER_CARD_DESIGN, templateId: 'custom', templateSource: 'custom', previewUrl: undefined }
       : DEFAULT_OFFER_CARD_DESIGN);
@@ -46,26 +51,35 @@ export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
   const [phone, setPhone] = useState(existingOffer?.phone || '');
   const [whatsapp, setWhatsapp] = useState(existingOffer?.whatsapp || '');
   const [offerAddress, setOfferAddress] = useState(existingOffer?.address || '');
+  const [houseNo, setHouseNo] = useState(existingOffer?.addressDetails?.houseNo || '');
+  const [streetAddress, setStreetAddress] = useState(existingOffer?.addressDetails?.streetAddress || existingOffer?.address || '');
   const [locality, setLocality] = useState(existingOffer?.locality || '');
-  const [imageUrls, setImageUrls] = useState<string[]>(existingOffer?.imageUrls || route.params.initialImageUrls || []);
+  const [coordinates, setCoordinates] = useState<{ latitude: number; longitude: number } | null>(() => {
+    const value = existingOffer?.location?.coordinates;
+    return Array.isArray(value) && value.length >= 2 ? { latitude: value[1], longitude: value[0] } : null;
+  });
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [imageUrls, setImageUrls] = useState<string[]>(existingOffer?.imageUrls || params.initialImageUrls || []);
   const [adminTemplates, setAdminTemplates] = useState<OfferCardTemplate[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!accessToken) return;
     listMyBusinesses(accessToken).then((response) => {
-      const item = response.data.find((candidate) => candidate._id === route.params.businessId) || null;
+      const item = response.data.find((candidate) => candidate._id === params.businessId) || null;
       setBusiness(item);
       if (item && !isEditing) {
         setCategory(item.category);
-        setPhone(item.phone);
-        setWhatsapp(item.whatsapp || '');
+        setPhone(sanitizeIndianPhoneInput(item.phone).digits);
+        setWhatsapp(sanitizeIndianPhoneInput(item.whatsapp || '').digits);
         setOfferAddress(item.address);
+        setStreetAddress(item.addressDetails?.streetAddress || item.address);
+        setHouseNo(item.addressDetails?.houseNo || '');
         setLocality(item.locality || '');
-        if (!imageUrls.length && (item.coverImageUrl || item.logoUrl)) setImageUrls([item.coverImageUrl || item.logoUrl || '']);
+        if (!coordinates && Array.isArray(item.location?.coordinates)) setCoordinates({ latitude: item.location.coordinates[1], longitude: item.location.coordinates[0] });
       }
     });
-  }, [accessToken, isEditing, route.params.businessId]);
+  }, [accessToken, isEditing, params.businessId]);
 
   useEffect(() => {
     let mounted = true;
@@ -73,7 +87,9 @@ export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
       .then((response) => {
         if (!mounted) return;
         // Admin data must never be allowed to break the create-offer screen.
-        const templates = Array.isArray(response.data) ? response.data.map(toOfferCardTemplate) : [];
+        const templates = Array.isArray(response.data)
+          ? response.data.filter((template) => template && typeof template === 'object').map(toOfferCardTemplate)
+          : [];
         setAdminTemplates(templates);
         if (!isEditing && designMode === 'templates' && templates[0]) setCardDesign((current) => current.templateId === DEFAULT_OFFER_CARD_DESIGN.templateId ? ({
           ...current,
@@ -131,13 +147,42 @@ export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
     setExpiresAt(selectedDate);
   };
 
+  const useCurrentLocation = async () => {
+    setLocationLoading(true);
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (!permission.granted) return Alert.alert('Location denied', 'Enter the offer address manually or allow location access in app settings.');
+      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const next = { latitude: position.coords.latitude, longitude: position.coords.longitude };
+      const places = await Location.reverseGeocodeAsync(next);
+      const place = places[0];
+      setCoordinates(next);
+      if (place) {
+        if (!houseNo.trim() && place.name) setHouseNo(place.name);
+        if (!streetAddress.trim() && place.street) setStreetAddress(place.street);
+        if (!locality.trim() && (place.district || place.subregion)) setLocality(place.district || place.subregion || '');
+      }
+    } catch (error: any) {
+      Alert.alert('Location not added', error?.message || 'Could not read your current location.');
+    } finally {
+      setLocationLoading(false);
+    }
+  };
+
   const submit = async () => {
-    if (!accessToken || !business || !title || !description || !originalPrice || !offerPrice) {
+    if (!accessToken || !business || !title || !description || !originalPrice || !offerPrice || !streetAddress.trim()) {
       return Alert.alert('Complete required fields', 'Title, description and prices are required.');
     }
 
     setLoading(true);
     try {
+      const businessCoordinates = business.location?.coordinates;
+      const selectedCoordinates = coordinates || (Array.isArray(businessCoordinates) && businessCoordinates.length >= 2
+        ? { latitude: businessCoordinates[1], longitude: businessCoordinates[0] }
+        : null);
+      if (!selectedCoordinates) throw new Error('Add a valid offer location before submitting.');
+      const cityName = typeof business.city === 'string' ? '' : business.city?.name || '';
+      const combinedAddress = [houseNo.trim(), streetAddress.trim(), locality.trim(), cityName].filter(Boolean).join(', ').slice(0, 300);
       const payload: Omit<OfferPayload, 'businessId'> = {
         title,
         description,
@@ -152,12 +197,13 @@ export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
         },
         startsAt: startsAt.toISOString(),
         expiresAt: expiresAt.toISOString(),
-        address: offerAddress || business.address,
+        address: combinedAddress || offerAddress || business.address,
         locality: locality || business.locality,
-        latitude: business.location.coordinates[1],
-        longitude: business.location.coordinates[0],
-        phone,
-        whatsapp,
+        addressDetails: { houseNo: houseNo.trim(), streetAddress: streetAddress.trim(), area: locality.trim(), city: cityName },
+        latitude: selectedCoordinates.latitude,
+        longitude: selectedCoordinates.longitude,
+        phone: phone ? toIndianPhone(phone) || phone : '',
+        whatsapp: whatsapp ? toIndianPhone(whatsapp) || whatsapp : '',
         terms,
       };
       if (existingOffer) {
@@ -191,16 +237,20 @@ export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
 
   const datePickerValue = activeDatePicker === 'expiry' ? expiresAt : startsAt;
   const datePickerMinimum = activeDatePicker === 'expiry' ? startsAt : new Date();
+  const revealFocusedInput = (target: number) => {
+    setTimeout(() => scrollRef.current?.scrollResponderScrollNativeHandleToKeyboard(target, 32, true), 120);
+  };
 
   return (
     <ScreenContainer>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={styles.top}>
         <Pressable onPress={navigation.goBack} style={styles.back}>
           <MaterialCommunityIcons name="arrow-left" size={24} />
         </Pressable>
         <Text style={styles.topTitle}>{isEditing ? 'Edit Offer' : 'Create Offer'}</Text>
       </View>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView ref={scrollRef} style={styles.flex} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}>
         <View style={styles.business}>
           <MaterialCommunityIcons name="storefront-outline" size={24} color={theme.colors.primary} />
           <View>
@@ -246,12 +296,14 @@ export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
           <Text style={styles.discountValue}>{discount}% OFF</Text>
         </View>
 
-        {route.params.initialDesign ? (
+        {params.initialDesign ? (
           <View style={styles.designReady}>
             <View style={styles.designReadyIcon}><MaterialCommunityIcons name="check-decagram" size={24} color={theme.colors.success} /></View>
             <View style={styles.flex}><Text style={styles.designReadyTitle}>Design ready</Text><Text style={styles.designReadyText}>Your card design, typography, colors and image are saved.</Text></View>
             <Pressable onPress={() => navigation.goBack()} style={styles.editDesign}><MaterialCommunityIcons name="pencil-outline" size={17} color={theme.colors.primary} /><Text style={styles.editDesignText}>Edit</Text></Pressable>
           </View>
+        ) : isEditing && existingOffer?.cardDesign?.canvas ? (
+          <View style={styles.existingDesign}><OfferCard offer={{ ...existingOffer, title, description, category, cardDesign }} variant="hero" onPress={() => undefined} /></View>
         ) : <OfferCardDesigner design={cardDesign} onChange={setCardDesign} title={title} description={description} price={offerPrice} category={category} templates={adminTemplates} mode={designMode} />}
 
         <Text style={styles.label}>Offer validity</Text>
@@ -285,12 +337,15 @@ export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
           />
         )}
 
-        <Input label="Offer location *" value={offerAddress} onChangeText={setOfferAddress} placeholder="Business or service location" />
-        <Input label="Locality" value={locality} onChangeText={setLocality} placeholder="Area / neighbourhood" />
+        <Input label="House No." value={houseNo} onChangeText={setHouseNo} placeholder="House / shop number" onFocus={(event) => revealFocusedInput(event.nativeEvent.target)} />
+        <Input label="Street Address *" value={streetAddress} onChangeText={setStreetAddress} placeholder="Street, landmark" multiline textAlignVertical="top" onFocus={(event) => revealFocusedInput(event.nativeEvent.target)} />
+        <Input label="Locality" value={locality} onChangeText={setLocality} placeholder="Area / neighbourhood" onFocus={(event) => revealFocusedInput(event.nativeEvent.target)} />
+        <Input label="City" value={typeof business?.city === 'string' ? '' : business?.city?.name || ''} editable={false} />
+        <Button label="Use Current Location" variant="outline" onPress={useCurrentLocation} loading={locationLoading} icon={<MaterialCommunityIcons name="crosshairs-gps" size={20} color={theme.colors.primary} />} />
 
-        <Input label="Phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-        <Input label="WhatsApp" value={whatsapp} onChangeText={setWhatsapp} keyboardType="phone-pad" />
-        <Input label={`Terms & Conditions${isFieldEditable('terms') ? '' : ' (locked by template)'}`} editable={isFieldEditable('terms')} value={terms} onChangeText={setTerms} multiline placeholder="Usage conditions, exclusions..." />
+        <Input label="Phone" value={phone} onChangeText={(value) => setPhone(sanitizeIndianPhoneInput(value).digits)} keyboardType="phone-pad" maxLength={10} onFocus={(event) => revealFocusedInput(event.nativeEvent.target)} />
+        <Input label="WhatsApp" value={whatsapp} onChangeText={(value) => setWhatsapp(sanitizeIndianPhoneInput(value).digits)} keyboardType="phone-pad" maxLength={10} onFocus={(event) => revealFocusedInput(event.nativeEvent.target)} />
+        <Input label={`Terms & Conditions${isFieldEditable('terms') ? '' : ' (locked by template)'}`} editable={isFieldEditable('terms')} value={terms} onChangeText={setTerms} multiline textAlignVertical="top" placeholder="Usage conditions, exclusions..." onFocus={(event) => revealFocusedInput(event.nativeEvent.target)} />
 
         <View style={styles.note}>
           <MaterialCommunityIcons name="shield-check-outline" size={22} color={theme.colors.secondary} />
@@ -298,11 +353,13 @@ export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
         </View>
         <Button label={isEditing ? 'Submit changes' : 'Submit offer'} onPress={submit} loading={loading} fullWidth />
       </ScrollView>
+      </KeyboardAvoidingView>
     </ScreenContainer>
   );
 };
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
   top: { height: 58, backgroundColor: theme.colors.surface, flexDirection: 'row', alignItems: 'center' },
   back: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center' },
   topTitle: { ...theme.typography.h3, color: theme.colors.text },
@@ -311,7 +368,6 @@ const styles = StyleSheet.create({
   businessLabel: { fontSize: 9, color: theme.colors.textMuted, fontWeight: '900', letterSpacing: 1 },
   businessName: { ...theme.typography.bodyBold, color: theme.colors.text, marginTop: 2 },
   two: { flexDirection: 'row', gap: 10 },
-  flex: { flex: 1 },
   discount: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: theme.colors.secondaryLight, borderRadius: 14, padding: 14, marginBottom: 18 },
   discountLabel: { ...theme.typography.caption, color: theme.colors.textSecondary },
   discountValue: { ...theme.typography.h3, color: theme.colors.success },
@@ -338,4 +394,5 @@ const styles = StyleSheet.create({
   copySummaryCategory: { ...theme.typography.tiny, color: theme.colors.primary, fontWeight: '800', marginTop: 8 },
   editDesign: { flexDirection: 'row', alignItems: 'center', gap: 4, padding: 7 },
   editDesignText: { ...theme.typography.caption, color: theme.colors.primary, fontWeight: '900' },
+  existingDesign: { marginBottom: 18 },
 });

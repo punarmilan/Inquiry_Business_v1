@@ -18,6 +18,7 @@ export interface Business {
   logoUrl?: string;
   coverImageUrl?: string;
   address: string;
+  addressDetails?: AddressDetails;
   locality?: string;
   location: { type: 'Point'; coordinates: [number, number] };
   city: City | string;
@@ -67,6 +68,7 @@ export interface Offer {
   startsAt: string;
   expiresAt: string;
   address: string;
+  addressDetails?: AddressDetails;
   locality?: string;
   location: { type: 'Point'; coordinates: [number, number] };
   phone?: string;
@@ -76,6 +78,13 @@ export interface Offer {
   moderationReason?: string;
   isFeatured: boolean;
   distanceKm?: number | null;
+}
+
+export interface AddressDetails {
+  houseNo?: string;
+  streetAddress?: string;
+  area?: string;
+  city?: string;
 }
 
 export type OfferTemplateField = {
@@ -233,6 +242,7 @@ export interface ServiceBooking {
   category: ServiceCategory;
   worker?: WorkerSummary | null;
   address: string;
+  addressDetails?: AddressDetails;
   locality?: string;
   scheduleType: 'now' | 'later';
   scheduledFor: string;

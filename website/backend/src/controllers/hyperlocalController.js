@@ -14,6 +14,7 @@ const TemplateAsset = require('../models/TemplateAsset');
 const TemplateSticker = require('../models/TemplateSticker');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
+const Report = require('../models/Report');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { getPagination, paginatedResponse } = require('../utils/pagination');
@@ -23,6 +24,10 @@ const {
   releaseProviderIfIdle,
   setManualAvailability,
 } = require('../services/providerAvailabilityService');
+const {
+  deleteTemplateAssetFromCloudinary,
+  uploadTemplateAssetToCloudinary,
+} = require('../services/cloudinaryTemplateAssetService');
 
 // No socket server on this service — this only persists the notification for the mobile
 // app to pick up on its next fetch, unlike mobile-backend's notifyUser which also pushes
@@ -108,13 +113,15 @@ const updateCity = asyncHandler(async (req, res) => {
   res.json({ success: true, city });
 });
 const deleteCity = asyncHandler(async (req, res) => {
-  const city = await City.findByIdAndUpdate(
-    req.params.id,
-    { $set: { isActive: false, offersEnabled: false, servicesEnabled: false } },
-    { new: true, runValidators: true }
-  );
+  const city = await City.findById(req.params.id);
   if (!city) throw new ApiError(404, 'City not found', 'CITY_NOT_FOUND');
-  await Worker.updateMany({ city: city._id }, { $set: { isActive: false, availability: 'offline' } });
+  const dependentCount = await Promise.all([
+    Business.countDocuments({ city: city._id }), Offer.countDocuments({ city: city._id }),
+    Worker.countDocuments({ city: city._id }), ServiceBooking.countDocuments({ city: city._id }),
+    ServiceCategory.countDocuments({ cityAvailability: city._id }),
+  ]).then((counts) => counts.reduce((sum, count) => sum + count, 0));
+  if (dependentCount) throw new ApiError(409, 'City has related records. Deactivate it instead of permanently deleting it.', 'CITY_HAS_DEPENDENCIES');
+  await city.deleteOne();
   res.json({ success: true, city });
 });
 
@@ -257,12 +264,14 @@ const updateServiceCategory = asyncHandler(async (req, res) => {
   res.json({ success: true, category });
 });
 const deleteServiceCategory = asyncHandler(async (req, res) => {
-  const category = await ServiceCategory.findByIdAndUpdate(
-    req.params.id,
-    { $set: { isActive: false } },
-    { new: true, runValidators: true }
-  );
+  const category = await ServiceCategory.findById(req.params.id);
   if (!category) throw new ApiError(404, 'Service category not found', 'SERVICE_CATEGORY_NOT_FOUND');
+  const dependentCount = await Promise.all([
+    Worker.countDocuments({ categories: category._id }), ServiceBooking.countDocuments({ category: category._id }),
+    ProviderApplication.countDocuments({ categories: category._id }),
+  ]).then((counts) => counts.reduce((sum, count) => sum + count, 0));
+  if (dependentCount) throw new ApiError(409, 'Category has related records. Deactivate it instead of permanently deleting it.', 'CATEGORY_HAS_DEPENDENCIES');
+  await category.deleteOne();
   res.json({ success: true, category });
 });
 
@@ -294,6 +303,21 @@ const moderateBusiness = asyncHandler(async (req, res) => {
   }
   res.json({ success: true, business });
 });
+const hardDeleteBusiness = asyncHandler(async (req, res) => {
+  const business = await Business.findById(req.params.id);
+  if (!business) throw new ApiError(404, 'Business not found', 'BUSINESS_NOT_FOUND');
+  const dependentCount = await Promise.all([
+    Offer.countDocuments({ business: business._id }),
+    Subscription.countDocuments({ business: business._id }),
+    Payment.countDocuments({ business: business._id }),
+  ]).then((counts) => counts.reduce((sum, count) => sum + count, 0));
+  if (dependentCount) {
+    throw new ApiError(409, 'Business has offers, subscriptions, or payments. Soft delete it to preserve those records.', 'BUSINESS_HAS_DEPENDENCIES');
+  }
+  await Report.deleteMany({ targetType: 'business', targetId: business._id });
+  await business.deleteOne();
+  res.json({ success: true, deletedId: req.params.id });
+});
 
 const listOffers = asyncHandler(async (req, res) => {
   const filter = {};
@@ -312,7 +336,7 @@ const moderateOffer = asyncHandler(async (req, res) => {
     if (!req.body.reason) throw new ApiError(422, 'Rejection reason is required', 'REJECTION_REASON_REQUIRED');
     offer.status = 'rejected'; offer.moderationReason = req.body.reason;
   }
-  if (req.body.action === 'suspend') { offer.status = 'suspended'; offer.moderationReason = req.body.reason || ''; }
+  if (req.body.action === 'suspend') { offer.status = 'suspended'; offer.isActive = false; offer.moderationReason = req.body.reason || ''; }
   if (req.body.action === 'restore') { offer.status = 'approved'; offer.isActive = true; offer.moderationReason = ''; }
   if (req.body.action === 'feature') {
     if (!req.body.featuredUntil || new Date(req.body.featuredUntil) <= new Date()) throw new ApiError(422, 'A future featuredUntil is required', 'FEATURE_DATE_REQUIRED');
@@ -327,6 +351,17 @@ const moderateOffer = asyncHandler(async (req, res) => {
     notifyUser({ userId: offer.owner, type: 'offer_rejected', title: 'Offer rejected', body: offer.moderationReason, data: { offerId: offer._id.toString() } });
   }
   res.json({ success: true, offer });
+});
+
+const hardDeleteOffer = asyncHandler(async (req, res) => {
+  const offer = await Offer.findById(req.params.id);
+  if (!offer) throw new ApiError(404, 'Offer not found', 'OFFER_NOT_FOUND');
+  await Promise.all([
+    User.collection.updateMany({ savedOffers: offer._id }, { $pull: { savedOffers: offer._id } }),
+    Report.deleteMany({ targetType: 'offer', targetId: offer._id }),
+  ]);
+  await offer.deleteOne();
+  res.json({ success: true, deletedId: req.params.id });
 });
 
 const listOfferTemplates = asyncHandler(async (_req, res) => {
@@ -391,16 +426,31 @@ const deleteTemplateSticker = asyncHandler(async (req, res) => {
   res.json({ success: true, sticker });
 });
 
-const uploadTemplateAsset = asyncHandler(async (req, res) => {
-  const { dataUrl, name } = req.body || {};
+const decodeTemplateAsset = (dataUrl) => {
   if (typeof dataUrl !== 'string') throw new ApiError(422, 'An image data URL is required', 'TEMPLATE_ASSET_DATA_REQUIRED');
   const match = dataUrl.match(/^data:(image\/(?:png|jpe?g|webp|gif));base64,([a-z0-9+/=\s]+)$/i);
   if (!match) throw new ApiError(422, 'Only PNG, JPEG, WEBP or GIF data URLs are supported', 'TEMPLATE_ASSET_FORMAT_INVALID');
   const data = Buffer.from(match[2].replace(/\s/g, ''), 'base64');
   if (!data.length || data.length > 8_000_000) throw new ApiError(422, 'Image must be smaller than 8 MB', 'TEMPLATE_ASSET_TOO_LARGE');
-  const asset = await TemplateAsset.create({ name: typeof name === 'string' ? name.slice(0, 180) : 'template-asset', mimeType: match[1].toLowerCase() === 'image/jpg' ? 'image/jpeg' : match[1].toLowerCase(), data, size: data.length, createdBy: req.admin._id });
-  const url = `${req.protocol}://${req.get('host')}/hyperlocal/template-assets/${asset._id}`;
-  res.status(201).json({ success: true, asset: { _id: asset._id, name: asset.name, mimeType: asset.mimeType, size: asset.size, url } });
+  const mimeType = match[1].toLowerCase() === 'image/jpg' ? 'image/jpeg' : match[1].toLowerCase();
+  const signatureValid = mimeType === 'image/png'
+    ? data.length >= 8 && data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+    : mimeType === 'image/jpeg'
+      ? data.length >= 3 && data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff
+      : mimeType === 'image/webp'
+        ? data.length >= 12 && data.toString('ascii', 0, 4) === 'RIFF' && data.toString('ascii', 8, 12) === 'WEBP'
+        : mimeType === 'image/gif'
+          ? data.length >= 6 && ['GIF87a', 'GIF89a'].includes(data.toString('ascii', 0, 6))
+          : false;
+  if (!signatureValid) throw new ApiError(422, 'Image content does not match its declared type', 'TEMPLATE_ASSET_CONTENT_INVALID');
+  return { data, mimeType };
+};
+
+const uploadTemplateAsset = asyncHandler(async (req, res) => {
+  const { dataUrl, name } = req.body || {};
+  const { data, mimeType } = decodeTemplateAsset(dataUrl);
+  const asset = await uploadTemplateAssetToCloudinary({ dataUrl, name, mimeType, size: data.length });
+  res.status(201).json({ success: true, asset });
 });
 
 const getTemplateAsset = asyncHandler(async (req, res) => {
@@ -408,7 +458,19 @@ const getTemplateAsset = asyncHandler(async (req, res) => {
   if (!asset) throw new ApiError(404, 'Template asset not found', 'TEMPLATE_ASSET_NOT_FOUND');
   res.set('Content-Type', asset.mimeType);
   res.set('Cache-Control', 'public, max-age=31536000, immutable');
+  res.set('Cross-Origin-Resource-Policy', 'cross-origin');
   res.send(asset.data);
+});
+
+const deleteTemplateAsset = asyncHandler(async (req, res) => {
+  if (await deleteTemplateAssetFromCloudinary(req.params.id)) {
+    res.json({ success: true, asset: { _id: req.params.id } });
+    return;
+  }
+  const asset = await TemplateAsset.findById(req.params.id).select('_id');
+  if (!asset) throw new ApiError(404, 'Template asset not found', 'TEMPLATE_ASSET_NOT_FOUND');
+  await asset.deleteOne();
+  res.json({ success: true, asset: { _id: asset._id } });
 });
 
 const listPlans = asyncHandler(async (_req, res) => res.json({ success: true, data: await Plan.find().sort({ sortOrder: 1, price: 1 }) }));
@@ -569,6 +631,8 @@ const refundPayment = asyncHandler(async (req, res) => {
 module.exports = {
   listCities, createCity, updateCity, deleteCity, listWorkers, listProviderApplications, approveProviderApplication, rejectProviderApplication, createWorker, updateWorker, deleteWorker,
   listServiceCategories, createServiceCategory, updateServiceCategory, deleteServiceCategory, listBusinesses, moderateBusiness,
-  listOffers, moderateOffer, listOfferTemplates, createOfferTemplate, updateOfferTemplate, deleteOfferTemplate, listTemplateStickers, createTemplateSticker, updateTemplateSticker, deleteTemplateSticker, uploadTemplateAsset, getTemplateAsset, listPlans, createPlan, updatePlan, deletePlan, listBookings, assignWorker, forwardBooking, updateBookingStatus,
+  listOffers, moderateOffer, listOfferTemplates, createOfferTemplate, updateOfferTemplate, deleteOfferTemplate, listTemplateStickers, createTemplateSticker, updateTemplateSticker, deleteTemplateSticker, uploadTemplateAsset, getTemplateAsset, deleteTemplateAsset, decodeTemplateAsset, listPlans, createPlan, updatePlan, deletePlan, listBookings, assignWorker, forwardBooking, updateBookingStatus,
   listPayments, verifyPayment, refundPayment,
 };
+module.exports.hardDeleteOffer = hardDeleteOffer;
+module.exports.hardDeleteBusiness = hardDeleteBusiness;

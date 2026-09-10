@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import * as ImagePicker from 'expo-image-picker';
@@ -17,6 +17,7 @@ const SUPPORTED_PROFILE_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 export const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
   const { currentUser, updateProfile } = useApp();
+  const scrollRef = useRef<ScrollView>(null);
   const tabBarHeight = useBottomTabBarHeight();
   const [name, setName] = useState(currentUser?.name || '');
   const [email, setEmail] = useState(currentUser?.email || '');
@@ -69,14 +70,18 @@ export const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
-  return <ScreenContainer><View style={styles.top}><Pressable onPress={navigation.goBack} style={styles.back}><MaterialCommunityIcons name="arrow-left" size={24} /></Pressable><Text style={styles.title}>Edit Profile</Text></View><ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + 24 }]} keyboardShouldPersistTaps="handled">
+  const revealFocusedInput = (target: number) => {
+    setTimeout(() => scrollRef.current?.scrollResponderScrollNativeHandleToKeyboard(target, 32, true), 120);
+  };
+
+  return <ScreenContainer><KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><View style={styles.top}><Pressable onPress={navigation.goBack} style={styles.back}><MaterialCommunityIcons name="arrow-left" size={24} /></Pressable><Text style={styles.title}>Edit Profile</Text></View><ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + 24 }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}>
     <Text style={styles.photoLabel}>Profile photo</Text>
     <Pressable onPress={pickProfilePhoto} style={styles.photoPicker} accessibilityRole="button" accessibilityLabel="Add profile photo">
       <Avatar uri={avatar || undefined} name={name || 'User'} size={104} />
       <View style={styles.photoEdit}><MaterialCommunityIcons name="camera-plus-outline" size={18} color={theme.colors.textInverse} /></View>
     </Pressable>
     <Text style={styles.photoHint}>Tap to add or change your profile picture.</Text>
-    <Input label="Name" value={name} onChangeText={setName} /><Input label="Phone" value={currentUser?.phone || ''} editable={false} /><Input label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" /><Input label="Address" value={address} onChangeText={setAddress} multiline /><Text style={styles.hint}>Saved city and area for discovery are managed from the location header.</Text><Button label="Save changes" onPress={save} loading={loading} fullWidth />
-  </ScrollView></ScreenContainer>;
+    <Input label="Name" value={name} onChangeText={setName} onFocus={(event) => revealFocusedInput(event.nativeEvent.target)} /><Input label="Phone" value={currentUser?.phone || ''} editable={false} /><Input label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" onFocus={(event) => revealFocusedInput(event.nativeEvent.target)} /><Input label="Address" value={address} onChangeText={setAddress} multiline textAlignVertical="top" onFocus={(event) => revealFocusedInput(event.nativeEvent.target)} /><Text style={styles.hint}>Saved city and area for discovery are managed from the location header.</Text><Button label="Save changes" onPress={save} loading={loading} fullWidth />
+  </ScrollView></KeyboardAvoidingView></ScreenContainer>;
 };
 const styles = StyleSheet.create({ top: { height: 58, backgroundColor: theme.colors.surface, flexDirection: 'row', alignItems: 'center' }, back: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center' }, title: { ...theme.typography.h3, color: theme.colors.text }, content: { padding: 20 }, photoLabel: { ...theme.typography.bodyBold, color: theme.colors.text, textAlign: 'center', marginBottom: 10 }, photoPicker: { alignSelf: 'center', position: 'relative', marginBottom: 8 }, photoEdit: { position: 'absolute', right: 0, bottom: 0, width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.primary, borderWidth: 3, borderColor: theme.colors.surface }, photoHint: { ...theme.typography.caption, color: theme.colors.textSecondary, textAlign: 'center', marginBottom: 22 }, hint: { ...theme.typography.caption, color: theme.colors.textSecondary, marginBottom: 18 } });

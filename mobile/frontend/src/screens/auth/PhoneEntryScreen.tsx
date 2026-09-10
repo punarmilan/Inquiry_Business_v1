@@ -1,7 +1,23 @@
-import React, { useRef, useState } from 'react';
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, Pressable, TextInput, ScrollView, ActivityIndicator } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Easing,
+  ImageBackground,
+  Keyboard,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  type KeyboardEvent,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { theme } from '../../theme';
 import { ScreenContainer } from '../../components/ScreenContainer';
@@ -15,6 +31,13 @@ import { ApiRequestError } from '../../services/api';
 type Props = NativeStackScreenProps<AuthStackParamList, 'PhoneEntry'>;
 type SocialIcon = 'google' | 'facebook' | 'apple';
 
+// Assumes this screen lives under src/screens/... and the asset is at mobile/frontend/assets/login.png.
+// If your real file is login.webp/login.jpg, change ONLY the extension on this line.
+const LOGIN_BACKGROUND = require('../../../assets/login.png');
+// Android keyboards can render a suggestion/password strip above the IME frame
+// reported to React Native. The extra clearance keeps the complete OAuth row visible.
+const KEYBOARD_CARD_GAP = Platform.OS === 'android' ? 40 : 12;
+
 const authErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof ApiRequestError && error.status === 429) {
     return error.message || 'Too many login attempts. Please wait a few minutes and try again.';
@@ -22,8 +45,32 @@ const authErrorMessage = (error: unknown, fallback: string) => {
   return error instanceof Error ? error.message : fallback;
 };
 
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
 export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
-  const { t, loginWithPassword, loginWithOAuth, requestOtp, remoteSettings } = useApp();
+  const {
+    t,
+    language,
+    setLanguage,
+    loginWithPassword,
+    loginWithOAuth,
+    requestOtp,
+    remoteSettings,
+  } = useApp();
+
+  const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  // Android's resize mode can temporarily reduce `height` while the IME is open.
+  // Keep the form's own dimensions stable so it moves as one panel instead of reflowing.
+  const layoutHeightRef = useRef(height);
+  if (height > layoutHeightRef.current) {
+    layoutHeightRef.current = height;
+  }
+  const styles = useMemo(
+    () => createStyles(width, layoutHeightRef.current, insets.top, insets.bottom),
+    [width, height, insets.top, insets.bottom]
+  );
+
   const [loginMode, setLoginMode] = useState<'phone' | 'email'>('phone');
   const [digits, setDigits] = useState('');
   const [password, setPassword] = useState('');
@@ -35,9 +82,54 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
   const [oauthLoading, setOauthLoading] = useState<'google' | 'facebook' | null>(null);
   const [oauthPrefill, setOauthPrefill] = useState<{ name: string; email: string } | null>(null);
   const [error, setError] = useState('');
+
   const inputRef = useRef<TextInput>(null);
   const passwordInputRef = useRef<TextInput>(null);
   const emailInputRef = useRef<TextInput>(null);
+  const cardRef = useRef<View>(null);
+  const keyboardTranslateY = useRef(new Animated.Value(0)).current;
+  const appliedKeyboardOffset = useRef(0);
+
+  useEffect(() => {
+    const animateCard = (offset: number, duration?: number) => {
+      appliedKeyboardOffset.current = offset;
+      Animated.timing(keyboardTranslateY, {
+        toValue: -offset,
+        duration: duration && duration > 0 ? duration : 250,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    };
+
+    const handleKeyboardShow = (event: KeyboardEvent) => {
+      // Measure after Android has applied any adjustResize inset. This avoids double-moving
+      // the panel, while still handling keyboards that overlay an edge-to-edge window.
+      requestAnimationFrame(() => {
+        cardRef.current?.measureInWindow((_x, y, _width, cardHeight) => {
+          const baseCardBottom = y + cardHeight + appliedKeyboardOffset.current;
+          const requiredOffset = Math.max(
+            0,
+            baseCardBottom - event.endCoordinates.screenY + KEYBOARD_CARD_GAP
+          );
+          animateCard(requiredOffset, event.duration);
+        });
+      });
+    };
+
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSubscription = Keyboard.addListener(showEvent, handleKeyboardShow);
+    const hideSubscription = Keyboard.addListener(hideEvent, (event) => {
+      animateCard(0, event.duration);
+    });
+
+    return () => {
+      keyboardTranslateY.stopAnimation();
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, [keyboardTranslateY]);
+
   const goBackFromLogin = () => {
     if (navigation.canGoBack()) {
       navigation.goBack();
@@ -46,22 +138,18 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
     navigation.navigate('Onboarding', { force: true });
   };
 
-  const content = remoteSettings['mobile.authFlow.content']?.phoneEntry;
-  const title =
-    loginMode === 'email' ? 'Login with Email' : content?.title || 'Login with Phone';
-  const subtitle = useOtpLogin
-    ? loginMode === 'email'
-      ? "We'll send you an OTP to verify your email"
-      : content?.subtitle || "We'll send you an OTP to verify your number"
-    : 'Enter your password to continue';
-  const otpLoginLabel = content?.sendOtpLabel || 'Send OTP';
+  const otpLoginLabel =
+    remoteSettings['mobile.authFlow.content']?.phoneEntry?.sendOtpLabel || 'Send OTP';
 
   const isValid = isValidIndianPhoneDigits(digits);
   const emailValue = email.trim();
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue);
   const passwordValue = password.trim();
   const identifierValid = loginMode === 'email' ? isEmailValid : isValid;
-  const canPrimaryLogin = useOtpLogin ? identifierValid : identifierValid && passwordValue.length >= 6;
+  const canPrimaryLogin = useOtpLogin
+    ? identifierValid
+    : identifierValid && passwordValue.length >= 6;
+
   const primaryLabel = useOtpLogin
     ? sending
       ? 'Sending...'
@@ -84,11 +172,14 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
 
   const handlePasswordLogin = async () => {
     if (useOtpLogin || !canPrimaryLogin || loggingIn || sending) return;
+
     setLoggingIn(true);
     setError('');
     setOauthPrefill(null);
+
     try {
-      const identifier = loginMode === 'email' ? { email: emailValue } : { phone: `+91${digits}` };
+      const identifier =
+        loginMode === 'email' ? { email: emailValue } : { phone: `+91${digits}` };
       await loginWithPassword(identifier, passwordValue);
     } catch (e) {
       const message = authErrorMessage(e, 'Could not log in. Try again.');
@@ -106,9 +197,11 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
 
   const handleSend = async () => {
     if (!isValid || sending || loggingIn) return;
+
     setSending(true);
     setError('');
     setOauthPrefill(null);
+
     try {
       const { demoOtp } = await requestOtp({ phone: `+91${digits}` });
       navigation.navigate('OtpVerification', { demoOtp });
@@ -126,9 +219,11 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
 
   const handleSendEmailOtp = async () => {
     if (!isEmailValid || sending || loggingIn) return;
+
     setSending(true);
     setError('');
     setOauthPrefill(null);
+
     try {
       const { demoOtp } = await requestOtp({ email: emailValue });
       navigation.navigate('OtpVerification', { demoOtp });
@@ -153,18 +248,22 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
       }
       return;
     }
+
     handlePasswordLogin();
   };
 
   const handleGoogleLogin = async () => {
     if (oauthLoading) return;
+
     setOauthLoading('google');
     setError('');
     setOauthPrefill(null);
+
     let googleProfile: { name: string; email: string } | null = null;
+
     try {
-      const { idToken, name, email } = await signInWithGoogle();
-      googleProfile = { name, email };
+      const { idToken, name, email: googleEmail } = await signInWithGoogle();
+      googleProfile = { name, email: googleEmail };
       await loginWithOAuth('google', idToken);
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Could not sign in with Google.';
@@ -179,116 +278,166 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
+  // Current source has no dedicated forgot-password route/handler.
+  // This safely reuses the already-existing OTP login flow instead of changing backend auth.
+  const handleForgotPassword = () => {
+    if (!useOtpLogin) {
+      setUseOtpLogin(true);
+      setError('');
+    }
+    Alert.alert('Forgot password?', 'OTP login has been enabled so you can continue securely.');
+  };
+
+  const handleLanguageToggle = () => {
+    setLanguage(language === 'en' ? 'hi' : 'en');
+  };
+
+  const goToProfileSetup = () => {
+    navigation.navigate(
+      'ProfileSetup',
+      oauthPrefill
+        ? { prefillName: oauthPrefill.name, prefillEmail: oauthPrefill.email }
+        : undefined
+    );
+  };
+
   return (
     <ScreenContainer backgroundColor={theme.colors.background}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      <ImageBackground
+        source={LOGIN_BACKGROUND}
+        resizeMode="cover"
+        style={baseStyles.flex}
+        imageStyle={styles.backgroundImage}
       >
-        <View style={styles.screen}>
-          <LinearGradient
-            colors={[theme.colors.primaryLight, '#F8FCFC', theme.colors.background]}
-            locations={[0, 0.45, 1]}
-            style={styles.glow}
-          />
+        <View style={styles.softOverlay} />
 
-          <View style={styles.header}>
+        <View style={styles.screen}>
+          {/* Top navigation */}
+          <View style={styles.topBar}>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={t('back')}
               onPress={goBackFromLogin}
-              style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+              style={({ pressed }) => [
+                styles.roundTopButton,
+                pressed && baseStyles.pressed,
+              ]}
             >
-              <MaterialCommunityIcons name="arrow-left" size={22} color={theme.colors.text} />
+              <MaterialCommunityIcons
+                name="arrow-left"
+                size={styles.metrics.topIcon}
+                color="#073B3E"
+              />
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Change language"
+              onPress={handleLanguageToggle}
+              style={({ pressed }) => [
+                styles.languagePill,
+                pressed && baseStyles.pressed,
+              ]}
+            >
+              <MaterialCommunityIcons
+                name="web"
+                size={styles.metrics.languageIcon}
+                color="#073B3E"
+              />
+              <Text style={styles.languageText}>{String(language || 'en').toUpperCase()}</Text>
+              <MaterialCommunityIcons
+                name="chevron-down"
+                size={styles.metrics.languageChevron}
+                color="#073B3E"
+              />
             </Pressable>
           </View>
 
-          <ScrollView
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+          <View style={styles.locationCard} pointerEvents="none">
+            <MaterialCommunityIcons
+              name="map-marker"
+              size={styles.metrics.locationIcon}
+              color="#07978F"
+            />
+            <Text style={styles.locationText}>
+              Same{`\n`}neighbourhood.{`\n`}More{`\n`}possibilities.
+            </Text>
+          </View>
+
+          {/* Error is kept outside the form so it never expands the no-scroll card. */}
+          {!!error && (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorText} numberOfLines={2}>
+                {error}
+              </Text>
+              {error.includes('not registered') && (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={goToProfileSetup}
+                  hitSlop={8}
+                >
+                  <Text style={styles.errorAction}>Register Now</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
+
+          {/* Glass login panel */}
+          <Animated.View
+            ref={cardRef}
+            style={[
+              styles.cardWrap,
+              { transform: [{ translateY: keyboardTranslateY }] },
+            ]}
           >
-            <View style={styles.content}>
-              <View style={styles.iconHaloOuter}>
-                <View style={styles.iconHaloInner}>
-                  <View style={styles.iconCircle}>
-                    <MaterialCommunityIcons name="handshake" size={32} color={theme.colors.primary} />
-                  </View>
-                </View>
-              </View>
-
-              <Text style={styles.welcomeTitle}>Welcome Back 👋</Text>
-              <Text style={styles.welcomeSubtitle}>Login to continue to your account</Text>
-
-              <View style={styles.tabRow}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: loginMode === 'phone' }}
+            <View style={styles.glassCard}>
+              {/* Phone / Email segmented control */}
+              <View style={styles.segmentOuter}>
+                <ModeTab
+                  active={loginMode === 'phone'}
+                  icon="phone"
+                  label="Phone"
                   onPress={() => selectLoginMode('phone')}
-                  style={[styles.tabButton, loginMode === 'phone' && styles.tabButtonActive]}
-                >
-                  <MaterialCommunityIcons
-                    name="phone"
-                    size={16}
-                    color={loginMode === 'phone' ? theme.colors.primary : theme.colors.textSecondary}
-                  />
-                  <Text style={[styles.tabText, loginMode === 'phone' && styles.tabTextActive]}>Phone</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: loginMode === 'email' }}
+                  styles={styles}
+                />
+                <ModeTab
+                  active={loginMode === 'email'}
+                  icon="email-outline"
+                  label="Email"
                   onPress={() => selectLoginMode('email')}
-                  style={[styles.tabButton, loginMode === 'email' && styles.tabButtonActive]}
-                >
-                  <MaterialCommunityIcons
-                    name="email-outline"
-                    size={16}
-                    color={loginMode === 'email' ? theme.colors.primary : theme.colors.textSecondary}
-                  />
-                  <Text style={[styles.tabText, loginMode === 'email' && styles.tabTextActive]}>Email</Text>
-                </Pressable>
+                  styles={styles}
+                />
               </View>
 
-              <View style={styles.modeInfoRow}>
-                <View style={styles.modeInfoIcon}>
-                  <MaterialCommunityIcons
-                    name={!useOtpLogin ? 'lock-outline' : loginMode === 'email' ? 'email-outline' : 'cellphone-message'}
-                    size={22}
-                    color={theme.colors.primary}
-                  />
-                </View>
-                <View style={styles.modeInfoText}>
-                  <Text style={styles.modeInfoTitle}>{title}</Text>
-                  <Text style={styles.modeInfoSubtitle}>{subtitle}</Text>
-                </View>
-              </View>
-
-              {loginMode === 'phone' && (
+              {/* Phone / email input */}
+              {loginMode === 'phone' ? (
                 <Pressable
-                  style={styles.inputRow}
+                  style={styles.inputShell}
                   accessibilityRole="button"
                   accessibilityLabel={t('phoneNumber')}
                   onPress={() => inputRef.current?.focus()}
                 >
                   <View style={styles.countryCode}>
                     <View style={styles.flag}>
-                      <View style={[styles.flagStripe, styles.flagSaffron]} />
-                      <View style={[styles.flagStripe, styles.flagWhite]} />
-                      <View style={[styles.flagStripe, styles.flagGreen]} />
+                      <View style={[styles.flagStripe, baseStyles.flagSaffron]} />
+                      <View style={[styles.flagStripe, baseStyles.flagWhite]} />
+                      <View style={[styles.flagStripe, baseStyles.flagGreen]} />
                     </View>
                     <Text style={styles.countryCodeText}>+91</Text>
                   </View>
+
                   <TextInput
                     ref={inputRef}
                     value={digits}
-                    onChangeText={(text) => setDigits(sanitizeIndianPhoneInput(text).digits)}
+                    onChangeText={(text) =>
+                      setDigits(sanitizeIndianPhoneInput(text).digits)
+                    }
                     placeholder="Enter your phone number"
-                    placeholderTextColor="#B8B2AA"
+                    placeholderTextColor="#8E99AA"
                     keyboardType="phone-pad"
                     textContentType="telephoneNumber"
                     autoComplete="tel"
                     maxLength={10}
-                    autoFocus
                     returnKeyType={useOtpLogin ? 'go' : 'next'}
                     onSubmitEditing={() => {
                       if (useOtpLogin) {
@@ -297,25 +446,27 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
                       }
                       passwordInputRef.current?.focus();
                     }}
-                    style={styles.numberInput}
+                    style={styles.phoneInput}
                   />
                 </Pressable>
-              )}
-
-              {loginMode === 'email' && (
-                <View style={styles.inputRow}>
-                  <MaterialCommunityIcons name="email-outline" size={20} color={theme.colors.textMuted} style={styles.passwordIcon} />
+              ) : (
+                <View style={styles.inputShell}>
+                  <MaterialCommunityIcons
+                    name="email-outline"
+                    size={styles.metrics.inputIcon}
+                    color="#768399"
+                    style={styles.inputLeftIcon}
+                  />
                   <TextInput
                     ref={emailInputRef}
                     value={email}
                     onChangeText={setEmail}
                     placeholder="Enter your email address"
-                    placeholderTextColor="#B8B2AA"
+                    placeholderTextColor="#8E99AA"
                     keyboardType="email-address"
                     textContentType="emailAddress"
                     autoComplete="email"
                     autoCapitalize="none"
-                    autoFocus
                     returnKeyType={useOtpLogin ? 'go' : 'next'}
                     onSubmitEditing={() => {
                       if (useOtpLogin) {
@@ -324,150 +475,233 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
                       }
                       passwordInputRef.current?.focus();
                     }}
-                    style={styles.passwordInput}
+                    style={styles.textInput}
                   />
                 </View>
               )}
 
+              {/* Password */}
               {!useOtpLogin && (
-                <View style={[styles.inputRow, styles.passwordRow]}>
-                  <MaterialCommunityIcons name="lock-outline" size={20} color={theme.colors.textMuted} style={styles.passwordIcon} />
+                <View style={styles.inputShell}>
+                  <MaterialCommunityIcons
+                    name="lock-outline"
+                    size={styles.metrics.inputIcon}
+                    color="#768399"
+                    style={styles.inputLeftIcon}
+                  />
                   <TextInput
                     ref={passwordInputRef}
                     value={password}
                     onChangeText={setPassword}
-                    placeholder="Password"
-                    placeholderTextColor="#B8B2AA"
+                    placeholder="Enter your password"
+                    placeholderTextColor="#8E99AA"
                     secureTextEntry={!showPassword}
                     textContentType="password"
                     autoComplete="password"
                     autoCapitalize="none"
                     returnKeyType="go"
                     onSubmitEditing={handlePasswordLogin}
-                    style={styles.passwordInput}
+                    style={styles.textInput}
                   />
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
                     onPress={() => setShowPassword((prev) => !prev)}
                     hitSlop={8}
-                    style={({ pressed }) => [styles.eyeToggle, pressed && styles.pressed]}
+                    style={({ pressed }) => [
+                      styles.eyeButton,
+                      pressed && baseStyles.pressed,
+                    ]}
                   >
                     <MaterialCommunityIcons
                       name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                      size={20}
-                      color={theme.colors.textMuted}
+                      size={styles.metrics.eyeIcon}
+                      color="#768399"
                     />
                   </Pressable>
                 </View>
               )}
 
-              <Pressable
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: useOtpLogin }}
-                accessibilityLabel="Login with OTP instead"
-                onPress={toggleOtpLogin}
-                hitSlop={8}
-                style={({ pressed }) => [styles.switchLinkRow, pressed && styles.pressed]}
-              >
-                <View style={[styles.switchCheckbox, useOtpLogin && styles.switchCheckboxChecked]}>
-                  {useOtpLogin && <MaterialCommunityIcons name="check" size={13} color={theme.colors.textInverse} />}
-                </View>
-                <Text style={styles.switchLinkText}>Login with OTP instead</Text>
-              </Pressable>
+              {/* OTP + forgot */}
+              <View style={styles.optionRow}>
+                <Pressable
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: useOtpLogin }}
+                  accessibilityLabel="Login with OTP instead"
+                  onPress={toggleOtpLogin}
+                  hitSlop={8}
+                  style={({ pressed }) => [
+                    styles.otpToggle,
+                    pressed && baseStyles.pressed,
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.checkbox,
+                      useOtpLogin && styles.checkboxChecked,
+                    ]}
+                  >
+                    {useOtpLogin && (
+                      <MaterialCommunityIcons
+                        name="check"
+                        size={styles.metrics.checkIcon}
+                        color="#FFFFFF"
+                      />
+                    )}
+                  </View>
+                  <Text style={styles.optionText}>Login with OTP instead</Text>
+                </Pressable>
 
-              {!!error && <Text style={styles.errorText}>{error}</Text>}
-              {error.includes('not registered') ? (
                 <Pressable
                   accessibilityRole="button"
-                  onPress={() =>
-                    navigation.navigate(
-                      'ProfileSetup',
-                      oauthPrefill ? { prefillName: oauthPrefill.name, prefillEmail: oauthPrefill.email } : undefined
-                    )
-                  }
-                  style={styles.registerPromptBtn}
+                  onPress={handleForgotPassword}
+                  hitSlop={8}
+                  style={({ pressed }) => pressed && baseStyles.pressed}
                 >
-                  <Text style={styles.registerPromptText}>Register Now</Text>
+                  <Text style={styles.forgotText}>Forgot password?</Text>
                 </Pressable>
-              ) : null}
+              </View>
 
+              {/* Primary button */}
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={loginMode === 'email' ? 'Send OTP to email' : useOtpLogin ? 'Login with OTP' : 'Login with password'}
+                accessibilityLabel={
+                  loginMode === 'email'
+                    ? useOtpLogin
+                      ? 'Send OTP to email'
+                      : 'Login with email and password'
+                    : useOtpLogin
+                      ? 'Login with OTP'
+                      : 'Login with password'
+                }
                 onPress={handlePrimaryLogin}
                 disabled={!canPrimaryLogin || sending || loggingIn}
                 style={({ pressed }) => [
-                  styles.otpButton,
-                  (!canPrimaryLogin || sending || loggingIn) && styles.disabled,
-                  pressed && canPrimaryLogin && !sending && !loggingIn && styles.pressed,
+                  styles.primaryButton,
+                  (!canPrimaryLogin || sending || loggingIn) && baseStyles.disabled,
+                  pressed && canPrimaryLogin && baseStyles.pressed,
                 ]}
               >
                 <LinearGradient
-                  colors={[theme.colors.primaryBright, theme.colors.primaryDark]}
+                  colors={['#0CB5AD', '#047E7B', '#006A68']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
-                  style={styles.otpGradient}
+                  style={styles.primaryGradient}
                 >
-                  <Text style={styles.otpButtonText}>{primaryLabel}</Text>
+                  <View style={styles.primaryCenter}>
+                    {(loggingIn || sending) && (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    )}
+                    <Text style={styles.primaryText}>{primaryLabel}</Text>
+                  </View>
+                  <MaterialCommunityIcons
+                    name="arrow-right"
+                    size={styles.metrics.primaryArrow}
+                    color="#FFFFFF"
+                  />
                 </LinearGradient>
               </Pressable>
 
+              {/* Register */}
               <View style={styles.registerRow}>
-                <Text style={styles.footerText}>Don't have an account? </Text>
+                <Text style={styles.registerMuted}>Don't have an account? </Text>
                 <Pressable
                   accessibilityRole="button"
-                  hitSlop={10}
-                  onPress={() =>
-                    navigation.navigate(
-                      'ProfileSetup',
-                      oauthPrefill ? { prefillName: oauthPrefill.name, prefillEmail: oauthPrefill.email } : undefined
-                    )
-                  }
+                  hitSlop={8}
+                  onPress={goToProfileSetup}
                 >
-                  <Text style={styles.footerLink}>Register</Text>
+                  <Text style={styles.registerLink}>Register</Text>
                 </Pressable>
               </View>
+
+              {/* Provider registration */}
               <Pressable
                 accessibilityRole="button"
                 onPress={() => navigation.navigate('ProviderRegistration')}
-                style={styles.providerRegisterLink}
+                style={({ pressed }) => [
+                  styles.providerButton,
+                  pressed && baseStyles.pressed,
+                ]}
               >
-                <MaterialCommunityIcons name="briefcase-plus-outline" size={16} color={theme.colors.primary} />
-                <Text style={styles.providerRegisterText}>Register as a service provider</Text>
+                <MaterialCommunityIcons
+                  name="account-plus-outline"
+                  size={styles.metrics.providerIcon}
+                  color="#078D89"
+                />
+                <Text style={styles.providerText}>Register as a service provider</Text>
               </Pressable>
 
+              {/* Divider */}
               <View style={styles.dividerRow}>
                 <View style={styles.dividerLine} />
                 <Text style={styles.dividerText}>Or continue with</Text>
                 <View style={styles.dividerLine} />
               </View>
 
+              {/* Social auth */}
               <View style={styles.socialRow}>
-                <SocialButton icon="google" onPress={handleGoogleLogin} loading={oauthLoading === 'google'} disabled={!!oauthLoading} />
-                <SocialButton icon="facebook" disabled />
-                <SocialButton icon="apple" disabled />
-              </View>
-
-              <View style={styles.secureRow}>
-                <MaterialCommunityIcons name="shield-check-outline" size={14} color={theme.colors.textMuted} />
-                <Text style={styles.secureText}>Your data is secure with us</Text>
+                <SocialButton
+                  icon="google"
+                  onPress={handleGoogleLogin}
+                  loading={oauthLoading === 'google'}
+                  disabled={!!oauthLoading}
+                  size={styles.metrics.socialSize}
+                />
+                <SocialButton icon="facebook" disabled size={styles.metrics.socialSize} />
+                <SocialButton icon="apple" disabled size={styles.metrics.socialSize} />
               </View>
             </View>
-          </ScrollView>
+          </Animated.View>
         </View>
-      </KeyboardAvoidingView>
+      </ImageBackground>
     </ScreenContainer>
   );
 };
+
+type ModeTabProps = {
+  active: boolean;
+  icon: 'phone' | 'email-outline';
+  label: string;
+  onPress: () => void;
+  styles: ReturnType<typeof createStyles>;
+};
+
+const ModeTab: React.FC<ModeTabProps> = ({ active, icon, label, onPress, styles }) => (
+  <Pressable
+    accessibilityRole="button"
+    accessibilityState={{ selected: active }}
+    onPress={onPress}
+    style={({ pressed }) => [
+      styles.segmentButton,
+      pressed && baseStyles.pressed,
+    ]}
+  >
+    {active && (
+      <LinearGradient
+        colors={['#0CB5AD', '#078B87']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={StyleSheet.absoluteFill}
+      />
+    )}
+    <MaterialCommunityIcons
+      name={icon}
+      size={styles.metrics.segmentIcon}
+      color={active ? '#FFFFFF' : '#667085'}
+    />
+    <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{label}</Text>
+  </Pressable>
+);
 
 const SocialButton: React.FC<{
   icon: SocialIcon;
   onPress?: () => void;
   loading?: boolean;
   disabled?: boolean;
-}> = ({ icon, onPress, loading, disabled }) => {
-  const iconColor = icon === 'google' ? '#4285F4' : icon === 'facebook' ? '#1877F2' : '#111111';
+  size: number;
+}> = ({ icon, onPress, loading, disabled, size }) => {
+  const iconColor =
+    icon === 'google' ? '#4285F4' : icon === 'facebook' ? '#1877F2' : '#111111';
 
   return (
     <Pressable
@@ -476,9 +710,14 @@ const SocialButton: React.FC<{
       onPress={onPress}
       disabled={disabled || !onPress}
       style={({ pressed }) => [
-        styles.socialButton,
-        (disabled || !onPress) && styles.disabled,
-        pressed && onPress && !disabled && styles.pressed,
+        baseStyles.socialButton,
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+        },
+        (disabled || !onPress) && baseStyles.socialDisabled,
+        pressed && onPress && !disabled && baseStyles.pressed,
       ]}
     >
       {loading ? (
@@ -486,187 +725,477 @@ const SocialButton: React.FC<{
       ) : icon === 'google' ? (
         <GoogleMark />
       ) : (
-        <MaterialCommunityIcons name={icon} size={22} color={iconColor} />
+        <MaterialCommunityIcons name={icon} size={Math.round(size * 0.42)} color={iconColor} />
       )}
     </Pressable>
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (width: number, height: number, topInset: number, bottomInset: number) => {
+  const usableHeight = Math.max(520, height - topInset - bottomInset);
+  const scale = clamp(usableHeight / 844, 0.72, 1.04);
+  const compact = usableHeight < 720;
+  const veryCompact = usableHeight < 640;
+
+  const hPad = clamp(width * 0.055, 18, 30);
+  const cardSide = clamp(width * 0.028, 12, 24);
+  const cardRatio = veryCompact ? 0.59 : compact ? 0.55 : 0.51;
+  const cardHeight = clamp(usableHeight * cardRatio, 378, 470);
+  const cardBottom = Math.max(34, bottomInset * 0.18);
+
+  const inputHeight = Math.round(clamp(56 * scale, 44, 58));
+  const segmentHeight = Math.round(clamp(50 * scale, 40, 52));
+  const primaryHeight = Math.round(clamp(56 * scale, 46, 58));
+  const providerHeight = Math.round(clamp(46 * scale, 38, 48));
+  const socialSize = Math.round(clamp(54 * scale, 42, 56));
+
+
+  // ScreenContainer already consumes the top safe-area inset.
+  const topNav = Math.max(6, Math.round(6 * scale));
+  const heroTop = topNav + Math.round(clamp(58 * scale, 44, 62));
+  const locationTop = heroTop + Math.round(clamp(74 * scale, 58, 82));
+
+  const metrics = {
+    topIcon: Math.round(clamp(30 * scale, 23, 31)),
+    languageIcon: Math.round(clamp(26 * scale, 20, 27)),
+    languageChevron: Math.round(clamp(24 * scale, 18, 25)),
+    locationIcon: Math.round(clamp(38 * scale, 28, 40)),
+    inputIcon: Math.round(clamp(24 * scale, 19, 25)),
+    eyeIcon: Math.round(clamp(27 * scale, 21, 28)),
+    checkIcon: Math.round(clamp(15 * scale, 11, 16)),
+    primaryArrow: Math.round(clamp(28 * scale, 22, 29)),
+    providerIcon: Math.round(clamp(23 * scale, 18, 24)),
+    segmentIcon: Math.round(clamp(21 * scale, 17, 22)),
+    socialSize,
+  };
+
+  const sheet = StyleSheet.create({
+    backgroundImage: {
+      width: '100%',
+      height: '145%',
+      top: -Math.round(usableHeight * 0.45),
+    },
+    softOverlay: {
+      ...StyleSheet.absoluteFill,
+      backgroundColor: 'rgba(228, 251, 255, 0.06)',
+    },
+    screen: {
+      flex: 1,
+      overflow: 'hidden',
+    },
+    topBar: {
+      position: 'absolute',
+      top: topNav,
+      left: hPad,
+      right: hPad,
+      zIndex: 30,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    roundTopButton: {
+      width: Math.round(clamp(58 * scale, 46, 60)),
+      height: Math.round(clamp(58 * scale, 46, 60)),
+      borderRadius: Math.round(clamp(29 * scale, 23, 30)),
+      backgroundColor: 'rgba(255,255,255,0.82)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.82)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#0A4B50',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.08,
+      shadowRadius: 10,
+      elevation: 2,
+    },
+    languagePill: {
+      minWidth: Math.round(clamp(122 * scale, 104, 130)),
+      height: Math.round(clamp(58 * scale, 46, 60)),
+      borderRadius: Math.round(clamp(29 * scale, 23, 30)),
+      paddingHorizontal: Math.round(clamp(16 * scale, 12, 18)),
+      backgroundColor: 'rgba(255,255,255,0.84)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.84)',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Math.round(clamp(10 * scale, 7, 10)),
+      shadowColor: '#0A4B50',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.07,
+      shadowRadius: 10,
+      elevation: 2,
+    },
+    languageText: {
+      color: '#073B3E',
+      fontSize: Math.round(clamp(18 * scale, 15, 19)),
+      fontWeight: '800',
+      letterSpacing: 0.2,
+    },
+    heroCopy: {
+      position: 'absolute',
+      top: heroTop,
+      left: hPad + Math.round(8 * scale),
+      right: hPad,
+      zIndex: 15,
+    },
+    welcomeTitle: {
+      color: '#043C3E',
+      fontSize: Math.round(clamp(37 * scale, 28, 39)),
+      fontWeight: '900',
+      lineHeight: Math.round(clamp(43 * scale, 34, 45)),
+      letterSpacing: -0.8,
+    },
+    welcomeSubtitle: {
+      marginTop: Math.round(clamp(10 * scale, 6, 11)),
+      color: '#315D68',
+      fontSize: Math.round(clamp(17 * scale, 13, 18)),
+      fontWeight: '500',
+      lineHeight: Math.round(clamp(24 * scale, 18, 25)),
+    },
+    locationCard: {
+      position: 'absolute',
+      top: locationTop,
+      left: hPad + Math.round(8 * scale),
+      zIndex: 14,
+      width: Math.round(clamp(width * 0.39, 190, 282)),
+      minHeight: Math.round(clamp(90 * scale, 64, 96)),
+      paddingHorizontal: Math.round(clamp(12 * scale, 9, 14)),
+      paddingVertical: Math.round(clamp(10 * scale, 7, 12)),
+      borderRadius: Math.round(clamp(24 * scale, 18, 26)),
+      backgroundColor: 'rgba(255,255,255,0.74)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.82)',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Math.round(clamp(8 * scale, 5, 9)),
+      shadowColor: '#0A4B50',
+      shadowOffset: { width: 0, height: 5 },
+      shadowOpacity: 0.08,
+      shadowRadius: 14,
+      elevation: 2,
+    },
+    locationText: {
+      flex: 1,
+      color: '#123D45',
+      fontSize: Math.round(clamp(14 * scale, 11, 15)),
+      lineHeight: Math.round(clamp(18 * scale, 14, 19)),
+      fontWeight: '600',
+    },
+    errorBanner: {
+      position: 'absolute',
+      left: cardSide + Math.round(12 * scale),
+      right: cardSide + Math.round(12 * scale),
+      bottom: cardHeight + cardBottom + Math.round(7 * scale),
+      zIndex: 40,
+      minHeight: Math.round(clamp(38 * scale, 30, 42)),
+      borderRadius: Math.round(clamp(13 * scale, 10, 14)),
+      backgroundColor: 'rgba(255,245,245,0.94)',
+      borderWidth: 1,
+      borderColor: 'rgba(220,70,70,0.28)',
+      paddingHorizontal: Math.round(clamp(12 * scale, 9, 13)),
+      paddingVertical: Math.round(clamp(7 * scale, 5, 8)),
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    errorText: {
+      flex: 1,
+      color: theme.colors.danger,
+      fontSize: Math.round(clamp(11.5 * scale, 10, 12)),
+      lineHeight: Math.round(clamp(15 * scale, 13, 16)),
+      fontWeight: '600',
+    },
+    errorAction: {
+      color: '#087F7B',
+      fontSize: Math.round(clamp(11.5 * scale, 10, 12)),
+      fontWeight: '800',
+    },
+    cardWrap: {
+      position: 'absolute',
+      left: cardSide,
+      right: cardSide,
+      bottom: cardBottom,
+      height: cardHeight,
+      zIndex: 20,
+    },
+    glassCard: {
+      flex: 1,
+      borderRadius: Math.round(clamp(34 * scale, 26, 38)),
+      backgroundColor: 'rgba(247,255,255,0.80)',
+      borderWidth: 1.2,
+      borderColor: 'rgba(255,255,255,0.90)',
+      paddingHorizontal: Math.round(clamp(18 * scale, 13, 20)),
+      paddingTop: Math.round(clamp(17 * scale, 12, 19)),
+      paddingBottom: Math.round(clamp(12 * scale, 8, 14)),
+      shadowColor: '#0C5D61',
+      shadowOffset: { width: 0, height: -5 },
+      shadowOpacity: 0.11,
+      shadowRadius: 22,
+      elevation: 7,
+      justifyContent: 'space-between',
+      overflow: 'hidden',
+    },
+    glassCardContent: {
+      flexGrow: 1,
+      justifyContent: 'space-between',
+      paddingBottom: Math.round(clamp(64 * scale, 48, 68)),
+    },
+    segmentOuter: {
+      height: segmentHeight,
+      borderRadius: segmentHeight / 2,
+      padding: Math.max(3, Math.round(4 * scale)),
+      backgroundColor: 'rgba(255,255,255,0.72)',
+      flexDirection: 'row',
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.85)',
+    },
+    segmentButton: {
+      flex: 1,
+      borderRadius: segmentHeight / 2,
+      overflow: 'hidden',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Math.round(clamp(8 * scale, 5, 8)),
+    },
+    segmentText: {
+      color: '#667085',
+      fontSize: Math.round(clamp(15 * scale, 12, 16)),
+      fontWeight: '800',
+    },
+    segmentTextActive: {
+      color: '#FFFFFF',
+    },
+    inputShell: {
+      width: '100%',
+      height: inputHeight,
+      borderRadius: Math.round(clamp(18 * scale, 14, 20)),
+      backgroundColor: 'rgba(255,255,255,0.86)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.94)',
+      flexDirection: 'row',
+      alignItems: 'center',
+      overflow: 'hidden',
+      shadowColor: '#0A4B50',
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.04,
+      shadowRadius: 8,
+      elevation: 1,
+    },
+    countryCode: {
+      width: Math.round(clamp(98 * scale, 76, 102)),
+      height: '100%',
+      borderRightWidth: 1,
+      borderRightColor: 'rgba(116,132,151,0.34)',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Math.round(clamp(8 * scale, 5, 8)),
+    },
+    flag: {
+      width: Math.round(clamp(26 * scale, 20, 27)),
+      height: Math.round(clamp(18 * scale, 14, 19)),
+      borderRadius: 2,
+      borderWidth: 1,
+      borderColor: 'rgba(0,0,0,0.08)',
+      overflow: 'hidden',
+    },
+    flagStripe: {
+      flex: 1,
+    },
+    countryCodeText: {
+      color: '#173B47',
+      fontSize: Math.round(clamp(17 * scale, 14, 18)),
+      fontWeight: '900',
+    },
+    phoneInput: {
+      flex: 1,
+      height: inputHeight,
+      paddingHorizontal: Math.round(clamp(15 * scale, 11, 16)),
+      paddingVertical: 0,
+      color: '#173B47',
+      fontSize: Math.round(clamp(15 * scale, 12, 16)),
+      fontWeight: '500',
+    },
+    inputLeftIcon: {
+      marginLeft: Math.round(clamp(16 * scale, 12, 17)),
+      marginRight: Math.round(clamp(4 * scale, 2, 5)),
+    },
+    textInput: {
+      flex: 1,
+      height: inputHeight,
+      paddingHorizontal: Math.round(clamp(12 * scale, 9, 13)),
+      paddingVertical: 0,
+      color: '#173B47',
+      fontSize: Math.round(clamp(15 * scale, 12, 16)),
+      fontWeight: '500',
+    },
+    eyeButton: {
+      width: Math.round(clamp(48 * scale, 38, 50)),
+      height: '100%',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    optionRow: {
+      width: '100%',
+      minHeight: Math.round(clamp(30 * scale, 24, 32)),
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: Math.round(clamp(8 * scale, 5, 8)),
+    },
+    otpToggle: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Math.round(clamp(8 * scale, 5, 8)),
+      flexShrink: 1,
+    },
+    checkbox: {
+      width: Math.round(clamp(22 * scale, 18, 23)),
+      height: Math.round(clamp(22 * scale, 18, 23)),
+      borderRadius: Math.round(clamp(6 * scale, 4, 6)),
+      borderWidth: 1.5,
+      borderColor: '#95A0B2',
+      backgroundColor: 'rgba(255,255,255,0.75)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    checkboxChecked: {
+      backgroundColor: '#078D89',
+      borderColor: '#078D89',
+    },
+    optionText: {
+      color: '#078D89',
+      fontSize: Math.round(clamp(12.5 * scale, 10, 13)),
+      fontWeight: '700',
+      flexShrink: 1,
+    },
+    forgotText: {
+      color: '#078D89',
+      fontSize: Math.round(clamp(12.5 * scale, 10, 13)),
+      fontWeight: '800',
+    },
+    primaryButton: {
+      width: '100%',
+      height: primaryHeight,
+      borderRadius: primaryHeight / 2,
+      overflow: 'hidden',
+      shadowColor: '#087F7B',
+      shadowOffset: { width: 0, height: 5 },
+      shadowOpacity: 0.20,
+      shadowRadius: 10,
+      elevation: 3,
+    },
+    primaryGradient: {
+      flex: 1,
+      paddingHorizontal: Math.round(clamp(22 * scale, 16, 24)),
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    primaryCenter: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Math.round(clamp(8 * scale, 5, 8)),
+      marginLeft: Math.round(clamp(20 * scale, 14, 22)),
+    },
+    primaryText: {
+      color: '#FFFFFF',
+      fontSize: Math.round(clamp(17 * scale, 14, 18)),
+      fontWeight: '900',
+    },
+    registerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: Math.round(clamp(23 * scale, 18, 24)),
+    },
+    registerMuted: {
+      color: '#667085',
+      fontSize: Math.round(clamp(13 * scale, 11, 14)),
+      fontWeight: '500',
+    },
+    registerLink: {
+      color: '#078D89',
+      fontSize: Math.round(clamp(13 * scale, 11, 14)),
+      fontWeight: '900',
+    },
+    providerButton: {
+      width: '100%',
+      height: providerHeight,
+      borderRadius: providerHeight / 2,
+      borderWidth: 1.2,
+      borderColor: 'rgba(8,159,155,0.68)',
+      backgroundColor: 'rgba(236,255,255,0.46)',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Math.round(clamp(8 * scale, 5, 8)),
+    },
+    providerText: {
+      color: '#078D89',
+      fontSize: Math.round(clamp(13.5 * scale, 11, 14)),
+      fontWeight: '900',
+    },
+    dividerRow: {
+      width: '100%',
+      minHeight: Math.round(clamp(22 * scale, 18, 24)),
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Math.round(clamp(10 * scale, 7, 11)),
+    },
+    dividerLine: {
+      flex: 1,
+      height: 1,
+      backgroundColor: 'rgba(91,110,129,0.34)',
+    },
+    dividerText: {
+      color: '#667085',
+      fontSize: Math.round(clamp(12.5 * scale, 10, 13)),
+      fontWeight: '500',
+    },
+    socialRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Math.round(clamp(30 * scale, 20, 34)),
+      minHeight: socialSize,
+    },
+
+  });
+
+  return { ...sheet, metrics };
+};
+
+const baseStyles = StyleSheet.create({
   flex: {
     flex: 1,
   },
-  screen: {
-    flex: 1,
-    overflow: 'hidden',
+  pressed: {
+    opacity: 0.82,
+    transform: [{ scale: 0.985 }],
   },
-  glow: {
-    position: 'absolute',
-    top: -120,
-    left: -96,
-    right: -28,
-    height: 370,
-    borderBottomLeftRadius: 220,
-    borderBottomRightRadius: 190,
+  disabled: {
+    opacity: 0.52,
   },
-  header: {
-    minHeight: 58,
-    justifyContent: 'center',
-    paddingHorizontal: 28,
+  socialDisabled: {
+    opacity: 0.72,
   },
-  backButton: {
-    width: theme.MIN_TAP_TARGET,
-    height: theme.MIN_TAP_TARGET,
-    justifyContent: 'center',
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingBottom: theme.spacing.xl,
-  },
-  content: {
-    alignItems: 'center',
-    paddingTop: 18,
-    paddingHorizontal: 28,
-  },
-  iconHaloOuter: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
-    backgroundColor: 'rgba(255, 255, 255, 0.42)',
+  socialButton: {
+    backgroundColor: 'rgba(255,255,255,0.92)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: theme.spacing.md,
-  },
-  iconHaloInner: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: theme.colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: theme.colors.shadow,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.28,
-    shadowRadius: 18,
-    elevation: 3,
-  },
-  welcomeTitle: {
-    ...theme.typography.h2,
-    color: theme.colors.text,
-    textAlign: 'center',
-  },
-  welcomeSubtitle: {
-    ...theme.typography.caption,
-    color: theme.colors.textSecondary,
-    textAlign: 'center',
-    marginTop: 4,
-  },
-  tabRow: {
-    flexDirection: 'row',
-    width: '100%',
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.pill,
-    padding: 4,
-    marginTop: theme.spacing.xl,
-    shadowColor: theme.colors.shadow,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.1,
-    shadowRadius: 14,
-    elevation: 2,
-  },
-  tabButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    minHeight: 44,
-    borderRadius: theme.radius.pill,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-  },
-  tabButtonActive: {
-    borderColor: theme.colors.primary,
-    backgroundColor: theme.colors.primaryLight,
-  },
-  tabText: {
-    ...theme.typography.caption,
-    color: theme.colors.textSecondary,
-    fontWeight: '700',
-  },
-  tabTextActive: {
-    color: theme.colors.primary,
-  },
-  modeInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    marginTop: theme.spacing.lg,
-    gap: theme.spacing.sm,
-  },
-  modeInfoIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: theme.colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modeInfoText: {
-    flex: 1,
-  },
-  modeInfoTitle: {
-    ...theme.typography.bodyBold,
-    color: theme.colors.text,
-  },
-  modeInfoSubtitle: {
-    ...theme.typography.caption,
-    color: theme.colors.textSecondary,
-    marginTop: 2,
-  },
-  inputRow: {
-    width: '100%',
-    minHeight: 56,
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.surface,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: theme.spacing.lg,
-    overflow: 'hidden',
-    shadowColor: theme.colors.shadow,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 20,
-    elevation: 2,
-  },
-  countryCode: {
-    width: 82,
-    height: '100%',
-    borderRightWidth: 1,
-    borderRightColor: '#F0EBE5',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-  },
-  flag: {
-    width: 19,
-    height: 14,
-    borderRadius: 2,
     borderWidth: 1,
-    borderColor: '#E1DDD8',
-    overflow: 'hidden',
-  },
-  flagStripe: {
-    flex: 1,
+    borderColor: 'rgba(255,255,255,0.95)',
+    shadowColor: '#0A4B50',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.10,
+    shadowRadius: 11,
+    elevation: 3,
   },
   flagSaffron: {
     backgroundColor: '#FF9933',
@@ -676,180 +1205,5 @@ const styles = StyleSheet.create({
   },
   flagGreen: {
     backgroundColor: '#138808',
-  },
-  countryCodeText: {
-    ...theme.typography.tiny,
-    color: theme.colors.text,
-    fontWeight: '800',
-  },
-  numberInput: {
-    flex: 1,
-    minHeight: 56,
-    paddingHorizontal: 14,
-    paddingVertical: 0,
-    ...theme.typography.tiny,
-    color: theme.colors.text,
-  },
-  passwordRow: {
-    marginTop: theme.spacing.md,
-  },
-  passwordIcon: {
-    marginLeft: theme.spacing.md,
-    marginRight: theme.spacing.xs,
-  },
-  passwordInput: {
-    flex: 1,
-    minHeight: 56,
-    paddingHorizontal: 14,
-    paddingVertical: 0,
-    ...theme.typography.tiny,
-    color: theme.colors.text,
-  },
-  eyeToggle: {
-    paddingHorizontal: theme.spacing.xs,
-    minHeight: 56,
-    justifyContent: 'center',
-  },
-  errorText: {
-    ...theme.typography.caption,
-    color: theme.colors.danger,
-    marginTop: theme.spacing.sm,
-    textAlign: 'center',
-  },
-  registerPromptBtn: {
-    minHeight: theme.MIN_TAP_TARGET,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.primary,
-    paddingHorizontal: theme.spacing.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: theme.spacing.md,
-  },
-  registerPromptText: {
-    ...theme.typography.bodyBold,
-    color: theme.colors.primary,
-  },
-  otpButton: {
-    width: '100%',
-    minHeight: 58,
-    borderRadius: theme.radius.lg,
-    marginTop: theme.spacing.xl,
-    overflow: 'hidden',
-    shadowColor: theme.colors.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 14,
-    elevation: 3,
-  },
-  otpGradient: {
-    flex: 1,
-    minHeight: 58,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  otpButtonText: {
-    ...theme.typography.button,
-    color: theme.colors.textInverse,
-    fontWeight: '800',
-  },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    marginTop: theme.spacing.xl,
-    gap: theme.spacing.sm,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: theme.colors.border,
-  },
-  dividerText: {
-    ...theme.typography.tiny,
-    color: theme.colors.textSecondary,
-  },
-  switchLinkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 6,
-    minHeight: theme.MIN_TAP_TARGET,
-    marginTop: theme.spacing.sm,
-  },
-  switchLinkText: {
-    ...theme.typography.caption,
-    color: theme.colors.primary,
-    fontWeight: '700',
-  },
-  switchCheckbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 5,
-    borderWidth: 1.5,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  switchCheckboxChecked: {
-    backgroundColor: theme.colors.primary,
-    borderColor: theme.colors.primary,
-  },
-  registerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: theme.spacing.xl,
-  },
-  footerText: {
-    ...theme.typography.tiny,
-    color: theme.colors.textSecondary,
-  },
-  footerLink: {
-    ...theme.typography.tiny,
-    color: theme.colors.primary,
-    fontWeight: '800',
-  },
-  providerRegisterLink: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 12,
-  },
-  providerRegisterText: {
-    ...theme.typography.caption, color: theme.colors.primary, fontWeight: '800',
-  },
-  socialRow: {
-    flexDirection: 'row',
-    gap: 24,
-    marginTop: theme.spacing.lg,
-  },
-  socialButton: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: theme.colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: theme.colors.shadow,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 2,
-  },
-  secureRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: theme.spacing.xl,
-  },
-  secureText: {
-    ...theme.typography.tiny,
-    color: theme.colors.textMuted,
-  },
-  disabled: {
-    opacity: 0.55,
-  },
-  pressed: {
-    opacity: 0.82,
-    transform: [{ scale: 0.98 }],
   },
 });
