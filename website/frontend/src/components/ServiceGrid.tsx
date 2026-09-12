@@ -16,7 +16,7 @@ function ServiceGrid({ navigate }: ServiceGridProps) {
           key={title}
           onClick={(event) => navigate(event, getServicePath(slug))}
         >
-          {image && <img src={image} alt={imageAlt || ''} />}
+          {image && <img src={image} alt={imageAlt || ''} loading="lazy" />}
           <div className="serviceCardBody">
             <span className="serviceIcon">
               <Icon size={18} aria-hidden="true" />

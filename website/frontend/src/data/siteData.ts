@@ -45,7 +45,7 @@ export const appImages = {
 
 export const stats: IconText[] = [
   { icon: MapPin, title: '10 KM', body: 'Strict Nearby Discovery' },
-  { icon: Construction, title: 'Trusted Services', body: 'Company Managed' },
+  { icon: Store, title: 'Trusted Services', body: 'Company Managed' },
   { icon: BadgeCheck, title: 'Approved Offers', body: 'Admin Moderated' },
   { icon: ShieldCheck, title: 'City Controlled', body: 'Available Where Ready' },
 ];

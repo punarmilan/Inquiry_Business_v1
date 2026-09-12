@@ -1,0 +1,18 @@
+
+> app@1.0.0 start:clear
+> node ./scripts/start-expo.cjs --clear --localhost
+
+[expo-start] ADB reverse enabled for 673f723a on port 8081.
+[expo-start] ADB reverse enabled for 673f723a on port 5000.
+[expo-start] Using port 8081.
+env: load .env
+env: export FACEBOOK_APP_ID FACEBOOK_CLIENT_TOKEN GOOGLE_IOS_URL_SCHEME GOOGLE_MAPS_API_KEY_ANDROID GOOGLE_MAPS_API_KEY_IOS GOOGLE_WEB_CLIENT_ID
+Starting project at E:\Worknai Projects\App\mobile\frontend
+Logs: E:\Worknai Projects\App\mobile\frontend\.expo\dev\logs\start.log
+◇ injected env (0) from .env // tip: ⌘ enable debugging { debug: true }
+Starting Metro Bundler
+
+warning: Bundler cache is empty, rebuilding (this may take a minute)
+Waiting on http://localhost:8081
+
+Logs for your project will appear below.

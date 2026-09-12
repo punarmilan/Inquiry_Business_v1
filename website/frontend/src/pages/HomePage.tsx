@@ -7,18 +7,40 @@ import ServiceGrid from '../components/ServiceGrid';
 import VisualStorySection from '../components/VisualStorySection';
 import WorkflowPanel from '../components/WorkflowPanel';
 import { PLAY_STORE_URL } from '../constants';
-import { appImages, employerSteps, liveJobs, stats, trustItems, workerSteps } from '../data/siteData';
+import { employerSteps, liveJobs, stats, trustItems, workerSteps } from '../data/siteData';
+import AnimatedHero from '../components/AnimatedHero';
 import type { NavigationHandler } from '../types';
+import DiscoveryExperience from '../components/DiscoveryExperience';
+import { useEffect, useRef } from 'react';
+import '../experience.css';
 
 type HomePageProps = {
   navigate: NavigationHandler;
 };
 
 function HomePage({ navigate }: HomePageProps) {
+  const experience = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const root = experience.current;
+    if (!root || !('IntersectionObserver' in window)) return;
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('isVisible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.08 });
+    root.querySelectorAll(':scope > section').forEach((section) => {
+      section.classList.add('revealSection');
+      observer.observe(section);
+    });
+    return () => observer.disconnect();
+  }, []);
   return (
     <>
       <section className="heroSection" aria-labelledby="hero-title">
-        <img className="heroBackdropImage" src={appImages.heroWorker} alt="" />
+        <AnimatedHero />
         <div className="heroInner">
           <div className="heroCopy">
             <p className="eyebrow heroPill">Hyperlocal offers and trusted services</p>
@@ -59,6 +81,8 @@ function HomePage({ navigate }: HomePageProps) {
         ))}
       </section>
 
+      <div className="homeExperience" ref={experience}>
+      <DiscoveryExperience navigate={navigate} />
       <VisualStorySection />
 
       <section className="section flowSection">
@@ -131,7 +155,8 @@ function HomePage({ navigate }: HomePageProps) {
 
       <section className="section featuresSection">
         <SectionHeading eyebrow="Inside the app" title="Everything you need, in one place" />
-        <FeatureGrid />
+        <FeatureGrid limit={6} />
+        <a className="experienceLink" href="/features" onClick={(event) => navigate(event, '/features')}>Explore every feature <span aria-hidden="true">↗</span></a>
       </section>
 
       <section className="appPreview" aria-label="InquiryExperts app preview">
@@ -166,6 +191,8 @@ function HomePage({ navigate }: HomePageProps) {
       </section>
 
       <InstallSection />
+      <footer className="experienceFooter"><strong>Inquiry<span>Experts</span></strong><p>A little closer. A lot more possible.</p><a href="#top">Back to top ↑</a></footer>
+      </div>
     </>
   );
 }

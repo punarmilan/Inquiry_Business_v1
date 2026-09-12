@@ -1,5 +1,5 @@
 import { BadgeCheck, BriefcaseBusiness, IndianRupee, MapPin, Timer } from 'lucide-react';
-import { appImages } from '../data/siteData';
+import previewCustomer from '../../assets/hero-woman.png';
 
 function PhonePreview() {
   return (
@@ -15,7 +15,7 @@ function PhonePreview() {
           <strong>Within 10 KM</strong>
           <small>Approved local deals</small>
         </div>
-        <img src={appImages.heroWorker} alt="" />
+        <img src={previewCustomer} alt="" loading="lazy" />
       </div>
       <div className="phoneChips">
         <span className="active">Cleaning</span>
