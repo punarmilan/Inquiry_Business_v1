@@ -1,6 +1,53 @@
 const Chat = require('../models/Chat');
 const Message = require('../models/Message');
+const ServiceBooking = require('../models/ServiceBooking');
 const ApiError = require('../utils/ApiError');
+const { canUseBookingChat } = require('../domain/rules');
+
+const bookingChatUnavailableError = (booking) => {
+  const message = booking?.status === 'completed'
+    ? 'Booking is completed. Chat is no longer available for this booking.'
+    : 'Chat is no longer available for this booking.';
+  return new ApiError(409, message, 'BOOKING_CHAT_UNAVAILABLE');
+};
+
+const assertBookingChatAvailable = (booking) => {
+  if (!canUseBookingChat(booking)) throw bookingChatUnavailableError(booking);
+};
+
+const assertCanAccessThread = async (chat, userId) => {
+  const role = assertParticipant(chat, userId);
+  if (!chat.booking) return role;
+
+  const booking = await ServiceBooking.findById(chat.booking).select('status');
+  if (!booking) throw new ApiError(404, 'Booking not found', 'BOOKING_NOT_FOUND');
+  assertBookingChatAvailable(booking);
+  return role;
+};
+
+// Older deployments created a non-partial { job, applicant } unique index.
+// Booking chats have job=null, so that stale index incorrectly permits only one
+// booking chat per provider. Remove only that legacy index and create the schema's
+// partial indexes before the API starts accepting traffic.
+const ensureChatIndexes = async () => {
+  const indexes = await Chat.collection.indexes();
+  const staleJobIndex = indexes.find((index) =>
+    index.unique === true &&
+    index.key?.job === 1 &&
+    index.key?.applicant === 1 &&
+    Object.keys(index.key).length === 2 &&
+    !index.partialFilterExpression
+  );
+
+  if (staleJobIndex) {
+    try {
+      await Chat.collection.dropIndex(staleJobIndex.name);
+    } catch (error) {
+      if (error?.codeName !== 'IndexNotFound' && error?.code !== 27) throw error;
+    }
+  }
+  await Chat.createIndexes();
+};
 
 const participantRole = (chat, userId) => {
   const id = userId.toString();
@@ -77,7 +124,7 @@ const postMessage = async ({ chatId, senderId, text }) => {
   if (!chat) {
     throw new ApiError(404, 'Conversation not found', 'CHAT_NOT_FOUND');
   }
-  const senderRole = assertParticipant(chat, senderId);
+  const senderRole = await assertCanAccessThread(chat, senderId);
   const recipientRole = senderRole === 'poster' ? 'applicant' : 'poster';
 
   const message = await Message.create({ chat: chat._id, sender: senderId, text });
@@ -104,6 +151,9 @@ const markRead = async ({ chatId, userId }) => {
 
 module.exports = {
   assertParticipant,
+  assertCanAccessThread,
+  assertBookingChatAvailable,
+  ensureChatIndexes,
   participantRole,
   findOrCreateChat,
   findOrCreateBookingChat,

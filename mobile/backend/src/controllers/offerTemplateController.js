@@ -6,7 +6,10 @@ const listTemplates = asyncHandler(async (req, res) => {
   if (req.query.category && req.query.category.toLowerCase() !== 'all') filter.category = req.query.category;
   const templates = await OfferTemplate.find(filter)
     .select('-createdBy -updatedBy -__v')
-    .sort({ sortOrder: 1, createdAt: -1 })
+    // The mobile template library's "New" section is chronological. Keep
+    // the admin sort order as a stable tie-breaker for templates created at
+    // the same time.
+    .sort({ createdAt: -1, sortOrder: 1, name: 1 })
     .lean();
   res.json({ success: true, data: templates });
 });

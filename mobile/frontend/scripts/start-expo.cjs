@@ -21,7 +21,10 @@ const loadPackageJson = () => {
 
 const { dependencies = {}, devDependencies = {} } = loadPackageJson();
 const hasDevClientInstalled = Boolean(dependencies['expo-dev-client'] || devDependencies['expo-dev-client']);
-const useDevClientByEnv = process.env.EXPO_USE_DEV_CLIENT === '1';
+// This project includes native modules that Expo Go cannot load. Prefer the
+// installed development client; EXPO_USE_DEV_CLIENT=0 remains an explicit
+// escape hatch for the rare Expo Go-only session.
+const useDevClientByEnv = process.env.EXPO_USE_DEV_CLIENT !== '0';
 
 const hasFlag = (...flags) =>
   userArgs.some((arg, index) => flags.includes(arg) || flags.some((flag) => arg.startsWith(`${flag}=`)));
@@ -164,8 +167,7 @@ const run = async () => {
   }
 
   if (!hasFlag('--go', '--dev-client')) {
-    // Expo Go is the safe default for local Android preview. A dev client is
-    // still supported explicitly with `--dev-client` or EXPO_USE_DEV_CLIENT=1.
+    // Native dependencies require the custom development client by default.
     expoArgs.push(hasDevClientInstalled && useDevClientByEnv ? '--dev-client' : '--go');
   }
 

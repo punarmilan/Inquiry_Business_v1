@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, ScrollView, StatusBar, View, useWindowDimensions } from 'react-native';
+import { ScrollView, StatusBar, View, useWindowDimensions } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -10,6 +9,7 @@ import { useApp } from '../../context/AppContext';
 import type { AuthStackParamList } from '../../navigation/types';
 import { IllustratedOnboardingPage } from './IllustratedOnboardingPage';
 import { onboardingStyles as styles, ONBOARDING_COLORS } from './OnboardingScreen.styles';
+import { LogoLoader } from '../../components/LogoLoader';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Onboarding'>;
 const ONBOARDING_SEEN_KEY: string = 'inquiryexperts_onboarding_seen_v2';
@@ -109,10 +109,7 @@ export const OnboardingScreen: React.FC<Props> = ({ navigation, route }) => {
     return (
       <View style={styles.loadingScreen}>
         <StatusBar hidden barStyle="dark-content" />
-        <View style={styles.loadingLogo}>
-          <MaterialCommunityIcons name="handshake" size={32} color={ONBOARDING_COLORS.primary} />
-        </View>
-        <ActivityIndicator color={ONBOARDING_COLORS.primary} />
+        <LogoLoader size={54} />
       </View>
     );
   }

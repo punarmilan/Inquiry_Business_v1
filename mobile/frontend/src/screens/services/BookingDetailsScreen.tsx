@@ -11,6 +11,7 @@ import type { ServicesStackParamList } from '../../navigation/types';
 import { useApp } from '../../context/AppContext';
 import { theme } from '../../theme';
 import { callPhoneNumber } from '../../utils/call';
+import { bookingChatUnavailableMessage, canUseBookingChat } from '../../utils/bookingChat';
 
 type Props = NativeStackScreenProps<ServicesStackParamList, 'BookingDetails'>;
 const steps = ['requested', 'confirmed', 'assigned', 'in_progress', 'completed'];
@@ -41,6 +42,10 @@ export const BookingDetailsScreen: React.FC<Props> = ({ route, navigation }) => 
 
   const openChat = async () => {
     if (!accessToken || !booking.worker || chatOpening) return;
+    if (!canUseBookingChat(booking)) {
+      Alert.alert('Chat unavailable', bookingChatUnavailableMessage(booking));
+      return;
+    }
     setChatOpening(true);
     try {
       const response = await openBookingChat(accessToken, booking._id);

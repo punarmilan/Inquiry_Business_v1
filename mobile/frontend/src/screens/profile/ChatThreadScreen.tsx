@@ -37,6 +37,7 @@ export const ChatThreadScreen: React.FC<Props> = ({ route, navigation }) => {
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [chatUnavailable, setChatUnavailable] = useState(false);
   const listRef = useRef<FlatList>(null);
 
   // Hide the bottom tab bar while the thread is open so it can't sit between
@@ -55,6 +56,7 @@ export const ChatThreadScreen: React.FC<Props> = ({ route, navigation }) => {
     }
     setLoading(true);
     setError(null);
+    setChatUnavailable(false);
     getThreadMessages(accessToken, chatId, { limit: 30 })
       .then((res) => {
         if (!Array.isArray(res.data)) {
@@ -66,6 +68,9 @@ export const ChatThreadScreen: React.FC<Props> = ({ route, navigation }) => {
       })
       .catch((requestError) => {
         setMessages([]);
+        if ((requestError as { code?: string })?.code === 'BOOKING_CHAT_UNAVAILABLE') {
+          setChatUnavailable(true);
+        }
         setError(requestError instanceof Error ? requestError.message : 'Could not load messages.');
       })
       .finally(() => setLoading(false));
@@ -77,7 +82,12 @@ export const ChatThreadScreen: React.FC<Props> = ({ route, navigation }) => {
     const socket = getSocket();
     if (!socket) return;
 
-    socket.emit('join_thread', { chatId });
+    socket.emit('join_thread', { chatId }, (ack: { ok: boolean; error?: string }) => {
+      if (!ack?.ok && ack?.error === 'BOOKING_CHAT_UNAVAILABLE') {
+        setChatUnavailable(true);
+        setError('Chat is no longer available for this booking.');
+      }
+    });
 
     const onNewMessage = (message: BackendMessage) => {
       if (message.chat !== chatId) return;
@@ -97,14 +107,20 @@ export const ChatThreadScreen: React.FC<Props> = ({ route, navigation }) => {
 
   const send = useCallback(() => {
     const text = draft.trim();
-    if (!text || !chatId) return;
+    if (!text || !chatId || chatUnavailable) return;
     setDraft('');
     getSocket()?.emit('send_message', { chatId, text }, (ack: { ok: boolean; error?: string }) => {
-      if (!ack?.ok) {
+      if (!ack?.ok && ack?.error === 'BOOKING_CHAT_UNAVAILABLE') {
+        setDraft(text);
+        setChatUnavailable(true);
+        setError('Chat is no longer available for this booking.');
+      } else if (!ack?.ok) {
+        setDraft(text);
+        setError('Message was not sent. Please try again.');
         // best-effort — the message just won't appear; user can retry
       }
     });
-  }, [chatId, draft]);
+  }, [chatId, chatUnavailable, draft]);
 
   const renderItem = ({ item }: { item: BackendMessage }) => {
     const isMe = item.sender === currentUser?.id;
@@ -161,13 +177,15 @@ export const ChatThreadScreen: React.FC<Props> = ({ route, navigation }) => {
             placeholderTextColor={theme.colors.textMuted}
             style={styles.input}
             multiline
+            editable={!chatUnavailable}
           />
           <IconButton
             name="send"
             accessibilityLabel="Send"
-            onPress={send}
+            onPress={chatUnavailable ? undefined : send}
             backgroundColor={theme.colors.primary}
             color={theme.colors.textInverse}
+            style={chatUnavailable && styles.disabledSend}
           />
         </View>
       </KeyboardAvoidingView>
@@ -257,6 +275,9 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.sm,
     maxHeight: 100,
     minHeight: theme.MIN_TAP_TARGET,
+  },
+  disabledSend: {
+    opacity: 0.45,
   },
   threadState: {
     alignItems: 'center',

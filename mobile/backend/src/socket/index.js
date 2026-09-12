@@ -31,7 +31,7 @@ const attachSocket = (io) => {
       try {
         const chat = await Chat.findById(chatId);
         if (!chat) throw new Error('CHAT_NOT_FOUND');
-        chatService.assertParticipant(chat, socket.user._id);
+        await chatService.assertCanAccessThread(chat, socket.user._id);
         socket.join(`chat:${chatId}`);
         ack?.({ ok: true });
       } catch (error) {

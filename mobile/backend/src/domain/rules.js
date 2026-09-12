@@ -52,6 +52,11 @@ const canAssignWorker = ({ booking, worker }) =>
 
 const canClientVerifyPayment = () => false;
 
+const BOOKING_CHAT_ACTIVE_STATUSES = Object.freeze(['assigned', 'in_progress']);
+
+const canUseBookingChat = (booking) =>
+  Boolean(booking && BOOKING_CHAT_ACTIVE_STATUSES.includes(booking.status));
+
 const canCreateWorker = (role) => ['staff', 'admin', 'superadmin'].includes(role);
 const canModerateOffer = (role) => ['staff', 'admin', 'superadmin'].includes(role);
 const canEditOffer = ({ offerOwnerId, userId }) => String(offerOwnerId) === String(userId);
@@ -64,6 +69,8 @@ module.exports = {
   hasPostingQuota,
   isServiceAvailable,
   canAssignWorker,
+  BOOKING_CHAT_ACTIVE_STATUSES,
+  canUseBookingChat,
   canClientVerifyPayment,
   canCreateWorker,
   canModerateOffer,

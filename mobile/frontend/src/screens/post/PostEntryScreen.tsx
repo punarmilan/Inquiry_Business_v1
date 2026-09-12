@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -18,101 +18,83 @@ export const PostEntryScreen: React.FC<Props> = ({ navigation }) => {
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [selectedBusinessId, setSelectedBusinessId] = useState('');
   const [loading, setLoading] = useState(true);
-  const [redirecting, setRedirecting] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [businessPickerOpen, setBusinessPickerOpen] = useState(false);
 
   const load = useCallback(() => {
-    if (!accessToken) return;
+    if (!accessToken) { setLoading(false); setLoadError('Sign in to load your businesses.'); return; }
     setLoading(true);
+    setLoadError('');
     listMyBusinesses(accessToken)
       .then((response) => {
-        setRedirecting(false);
         setBusinesses(response.data);
-        setSelectedBusinessId((current) => response.data.some((item) => item._id === current) ? current : response.data[0]?._id || '');
+        setSelectedBusinessId((current) => response.data.some((item) => item._id === current) ? current : '');
       })
+      .catch(() => setLoadError('Businesses could not be loaded. Please try again.'))
       .finally(() => setLoading(false));
   }, [accessToken]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  useEffect(() => {
-    if (!loading && !businesses.length && !redirecting) {
-      setRedirecting(true);
-      navigation.navigate('BusinessSetup');
-    }
-  }, [businesses.length, loading, navigation, redirecting]);
+  if (loading) return <ScreenContainer style={styles.center}><ActivityIndicator color={theme.colors.primary} /></ScreenContainer>;
 
-  if (loading || redirecting) return <ScreenContainer style={styles.center}><ActivityIndicator color={theme.colors.primary} /></ScreenContainer>;
+  if (loadError) return <ScreenContainer style={styles.center}><Text style={styles.body}>{loadError}</Text><Button label="Retry" onPress={load} /></ScreenContainer>;
 
-  const business = businesses.find((item) => item._id === selectedBusinessId) || businesses[0];
-  if (!business) return null;
+  const business = businesses.find((item) => item._id === selectedBusinessId) || null;
 
-  const isApproved = business.verificationStatus === 'verified';
-  const hasPlan = Boolean(isApproved && business.activeSubscription?.status === 'active' && new Date(business.activeSubscription.endsAt) >= new Date());
-  const statusLabel = business.verificationStatus === 'verified' ? 'Approved' : business.verificationStatus === 'pending' ? 'Pending approval' : business.verificationStatus === 'rejected' ? 'Needs changes' : 'Suspended';
+  if (!businesses.length) return <ScreenContainer style={styles.container}>
+    <View style={styles.hero}><View style={styles.icon}><MaterialCommunityIcons name="store-plus-outline" size={52} color={theme.colors.primary} /></View><Text style={styles.title}>Add your business first</Text><Text style={styles.body}>You haven't added a business yet. Add one to start designing local offers.</Text></View>
+    <Button label="Add Business" onPress={() => navigation.navigate('BusinessSetup')} fullWidth icon={<MaterialCommunityIcons name="store-plus-outline" size={19} color={theme.colors.textInverse} />} />
+  </ScreenContainer>;
+
+  const isApproved = business?.verificationStatus === 'verified';
+  const hasPlan = Boolean(business && isApproved && business.activeSubscription?.status === 'active' && new Date(business.activeSubscription.endsAt) >= new Date());
+  const statusLabel = business?.verificationStatus === 'verified' ? 'Approved' : business?.verificationStatus === 'pending' ? 'Pending approval' : business?.verificationStatus === 'rejected' ? 'Needs changes' : 'Suspended';
 
   return (
     <ScreenContainer style={styles.container}>
+      <View style={styles.topBar}><Pressable onPress={navigation.goBack} style={styles.backButton}><MaterialCommunityIcons name="chevron-left" size={26} color={theme.colors.text} /></Pressable><Text style={styles.topBarTitle}>Post a Local Offer</Text><View style={styles.topBarSpacer} /></View>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <View style={styles.heroBanner}>
+        <View style={styles.heroGlow} />
+        <Image source={require('../../../assets/screen-3/03-post-offer-character.png')} style={styles.heroImage} resizeMode="contain" />
+      </View>
       <View style={styles.hero}>
-        <View style={styles.icon}><MaterialCommunityIcons name="palette-outline" size={52} color={theme.colors.primary} /></View>
         <Text style={styles.title}>Post a local offer</Text>
-        <Text style={styles.body}>Choose a business profile, activate its plan, then design and submit an offer for admin review.</Text>
+        <Text style={styles.body}>Create attractive offers and reach{`\n`}more customers near you.</Text>
       </View>
 
-      {businesses.length > 1 ? (
-        <>
-          <Text style={styles.selectionLabel}>Choose business to post from</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.businessChoices}>
-            {businesses.map((item) => (
-              <Pressable key={item._id} onPress={() => setSelectedBusinessId(item._id)} style={[styles.businessChoice, item._id === business._id && styles.businessChoiceActive]}>
-                <MaterialCommunityIcons name="storefront-outline" size={18} color={item._id === business._id ? theme.colors.textInverse : theme.colors.primary} />
-                <Text numberOfLines={1} style={[styles.businessChoiceText, item._id === business._id && styles.businessChoiceTextActive]}>{item.name}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        </>
-      ) : null}
+      <Text style={styles.selectionLabel}>Your business</Text>
+      <Pressable onPress={() => setBusinessPickerOpen(true)} style={styles.businessSelectCard}>
+        <View style={styles.businessSelectLogo}>{business?.logoUrl ? <Image source={{ uri: business.logoUrl }} style={styles.selectedLogo} /> : <MaterialCommunityIcons name="storefront-outline" size={25} color={theme.colors.primary} />}</View>
+        <Text numberOfLines={1} style={[styles.businessSelectText, !business && styles.businessPlaceholder]}>{business?.name || 'Select a business'}</Text>
+        <MaterialCommunityIcons name="chevron-down" size={22} color={theme.colors.text} />
+      </Pressable>
 
-      <View style={styles.selectedBusiness}>
-        <View style={styles.selectedIcon}><MaterialCommunityIcons name="storefront-outline" size={24} color={theme.colors.primary} /></View>
-        <View style={styles.flex}><Text style={styles.selectedLabel}>POSTING AS</Text><Text style={styles.selectedName}>{business.name}</Text></View>
-        <Text style={[styles.status, business.verificationStatus === 'verified' && styles.statusApproved]}>{statusLabel}</Text>
-      </View>
+      {!business ? <View style={styles.helperCard}><MaterialCommunityIcons name="information-outline" size={20} color={theme.colors.primary} /><Text style={styles.helperText}>Select a business to design your offer.</Text></View> : null}
 
-      <View style={styles.steps}>
-        <Step number="1" label="Business profile approved" done={isApproved} />
-        <Step number="2" label="Eligible plan" done={hasPlan} />
-        <Step number="3" label="Design & submit offer" done={false} />
-      </View>
+      <Button label="Design your offer" disabled={!business} onPress={() => {
+        if (business) navigation.navigate('TemplateLibrary', { businessId: business._id });
+      }} fullWidth />
 
-      {business.verificationStatus === 'pending' ? (
-        <View style={styles.approvalCard}>
-          <MaterialCommunityIcons name="clock-check-outline" size={24} color={theme.colors.secondary} />
-          <View style={styles.flex}><Text style={styles.approvalTitle}>Business profile under review</Text><Text style={styles.approvalText}>Admin approval usually completes within 24 hours. Posting unlocks automatically after approval.</Text></View>
-        </View>
-      ) : business.verificationStatus === 'rejected' ? (
-        <View style={styles.approvalCard}>
-          <MaterialCommunityIcons name="alert-circle-outline" size={24} color={theme.colors.danger} />
-          <View style={styles.flex}><Text style={styles.approvalTitle}>Update your business profile</Text><Text style={styles.approvalText}>{business.verificationNote || 'Admin requested changes before approval.'}</Text></View>
-        </View>
-      ) : business.verificationStatus === 'suspended' ? (
-        <View style={styles.approvalCard}><MaterialCommunityIcons name="pause-circle-outline" size={24} color={theme.colors.danger} /><View style={styles.flex}><Text style={styles.approvalTitle}>Business profile suspended</Text><Text style={styles.approvalText}>Contact support before posting from this profile.</Text></View></View>
-      ) : !hasPlan ? (
-        <Button label="View Subscription Plans" onPress={() => navigation.navigate('Plans', { businessId: business._id })} fullWidth />
-      ) : (
-        <View style={styles.designChoices}>
-          <Button
-            label="Design your offer"
-            icon={<MaterialCommunityIcons name="palette-outline" size={19} color={theme.colors.textInverse} />}
-            onPress={() => navigation.navigate('OfferDesignEditor', { businessId: business._id, designMode: 'templates' })}
-            fullWidth
-          />
-        </View>
-      )}
 
-      <Pressable onPress={() => navigation.navigate('BusinessSetup', { businessId: business._id })} style={styles.customize}>
+      {business ? <Pressable onPress={() => navigation.navigate('BusinessSetup', { businessId: business._id })} style={styles.customize}>
         <MaterialCommunityIcons name="pencil-outline" size={18} color={theme.colors.primary} />
         <Text style={styles.customizeText}>{business.verificationStatus === 'rejected' ? 'Update & resubmit profile' : 'Customize business profile'}</Text>
-      </Pressable>
+      </Pressable> : null}
+      </ScrollView>
+      <Modal transparent animationType="slide" visible={businessPickerOpen} onRequestClose={() => setBusinessPickerOpen(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setBusinessPickerOpen(false)}>
+          <View style={styles.businessSheet} onStartShouldSetResponder={() => true}>
+            <View style={styles.sheetHandle} /><Text style={styles.sheetTitle}>Select a business</Text>
+            <ScrollView style={{ maxHeight: 360 }}>
+            {businesses.map((item) => <Pressable key={item._id} onPress={() => { setSelectedBusinessId(item._id); setBusinessPickerOpen(false); }} style={[styles.sheetOption, item._id === business?._id && styles.sheetOptionActive]}>
+              <View style={styles.sheetLogo}>{item.logoUrl ? <Image source={{ uri: item.logoUrl }} style={styles.selectedLogo} /> : <MaterialCommunityIcons name="storefront-outline" size={22} color={theme.colors.primary} />}</View><Text style={styles.sheetOptionText}>{item.name}</Text>{item._id === business?._id ? <MaterialCommunityIcons name="check" size={20} color={theme.colors.primary} /> : null}
+            </Pressable>)}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
     </ScreenContainer>
   );
 };
@@ -120,10 +102,11 @@ export const PostEntryScreen: React.FC<Props> = ({ navigation }) => {
 const Step = ({ number, label, done }: { number: string; label: string; done: boolean }) => <View style={styles.step}><View style={[styles.stepCircle, done && styles.done]}>{done ? <MaterialCommunityIcons name="check" size={18} color={theme.colors.textInverse} /> : <Text style={styles.stepNumber}>{number}</Text>}</View><Text style={styles.stepLabel}>{label}</Text></View>;
 
 const styles = StyleSheet.create({
-  container: { padding: 22, justifyContent: 'center' }, center: { alignItems: 'center', justifyContent: 'center' }, flex: { flex: 1 },
-  hero: { alignItems: 'center' }, icon: { width: 100, height: 100, borderRadius: 32, backgroundColor: theme.colors.primaryLight, alignItems: 'center', justifyContent: 'center' }, title: { ...theme.typography.h1, color: theme.colors.text, marginTop: 22, textAlign: 'center' }, body: { ...theme.typography.body, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 22, marginTop: 8 },
-  selectionLabel: { ...theme.typography.caption, color: theme.colors.textSecondary, fontWeight: '800', marginTop: 22, marginBottom: 8 }, businessChoices: { gap: 9, paddingBottom: 2 }, businessChoice: { maxWidth: 180, minHeight: 42, flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 12, borderRadius: 99, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border }, businessChoiceActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }, businessChoiceText: { maxWidth: 132, ...theme.typography.caption, color: theme.colors.text, fontWeight: '800' }, businessChoiceTextActive: { color: theme.colors.textInverse },
-  selectedBusiness: { flexDirection: 'row', alignItems: 'center', gap: 11, backgroundColor: theme.colors.primaryLight, borderRadius: 17, padding: 13, marginTop: 18 }, selectedIcon: { width: 45, height: 45, borderRadius: 14, backgroundColor: theme.colors.surface, alignItems: 'center', justifyContent: 'center' }, selectedLabel: { ...theme.typography.tiny, color: theme.colors.textMuted, fontWeight: '900', letterSpacing: 1 }, selectedName: { ...theme.typography.bodyBold, color: theme.colors.text, marginTop: 2 }, status: { ...theme.typography.tiny, color: theme.colors.warning, fontWeight: '900', textTransform: 'uppercase' }, statusApproved: { color: theme.colors.success },
+  container: { paddingHorizontal: 14 }, scrollContent: { flexGrow: 1, paddingBottom: 20 }, center: { alignItems: 'center', justifyContent: 'center' }, flex: { flex: 1 }, topBar: { height: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, backButton: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }, topBarTitle: { ...theme.typography.bodyBold, color: theme.colors.text }, topBarSpacer: { width: 36 },
+  heroBanner: { height: 178, marginTop: 8, overflow: 'hidden', borderRadius: 18, backgroundColor: '#DDF3FC', position: 'relative' }, heroGlow: { position: 'absolute', width: 240, height: 240, borderRadius: 120, backgroundColor: '#BDE9F9', right: -35, top: -32 }, heroImage: { width: '100%', height: '100%', transform: [{ scale: 1.08 }] }, hero: { alignItems: 'center', paddingHorizontal: 8, paddingTop: 17 }, icon: { width: 96, height: 96, borderRadius: 30, backgroundColor: theme.colors.primaryLight, alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginBottom: 18 }, title: { ...theme.typography.h2, color: theme.colors.text, textAlign: 'center' }, body: { ...theme.typography.body, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 20, marginTop: 7 },
+  selectionLabel: { ...theme.typography.caption, color: theme.colors.text, fontWeight: '900', marginTop: 25, marginBottom: 8 }, businessSelectCard: { minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 12, borderRadius: 10, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: '#E6EAF0', shadowColor: '#64748B', shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 2 }, businessSelectLogo: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', backgroundColor: theme.colors.primaryLight }, businessSelectText: { flex: 1, ...theme.typography.bodyBold, color: theme.colors.text }, businessPlaceholder: { color: theme.colors.textSecondary, fontWeight: '700' },
+  selectedBusiness: { flexDirection: 'row', alignItems: 'center', gap: 11, backgroundColor: theme.colors.primaryLight, borderRadius: 17, padding: 13, marginTop: 18 }, selectedIcon: { width: 45, height: 45, borderRadius: 14, backgroundColor: theme.colors.surface, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }, selectedLogo: { width: '100%', height: '100%' }, selectedLabel: { ...theme.typography.tiny, color: theme.colors.textMuted, fontWeight: '900', letterSpacing: 1 }, selectedName: { ...theme.typography.bodyBold, color: theme.colors.text, marginTop: 2 }, status: { ...theme.typography.tiny, color: theme.colors.warning, fontWeight: '900', textTransform: 'uppercase' }, statusApproved: { color: theme.colors.success }, helperCard: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, marginTop: 16, borderRadius: 13, backgroundColor: theme.colors.primaryLight }, helperText: { ...theme.typography.caption, color: theme.colors.primaryDark, fontWeight: '700' },
+  modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(15,23,42,0.28)' }, businessSheet: { padding: 16, paddingBottom: 28, borderTopLeftRadius: 24, borderTopRightRadius: 24, backgroundColor: theme.colors.surface }, sheetHandle: { width: 38, height: 4, alignSelf: 'center', borderRadius: 2, backgroundColor: theme.colors.border, marginBottom: 14 }, sheetTitle: { ...theme.typography.h3, color: theme.colors.text, marginBottom: 10 }, sheetOption: { minHeight: 55, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 10, borderRadius: 12 }, sheetOptionActive: { backgroundColor: theme.colors.primaryLight }, sheetLogo: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', backgroundColor: theme.colors.surfaceAlt }, sheetOptionText: { flex: 1, ...theme.typography.bodyBold, color: theme.colors.text },
   steps: { marginVertical: 22, backgroundColor: theme.colors.surface, borderRadius: 20, padding: 16, gap: 14 }, step: { flexDirection: 'row', alignItems: 'center', gap: 12 }, stepCircle: { width: 34, height: 34, borderRadius: 17, backgroundColor: theme.colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }, done: { backgroundColor: theme.colors.success }, stepNumber: { fontWeight: '900', color: theme.colors.textMuted }, stepLabel: { ...theme.typography.bodyBold, color: theme.colors.text }, approvalCard: { flexDirection: 'row', gap: 11, backgroundColor: theme.colors.secondaryLight, borderRadius: 16, padding: 14, marginBottom: 16 }, approvalTitle: { ...theme.typography.bodyBold, color: theme.colors.text }, approvalText: { ...theme.typography.caption, color: theme.colors.textSecondary, lineHeight: 18, marginTop: 3 }, customize: { minHeight: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 8 }, customizeText: { ...theme.typography.caption, color: theme.colors.primary, fontWeight: '900' },
   designChoices: { marginTop: 2 },
 });

@@ -10,6 +10,7 @@ import { Avatar } from '../../components/Avatar';
 import { useApp } from '../../context/AppContext';
 import { listProviderBookings, openProviderBookingChat, respondToProviderBooking, updateProviderAvailability, updateProviderBookingStatus, type ProviderBooking } from '../../services/api';
 import { callPhoneNumber } from '../../utils/call';
+import { bookingChatUnavailableMessage, canUseBookingChat } from '../../utils/bookingChat';
 import type { ProviderTabParamList } from '../../navigation/types';
 import { theme } from '../../theme';
 
@@ -138,6 +139,10 @@ export const ProviderHomeScreen: React.FC<Props> = ({ navigation }) => {
 
   const openChat = async (booking: ProviderBooking) => {
     if (!accessToken) return;
+    if (!canUseBookingChat(booking)) {
+      Alert.alert('Chat unavailable', bookingChatUnavailableMessage(booking));
+      return;
+    }
     try {
       const response = await openProviderBookingChat(accessToken, booking._id);
       const customer = response.customer || booking.customer;

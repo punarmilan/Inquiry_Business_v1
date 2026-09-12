@@ -772,8 +772,8 @@ const createStyles = (width: number, height: number, topInset: number, bottomIns
   const sheet = StyleSheet.create({
     backgroundImage: {
       width: '100%',
-      height: '145%',
-      top: -Math.round(usableHeight * 0.45),
+      height: '128%',
+      top: -Math.round(usableHeight * 0.18),
     },
     softOverlay: {
       ...StyleSheet.absoluteFill,

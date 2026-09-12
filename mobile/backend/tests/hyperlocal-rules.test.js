@@ -7,6 +7,7 @@ const {
   hasPostingQuota,
   isServiceAvailable,
   canAssignWorker,
+  canUseBookingChat,
   canClientVerifyPayment,
   canCreateWorker,
   canModerateOffer,
@@ -89,6 +90,7 @@ test('16. unsupported city produces coming-soon availability state', () => {
   assert.equal(isServiceAvailable(unsupported), false);
   assert.equal(Boolean(unsupported.isActive && unsupported.offersEnabled), false);
 });
+
 test('17. bottom navigation gates Post behind an approved business', () => {
   const source = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/navigation/MainTabNavigator.tsx'), 'utf8');
   const labels = [...source.matchAll(/name="(OffersTab|ServicesTab|PostTab|MoreTab|ProfileTab)"/g)].map((match) => match[1]);
@@ -100,4 +102,11 @@ test('18. city availability selects the active flag used in its response checks'
   const source = fs.readFileSync(path.resolve(__dirname, '../src/controllers/cityController.js'), 'utf8');
   const publicFields = source.match(/const publicFields = '([^']+)'/)?.[1].split(/\s+/) || [];
   assert.ok(publicFields.includes('isActive'));
+});
+test('19. booking chat is available only while service work is active', () => {
+  assert.equal(canUseBookingChat({ status: 'assigned' }), true);
+  assert.equal(canUseBookingChat({ status: 'in_progress' }), true);
+  for (const status of ['requested', 'confirmed', 'completed', 'cancelled']) {
+    assert.equal(canUseBookingChat({ status }), false, `${status} must not allow chat`);
+  }
 });

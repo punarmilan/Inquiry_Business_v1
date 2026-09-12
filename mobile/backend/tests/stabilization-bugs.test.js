@@ -35,6 +35,9 @@ test('affected forms use keyboard-aware scroll containers and booking picker unm
     const source = readFrontend(file);
     assert.match(source, /scrollResponderScrollNativeHandleToKeyboard/);
     assert.match(source, /automaticallyAdjustKeyboardInsets/);
+    assert.match(source, /keyboardShouldPersistTaps="always"/);
+    assert.match(source, /keyboardDismissMode="none"/);
+    assert.doesNotMatch(source, /keyboardDismissMode="on-drag"/);
     assert.doesNotMatch(source, /Platform\.OS === 'ios' \? 'padding' : 'height'/);
   }
   const booking = readFrontend('screens/services/BookServiceScreen.tsx');
@@ -42,6 +45,50 @@ test('affected forms use keyboard-aware scroll containers and booking picker unm
   assert.match(booking, /setDatePickerVisible\(false\)/);
   assert.match(booking, /event\.type !== 'dismissed'/);
   assert.doesNotMatch(booking, /mode="datetime"/);
+});
+
+test('service booking uses real area options and verified providers carry a visible trust mark', () => {
+  const booking = readFrontend('screens/services/BookServiceScreen.tsx');
+  const servicesHome = readFrontend('screens/services/ServicesHomeScreen.tsx');
+  const providerTypes = readFrontend('types/hyperlocal.ts');
+  const serviceController = fs.readFileSync(path.join(root, 'backend/src/controllers/serviceController.js'), 'utf8');
+  const applicationsPage = fs.readFileSync(path.resolve(root, '../website/admin-frontend/src/pages/hyperlocal/ProviderApplicationsPage.tsx'), 'utf8');
+  const adminController = fs.readFileSync(path.resolve(root, '../website/backend/src/controllers/hyperlocalController.js'), 'utf8');
+
+  assert.match(booking, /accessibilityLabel="Select service area"/);
+  assert.match(booking, /route\.params\.availableAreas\?\.map/);
+  assert.match(booking, /setAreaPickerOpen\(false\)/);
+  assert.match(serviceController, /experienceYears verificationStatus/);
+  assert.match(providerTypes, /verificationStatus: 'verified'/);
+  assert.match(servicesHome, /accessibilityLabel="Verified provider"/);
+  assert.match(servicesHome, /theme\.colors\.verified/);
+  assert.match(applicationsPage, /'Verify provider'/);
+  assert.match(adminController, /verificationStatus: 'verified'/);
+});
+
+test('booking chat open and message paths enforce the same lifecycle rule', () => {
+  const serviceController = fs.readFileSync(path.join(root, 'backend/src/controllers/serviceController.js'), 'utf8');
+  const chatController = fs.readFileSync(path.join(root, 'backend/src/controllers/chatController.js'), 'utf8');
+  const chatService = fs.readFileSync(path.join(root, 'backend/src/services/chatService.js'), 'utf8');
+  const socket = fs.readFileSync(path.join(root, 'backend/src/socket/index.js'), 'utf8');
+  const server = fs.readFileSync(path.join(root, 'backend/src/server.js'), 'utf8');
+  const bookingDetails = readFrontend('screens/services/BookingDetailsScreen.tsx');
+
+  assert.equal((serviceController.match(/assertBookingChatAvailable\(booking\)/g) || []).length, 2);
+  assert.match(chatController, /await chatService\.assertCanAccessThread/);
+  assert.match(chatService, /await assertCanAccessThread\(chat, senderId\)/);
+  assert.match(socket, /await chatService\.assertCanAccessThread/);
+  assert.match(server, /await ensureChatIndexes\(\)/);
+  assert.match(bookingDetails, /canUseBookingChat\(booking\)/);
+});
+
+test('booking chat creation remains idempotent and repairs the legacy conflicting index', () => {
+  const chatService = fs.readFileSync(path.join(root, 'backend/src/services/chatService.js'), 'utf8');
+  assert.match(chatService, /findOneAndUpdate\([\s\S]*?upsert: true/);
+  assert.match(chatService, /error\?\.code !== 11000/);
+  assert.match(chatService, /partialFilterExpression/);
+  assert.match(chatService, /dropIndex\(staleJobIndex\.name\)/);
+  assert.match(chatService, /Chat\.createIndexes\(\)/);
 });
 
 test('saved offers and saved locations persist explicit state as collections', () => {

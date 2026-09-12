@@ -5,14 +5,11 @@
  */
 const mongoose = require('mongoose');
 const env = require('../config/env');
-const Chat = require('../models/Chat');
+const { ensureChatIndexes } = require('../services/chatService');
 
 const run = async () => {
   await mongoose.connect(env.mongoUri);
-  const indexes = await Chat.collection.indexes();
-  const oldIndex = indexes.find((index) => index.name === 'job_1_applicant_1' && !index.partialFilterExpression);
-  if (oldIndex) await Chat.collection.dropIndex(oldIndex.name);
-  await Chat.syncIndexes();
+  await ensureChatIndexes();
   await mongoose.disconnect();
 };
 

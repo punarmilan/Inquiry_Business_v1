@@ -1,7 +1,5 @@
 require('dotenv').config({ path: __dirname + '/.env' });
 
-const appJson = require('./app.json');
-
 const dynamicPlugins = [
   [
     'react-native-maps',
@@ -32,11 +30,10 @@ const dynamicPlugins = [
   ],
 ].filter(Boolean);
 
-module.exports = {
-  expo: {
-    ...appJson.expo,
+module.exports = ({ config }) => ({
+  ...config,
     extra: {
-      ...appJson.expo.extra,
+      ...config.extra,
       googleWebClientId: process.env.GOOGLE_WEB_CLIENT_ID || '',
       ...(process.env.EXPO_PUBLIC_API_BASE_URL
         ? { apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL }
@@ -45,6 +42,5 @@ module.exports = {
         ? { eas: { projectId: process.env.EAS_PROJECT_ID } }
         : {}),
     },
-    plugins: [...appJson.expo.plugins, ...dynamicPlugins],
-  },
-};
+    plugins: [...(config.plugins || []), ...dynamicPlugins],
+});

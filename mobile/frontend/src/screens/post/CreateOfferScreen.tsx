@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Dimensions, findNodeHandle, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Location from 'expo-location';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -26,6 +26,7 @@ const formatOfferDate = (date: Date) =>
 export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
   const { accessToken } = useApp();
   const scrollRef = useRef<ScrollView>(null);
+  const scrollOffsetRef = useRef(0);
   const params = route.params || ({} as PostStackParamList['CreateOffer']);
   const existingOffer = params.offer;
   const isEditing = Boolean(existingOffer);
@@ -237,8 +238,22 @@ export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
 
   const datePickerValue = activeDatePicker === 'expiry' ? expiresAt : startsAt;
   const datePickerMinimum = activeDatePicker === 'expiry' ? startsAt : new Date();
-  const revealFocusedInput = (target: number) => {
-    setTimeout(() => scrollRef.current?.scrollResponderScrollNativeHandleToKeyboard(target, 32, true), 120);
+  const revealFocusedInput = () => {
+    setTimeout(() => {
+      const focusedInput = TextInput.State.currentlyFocusedInput();
+      const scrollView = scrollRef.current;
+      if (!focusedInput || !scrollView) return;
+      const keyboardTop = Math.min(Keyboard.metrics()?.screenY ?? Number.POSITIVE_INFINITY, Dimensions.get('window').height);
+      focusedInput.measureInWindow((_x, y, _width, height) => {
+        if (Number.isFinite(keyboardTop)) {
+          const hiddenByKeyboard = y + height + 28 - keyboardTop;
+          if (hiddenByKeyboard > 0) scrollView.scrollTo({ y: scrollOffsetRef.current + hiddenByKeyboard, animated: true });
+          return;
+        }
+        const nativeHandle = findNodeHandle(focusedInput as any);
+        if (nativeHandle) scrollView.scrollResponderScrollNativeHandleToKeyboard(nativeHandle, 96, true);
+      });
+    }, 250);
   };
 
   return (
@@ -250,7 +265,7 @@ export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
         </Pressable>
         <Text style={styles.topTitle}>{isEditing ? 'Edit Offer' : 'Create Offer'}</Text>
       </View>
-      <ScrollView ref={scrollRef} style={styles.flex} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}>
+      <ScrollView ref={scrollRef} onScroll={(event) => { scrollOffsetRef.current = event.nativeEvent.contentOffset.y; }} scrollEventThrottle={16} style={styles.flex} contentContainerStyle={styles.content} keyboardShouldPersistTaps="always" keyboardDismissMode="none" automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}>
         <View style={styles.business}>
           <MaterialCommunityIcons name="storefront-outline" size={24} color={theme.colors.primary} />
           <View>
@@ -277,17 +292,17 @@ export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
           </View>
         ) : (
           <>
-            <Input label={`Offer title *${isFieldEditable('title') ? '' : ' (locked by template)'}`} editable={isFieldEditable('title')} value={title} onChangeText={setTitle} placeholder="30% off on family dinner" />
-            <Input label={`Description *${isFieldEditable('description') ? '' : ' (locked by template)'}`} editable={isFieldEditable('description')} value={description} onChangeText={setDescription} multiline placeholder="What is included?" />
-            <Input label={`Category *${isFieldEditable('category') ? '' : ' (locked by template)'}`} editable={isFieldEditable('category')} value={category} onChangeText={setCategory} />
+            <Input label={`Offer title *${isFieldEditable('title') ? '' : ' (locked by template)'}`} editable={isFieldEditable('title')} value={title} onChangeText={setTitle} placeholder="30% off on family dinner" onFocus={revealFocusedInput} />
+            <Input label={`Description *${isFieldEditable('description') ? '' : ' (locked by template)'}`} editable={isFieldEditable('description')} value={description} onChangeText={setDescription} multiline placeholder="What is included?" onFocus={revealFocusedInput} />
+            <Input label={`Category *${isFieldEditable('category') ? '' : ' (locked by template)'}`} editable={isFieldEditable('category')} value={category} onChangeText={setCategory} onFocus={revealFocusedInput} />
           </>
         )}
         <View style={styles.two}>
           <View style={styles.flex}>
-            <Input label={`Original price *${isFieldEditable('originalPrice') ? '' : ' (locked by template)'}`} editable={isFieldEditable('originalPrice')} value={originalPrice} onChangeText={setOriginalPrice} keyboardType="numeric" />
+            <Input label={`Original price *${isFieldEditable('originalPrice') ? '' : ' (locked by template)'}`} editable={isFieldEditable('originalPrice')} value={originalPrice} onChangeText={setOriginalPrice} keyboardType="numeric" onFocus={revealFocusedInput} />
           </View>
           <View style={styles.flex}>
-            <Input label={`Offer price *${isFieldEditable('offerPrice') ? '' : ' (locked by template)'}`} editable={isFieldEditable('offerPrice')} value={offerPrice} onChangeText={setOfferPrice} keyboardType="numeric" />
+            <Input label={`Offer price *${isFieldEditable('offerPrice') ? '' : ' (locked by template)'}`} editable={isFieldEditable('offerPrice')} value={offerPrice} onChangeText={setOfferPrice} keyboardType="numeric" onFocus={revealFocusedInput} />
           </View>
         </View>
 
@@ -337,15 +352,15 @@ export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
           />
         )}
 
-        <Input label="House No." value={houseNo} onChangeText={setHouseNo} placeholder="House / shop number" onFocus={(event) => revealFocusedInput(event.nativeEvent.target)} />
-        <Input label="Street Address *" value={streetAddress} onChangeText={setStreetAddress} placeholder="Street, landmark" multiline textAlignVertical="top" onFocus={(event) => revealFocusedInput(event.nativeEvent.target)} />
-        <Input label="Locality" value={locality} onChangeText={setLocality} placeholder="Area / neighbourhood" onFocus={(event) => revealFocusedInput(event.nativeEvent.target)} />
+        <Input label="House No." value={houseNo} onChangeText={setHouseNo} placeholder="House / shop number" onFocus={revealFocusedInput} />
+        <Input label="Street Address *" value={streetAddress} onChangeText={setStreetAddress} placeholder="Street, landmark" multiline textAlignVertical="top" onFocus={revealFocusedInput} />
+        <Input label="Locality" value={locality} onChangeText={setLocality} placeholder="Area / neighbourhood" onFocus={revealFocusedInput} />
         <Input label="City" value={typeof business?.city === 'string' ? '' : business?.city?.name || ''} editable={false} />
         <Button label="Use Current Location" variant="outline" onPress={useCurrentLocation} loading={locationLoading} icon={<MaterialCommunityIcons name="crosshairs-gps" size={20} color={theme.colors.primary} />} />
 
-        <Input label="Phone" value={phone} onChangeText={(value) => setPhone(sanitizeIndianPhoneInput(value).digits)} keyboardType="phone-pad" maxLength={10} onFocus={(event) => revealFocusedInput(event.nativeEvent.target)} />
-        <Input label="WhatsApp" value={whatsapp} onChangeText={(value) => setWhatsapp(sanitizeIndianPhoneInput(value).digits)} keyboardType="phone-pad" maxLength={10} onFocus={(event) => revealFocusedInput(event.nativeEvent.target)} />
-        <Input label={`Terms & Conditions${isFieldEditable('terms') ? '' : ' (locked by template)'}`} editable={isFieldEditable('terms')} value={terms} onChangeText={setTerms} multiline textAlignVertical="top" placeholder="Usage conditions, exclusions..." onFocus={(event) => revealFocusedInput(event.nativeEvent.target)} />
+        <Input label="Phone" value={phone} onChangeText={(value) => setPhone(sanitizeIndianPhoneInput(value).digits)} keyboardType="phone-pad" maxLength={10} onFocus={revealFocusedInput} />
+        <Input label="WhatsApp" value={whatsapp} onChangeText={(value) => setWhatsapp(sanitizeIndianPhoneInput(value).digits)} keyboardType="phone-pad" maxLength={10} onFocus={revealFocusedInput} />
+        <Input label={`Terms & Conditions${isFieldEditable('terms') ? '' : ' (locked by template)'}`} editable={isFieldEditable('terms')} value={terms} onChangeText={setTerms} multiline textAlignVertical="top" placeholder="Usage conditions, exclusions..." onFocus={revealFocusedInput} />
 
         <View style={styles.note}>
           <MaterialCommunityIcons name="shield-check-outline" size={22} color={theme.colors.secondary} />
@@ -363,7 +378,7 @@ const styles = StyleSheet.create({
   top: { height: 58, backgroundColor: theme.colors.surface, flexDirection: 'row', alignItems: 'center' },
   back: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center' },
   topTitle: { ...theme.typography.h3, color: theme.colors.text },
-  content: { padding: 18, paddingBottom: 100 },
+  content: { flexGrow: 1, padding: 18, paddingBottom: 100 },
   business: { flexDirection: 'row', gap: 12, alignItems: 'center', backgroundColor: theme.colors.primaryLight, borderRadius: 16, padding: 14, marginBottom: 18 },
   businessLabel: { fontSize: 9, color: theme.colors.textMuted, fontWeight: '900', letterSpacing: 1 },
   businessName: { ...theme.typography.bodyBold, color: theme.colors.text, marginTop: 2 },

@@ -41,7 +41,7 @@ const getMessages = asyncHandler(async (req, res) => {
   if (!chat) {
     throw new ApiError(404, 'Conversation not found', 'CHAT_NOT_FOUND');
   }
-  chatService.assertParticipant(chat, req.user._id);
+  await chatService.assertCanAccessThread(chat, req.user._id);
 
   const filter = { chat: chat._id };
   if (req.query.before) {

@@ -763,6 +763,7 @@ export const verifyWorkerOtp = (accessToken: string, jobId: string, otp: string)
 export interface BackendChat {
   _id: string;
   job: { _id: string; title: string; status: string } | string | null;
+  booking?: { _id: string; bookingNumber: string; status: string } | string | null;
   poster: BackendUser | string;
   applicant: BackendUser | string;
   otherUser?: BackendUser;

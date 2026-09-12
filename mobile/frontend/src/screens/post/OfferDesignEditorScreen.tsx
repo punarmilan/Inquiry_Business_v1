@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Image, Keyboard, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Animated, Image, Keyboard, KeyboardAvoidingView, Platform, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -8,6 +8,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { listMyBusinesses, listOfferTemplates, listTemplateStickers } from '../../services/api';
+import { recordOfferTemplateUsage, saveOfferDesignCreation } from '../../services/offerDesignStorage';
 import { DEFAULT_OFFER_CARD_DESIGN, OFFER_AVATARS, OFFER_CARD_COLORS, OFFER_CARD_TEMPLATES, findOfferAvatar, resolveDynamicValue, resolveOfferFontFamily, resolveOfferLineHeight, resolveTemplateElementValue, toOfferCardTemplate, type OfferCardDesign, type OfferCardTemplate, type OfferTemplateCanvas, type OfferTemplateElement } from '../../config/offerCardDesigner';
 import { OfferAvatarSprite } from '../../components/OfferAvatarSprite';
 import type { OfferSticker } from '../../config/offerStickers';
@@ -17,15 +18,17 @@ import { useApp } from '../../context/AppContext';
 import { theme } from '../../theme';
 
 type Props = NativeStackScreenProps<PostStackParamList, 'OfferDesignEditor'>;
-type EditorTool = 'templates' | 'text' | 'brand' | 'uploads' | 'stickers' | 'shapes';
+type EditorTool = 'templates' | 'text' | 'brand' | 'uploads' | 'stickers' | 'shapes' | 'more';
+type EditorSnapshot = { cardDesign: OfferCardDesign; title: string; description: string; category: string; imageUrls: string[]; posterTextValues: Record<string, string> };
 
 const TOOLS: Array<{ id: EditorTool; label: string; icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'] }> = [
   { id: 'templates', label: 'Templates', icon: 'view-grid-outline' },
   { id: 'text', label: 'Text', icon: 'format-text' },
-  { id: 'brand', label: 'Brand', icon: 'palette-outline' },
-  { id: 'uploads', label: 'Uploads', icon: 'cloud-upload-outline' },
+  { id: 'brand', label: 'Background', icon: 'palette-outline' },
+  { id: 'uploads', label: 'Image', icon: 'cloud-upload-outline' },
   { id: 'stickers', label: 'Stickers', icon: 'sticker-outline' },
   { id: 'shapes', label: 'Shapes', icon: 'shape-outline' },
+  { id: 'more', label: 'More', icon: 'dots-horizontal-circle-outline' },
 ];
 const FONT_WEIGHT_OPTIONS = [
   { value: '500' as const, label: 'Light' },
@@ -35,9 +38,10 @@ const FONT_WEIGHT_OPTIONS = [
   { value: '900' as const, label: 'Extra bold' },
 ];
 const TEXT_COLOR_OPTIONS = ['#FFFFFF', '#111827', '#F45B18', '#E53935', '#FFC107', '#2563EB', '#16A34A', '#9333EA'] as const;
+const FONT_FAMILY_OPTIONS = [{ value: 'System', label: 'System' }, { value: 'Serif', label: 'Serif' }, { value: 'Mono', label: 'Mono' }] as const;
 const makeBlankCanvas = (): OfferTemplateCanvas => ({
   width: 1080,
-  height: 1350,
+  height: 1920,
   backgroundColor: '#FFFFFF',
   background: { type: 'solid', color: '#FFFFFF' },
   elements: [],
@@ -65,14 +69,14 @@ const makeBlankDesign = (): OfferCardDesign => ({
 
 const makeCanvasFromDesign = (design: OfferCardDesign): OfferTemplateCanvas => ({
   width: 1080,
-  height: 1350,
+  height: 1920,
   backgroundColor: design.primaryColor,
   background: { type: 'gradient', from: design.primaryColor, to: design.secondaryColor },
   overlay: design.previewUrl ? { color: '#000000', opacity: 0.28 } : undefined,
   elements: [
     ...(design.previewUrl ? [{
       id: 'template-background-image', type: 'image' as const, field: 'imageUrls', imageUrl: design.previewUrl,
-      x: 0, y: 0, width: 1080, height: 1350, zIndex: 1, editable: true, resizeMode: 'cover' as const,
+      x: 0, y: 0, width: 1080, height: 1920, zIndex: 1, editable: true, resizeMode: 'cover' as const,
     }] : []),
     {
       id: 'template-category', type: 'text', field: 'category', content: 'LOCAL OFFER',
@@ -244,6 +248,7 @@ const EditableCanvasText: React.FC<{
   onOffsetChange: (kind: EditableTextKey, offset: TextOffset) => void;
   onTransformCommit?: (scale: number, rotation: number) => void;
 }> = ({ kind, text, placeholder, style, layerStyle, numberOfLines, showPlaceholder = true, rotation = 0, editingText, movingText, offset, onEditText, onToggleMove, onChangeText, onOffsetChange, onTransformCommit }) => {
+  const [liveDrag, setLiveDrag] = useState<TextOffset | null>(null);
   const offsetRef = useRef(offset);
   const dragStart = useRef(offset);
   const lastPinchDistance = useRef<number | null>(null);
@@ -258,8 +263,8 @@ const EditableCanvasText: React.FC<{
 
   const responder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => movingText === kind,
-    onMoveShouldSetPanResponder: (_, gesture) => movingText === kind || gesture.numberActiveTouches > 1 || Math.abs(gesture.dx) > 6 || Math.abs(gesture.dy) > 6,
-    onMoveShouldSetPanResponderCapture: (_, gesture) => movingText === kind || gesture.numberActiveTouches > 1 || Math.abs(gesture.dx) > 6 || Math.abs(gesture.dy) > 6,
+    onMoveShouldSetPanResponder: (_, gesture) => editingText !== kind && (movingText === kind || gesture.numberActiveTouches > 1 || Math.abs(gesture.dx) > 6 || Math.abs(gesture.dy) > 6),
+    onMoveShouldSetPanResponderCapture: (_, gesture) => editingText !== kind && (movingText === kind || gesture.numberActiveTouches > 1 || Math.abs(gesture.dx) > 6 || Math.abs(gesture.dy) > 6),
     onPanResponderGrant: (event) => {
       dragStart.current = offsetRef.current;
       lastPinchDistance.current = distanceBetweenTouches(event.nativeEvent.touches);
@@ -291,6 +296,7 @@ const EditableCanvasText: React.FC<{
           }
         }
         lastTouchAngle.current = angle;
+        lastPinchDistance.current = distance;
         return;
       }
       if (rotating.current) return;
@@ -299,9 +305,11 @@ const EditableCanvasText: React.FC<{
         x: Math.max(-320, Math.min(320, dragStart.current.x + gesture.dx)),
         y: Math.max(-320, Math.min(320, dragStart.current.y + gesture.dy)),
       };
-      onOffsetChange(kind, next);
+      setLiveDrag(next);
     },
-    onPanResponderRelease: () => {
+    onPanResponderRelease: (_, gesture) => {
+      if (!rotating.current && dragged.current) onOffsetChange(kind, { x: dragStart.current.x + gesture.dx, y: dragStart.current.y + gesture.dy });
+      setLiveDrag(null);
       if (rotating.current && onTransformCommit) onTransformCommit(liveScaleRef.current, liveRotationRef.current);
       lastPinchDistance.current = null;
       lastTouchAngle.current = null;
@@ -320,7 +328,7 @@ const EditableCanvasText: React.FC<{
       setLiveRotation(0);
       rotating.current = false;
     },
-  }), [kind, movingText, onOffsetChange, onTransformCommit]);
+  }), [kind, movingText, editingText, onOffsetChange, onTransformCommit]);
 
   const handleTap = () => {
     if (movingText === kind) {
@@ -333,7 +341,7 @@ const EditableCanvasText: React.FC<{
 
   const isActive = editingText === kind || movingText === kind;
   return (
-    <View collapsable={false} {...responder.panHandlers} style={[styles.canvasMovableText, layerStyle, { transform: [{ translateX: offset.x }, { translateY: offset.y }, { rotate: `${rotation + liveRotation}deg` }, { scale: liveScale }] }]}>
+    <View collapsable={false} {...responder.panHandlers} style={[styles.canvasMovableText, layerStyle, { transform: [{ translateX: liveDrag?.x ?? offset.x }, { translateY: liveDrag?.y ?? offset.y }, { rotate: `${rotation + liveRotation}deg` }, { scale: liveScale }] }]}>
       <Pressable onPress={handleTap} hitSlop={8} style={[styles.canvasTextTouch, isActive && styles.canvasTextSelected]}>
         {editingText === kind ? (
           <TextInput
@@ -343,7 +351,7 @@ const EditableCanvasText: React.FC<{
             onBlur={() => onEditText(null)}
             placeholder={placeholder}
             placeholderTextColor="rgba(255,255,255,0.78)"
-            multiline={kind === 'description'}
+            multiline
             numberOfLines={numberOfLines}
             allowFontScaling={false}
             style={[style, styles.canvasTextInput]}
@@ -444,13 +452,14 @@ const CanvasPreview: React.FC<{
   selectedShapeId: string | null;
   onSelectShape: (id: string | null) => void;
   onSelectTextElement: (id: string) => void;
+  onDoubleTapEmpty: (position: { x: number; y: number }) => void;
   avatarOffset: TextOffset;
   onMoveAvatar: (delta: TextOffset) => void;
   avatarScale: number;
   avatarSelected: boolean;
   onSelectAvatar: () => void;
   onResizeAvatar: (factor: number) => void;
-}> = ({ design, template, business, title, description, category, imageUrl, textValues, editingText, movingText, textOffsets, onEditText, onToggleMove, onChangeText, onOffsetChange, onMoveElement, onResizeElement, onRotateElement, onDeleteElement, selectedStickerId, onSelectSticker, selectedImageId, onSelectImage, selectedShapeId, onSelectShape, onSelectTextElement, avatarOffset, onMoveAvatar, avatarScale, avatarSelected, onSelectAvatar, onResizeAvatar }) => {
+}> = ({ design, template, business, title, description, category, imageUrl, textValues, editingText, movingText, textOffsets, onEditText, onToggleMove, onChangeText, onOffsetChange, onMoveElement, onResizeElement, onRotateElement, onDeleteElement, selectedStickerId, onSelectSticker, selectedImageId, onSelectImage, selectedShapeId, onSelectShape, onSelectTextElement, onDoubleTapEmpty, avatarOffset, onMoveAvatar, avatarScale, avatarSelected, onSelectAvatar, onResizeAvatar }) => {
   const avatar = design.avatarId ? findOfferAvatar(design.avatarId) : null;
   const source = imageUrl || design.previewUrl;
   const textAlign = design.textAlign || (design.layout === 'center' ? 'center' : 'left');
@@ -476,6 +485,7 @@ const CanvasPreview: React.FC<{
     ...(imageUrl ? { imageUrls: imageUrl } : {}),
   };
   const [canvasWidth, setCanvasWidth] = useState(0);
+  const lastCanvasTapRef = useRef<{ time: number; x: number; y: number } | null>(null);
   const [stageSize, setStageSize] = useState<LayoutSize>({ width: 0, height: 0 });
   const posterScale = poster && canvasWidth ? canvasWidth / poster.width : 0.28;
   const canvasAspectRatio = poster && Number.isFinite(poster.width) && Number.isFinite(poster.height) && poster.width > 0 && poster.height > 0
@@ -483,7 +493,6 @@ const CanvasPreview: React.FC<{
     : 0.82;
   const previewFrameSize = useMemo(() => {
     const availableFrameWidth = Math.min(
-      CANVAS_MAX_WIDTH,
       Math.max(0, stageSize.width - CANVAS_STAGE_HORIZONTAL_PADDING * 2),
     );
     const availableFrameHeight = Math.max(
@@ -608,7 +617,7 @@ const CanvasPreview: React.FC<{
     if (element.id.startsWith('sticker-')) {
       return <MovablePosterElement key={element.id} style={layer} baseTransform={rotationTransform(element.rotation)} onSelect={() => onSelectSticker(element.id)} onCommit={(delta) => onMoveElement(element.id, { x: delta.x / Math.max(posterScale, 0.01), y: delta.y / Math.max(posterScale, 0.01) })}><Text style={[StyleSheet.absoluteFill, styles.posterText, textStyle]} numberOfLines={displayLineCount(element)} adjustsFontSizeToFit minimumFontScale={0.55} allowFontScaling={false}>{textFor(element)}</Text></MovablePosterElement>;
     }
-    if (editableKind) return <EditableCanvasText key={element.id} kind={editableKind} text={textFor(element)} placeholder={element.text || ''} showPlaceholder={false} rotation={element.rotation} style={[styles.posterText, textStyle]} layerStyle={layer} numberOfLines={displayLineCount(element)} editingText={editingText} movingText={movingText} offset={textOffsets[editableKind] || { x: 0, y: 0 }} onEditText={(kind) => { if (kind) onSelectTextElement(element.id); onEditText(kind); }} onToggleMove={onToggleMove} onChangeText={onChangeText} onOffsetChange={onOffsetChange} onTransformCommit={(scale, rotation) => { if (Math.abs(scale - 1) > 0.01) onResizeElement(element.id, scale); if (Math.abs(rotation) > 0.1) onRotateElement(element.id, rotation); }} />;
+    if (editableKind) return <EditableCanvasText key={element.id} kind={editableKind} text={textFor(element)} placeholder={element.text || ''} showPlaceholder={false} rotation={element.rotation} style={[styles.posterText, textStyle]} layerStyle={layer} numberOfLines={displayLineCount(element)} editingText={editingText} movingText={movingText} offset={{ x: 0, y: 0 }} onEditText={(kind) => { if (kind) onSelectTextElement(element.id); onEditText(kind); }} onToggleMove={onToggleMove} onChangeText={onChangeText} onOffsetChange={(_, delta) => onMoveElement(element.id, { x: delta.x / Math.max(posterScale, 0.01), y: delta.y / Math.max(posterScale, 0.01) })} onTransformCommit={(scale, rotation) => { if (Math.abs(scale - 1) > 0.01) onResizeElement(element.id, scale); if (Math.abs(rotation) > 0.1) onRotateElement(element.id, rotation); }} />;
     return <MovablePosterElement key={element.id} style={layer} baseTransform={rotationTransform(element.rotation)} onTransformCommit={(scale, rotation) => { onResizeElement(element.id, scale); if (Math.abs(rotation) > 0.1) onRotateElement(element.id, rotation); }} onCommit={(delta) => onMoveElement(element.id, { x: delta.x / Math.max(posterScale, 0.01), y: delta.y / Math.max(posterScale, 0.01) })}><Text style={[StyleSheet.absoluteFill, styles.posterText, textStyle]} numberOfLines={displayLineCount(element)} adjustsFontSizeToFit minimumFontScale={0.55} allowFontScaling={false}>{textFor(element)}</Text></MovablePosterElement>;
   };
 
@@ -618,8 +627,8 @@ const CanvasPreview: React.FC<{
       <LinearGradient colors={['rgba(0,0,0,0.03)', 'rgba(0,0,0,0.62)']} style={styles.canvasShade} />
       <View style={styles.canvasTop}><Text style={styles.canvasCategory}>{(category || 'LOCAL OFFER').toUpperCase()}</Text><View style={styles.canvasBadge}><Text style={styles.canvasBadgeText}>OFFER</Text></View></View>
       <View style={[styles.canvasCopy, design.layout === 'left' && styles.canvasCopyLeft, design.layout === 'bottom' && styles.canvasCopyBottom, design.layout === 'center' && styles.canvasCopyCenter]}>
-        <EditableCanvasText kind="title" text={title} placeholder="Your offer title" style={[styles.canvasTitle, { fontSize: titleSize, lineHeight: titleSize + 4, fontWeight: (design.customizations?.titleFontWeight || design.fontWeight || '900') as '500' | '600' | '700' | '800' | '900', fontStyle: (design.customizations?.titleFontStyle || design.fontStyle || 'normal') as 'normal' | 'italic', textAlign: (design.customizations?.titleTextAlign || textAlign) as 'left' | 'center' | 'right', color: String(design.customizations?.titleColor || '#FFFFFF'), letterSpacing: Number(design.customizations?.titleLetterSpacing || 0), textDecorationLine: (design.customizations?.titleTextDecoration || 'none') as 'none' | 'underline' | 'line-through', textTransform: (design.customizations?.titleTextTransform || 'none') as 'none' | 'uppercase' | 'lowercase' | 'capitalize' }]} numberOfLines={2} editingText={editingText} movingText={movingText} offset={textOffsets.title} onEditText={(kind) => { if (kind) onSelectTextElement('$title'); onEditText(kind); }} onToggleMove={onToggleMove} onChangeText={onChangeText} onOffsetChange={onOffsetChange} />
-        <EditableCanvasText kind="description" text={description} placeholder="Your offer description appears here." style={[styles.canvasDescription, { fontSize: bodySize, fontWeight: (design.customizations?.descriptionFontWeight || '600') as '500' | '600' | '700' | '800' | '900', fontStyle: (design.customizations?.descriptionFontStyle || design.fontStyle || 'normal') as 'normal' | 'italic', textAlign: (design.customizations?.descriptionTextAlign || textAlign) as 'left' | 'center' | 'right', color: String(design.customizations?.descriptionColor || 'rgba(255,255,255,0.95)'), letterSpacing: Number(design.customizations?.descriptionLetterSpacing || 0), textDecorationLine: (design.customizations?.descriptionTextDecoration || 'none') as 'none' | 'underline' | 'line-through', textTransform: (design.customizations?.descriptionTextTransform || 'none') as 'none' | 'uppercase' | 'lowercase' | 'capitalize' }]} numberOfLines={3} editingText={editingText} movingText={movingText} offset={textOffsets.description} onEditText={(kind) => { if (kind) onSelectTextElement('$description'); onEditText(kind); }} onToggleMove={onToggleMove} onChangeText={onChangeText} onOffsetChange={onOffsetChange} />
+        <EditableCanvasText kind="title" text={title} placeholder="Your offer title" style={[styles.canvasTitle, { fontSize: titleSize, lineHeight: titleSize + 4, fontWeight: (design.customizations?.titleFontWeight || design.fontWeight || '900') as '500' | '600' | '700' | '800' | '900', fontStyle: (design.customizations?.titleFontStyle || design.fontStyle || 'normal') as 'normal' | 'italic', fontFamily: resolveOfferFontFamily(String(design.customizations?.titleFontFamily || 'System')), textAlign: (design.customizations?.titleTextAlign || textAlign) as 'left' | 'center' | 'right', color: String(design.customizations?.titleColor || '#FFFFFF'), letterSpacing: Number(design.customizations?.titleLetterSpacing || 0), textDecorationLine: (design.customizations?.titleTextDecoration || 'none') as 'none' | 'underline' | 'line-through', textTransform: (design.customizations?.titleTextTransform || 'none') as 'none' | 'uppercase' | 'lowercase' | 'capitalize' }]} numberOfLines={2} editingText={editingText} movingText={movingText} offset={textOffsets.title} onEditText={(kind) => { if (kind) onSelectTextElement('$title'); onEditText(kind); }} onToggleMove={onToggleMove} onChangeText={onChangeText} onOffsetChange={onOffsetChange} />
+        <EditableCanvasText kind="description" text={description} placeholder="Your offer description appears here." style={[styles.canvasDescription, { fontSize: bodySize, fontWeight: (design.customizations?.descriptionFontWeight || '600') as '500' | '600' | '700' | '800' | '900', fontStyle: (design.customizations?.descriptionFontStyle || design.fontStyle || 'normal') as 'normal' | 'italic', fontFamily: resolveOfferFontFamily(String(design.customizations?.descriptionFontFamily || 'System')), textAlign: (design.customizations?.descriptionTextAlign || textAlign) as 'left' | 'center' | 'right', color: String(design.customizations?.descriptionColor || 'rgba(255,255,255,0.95)'), letterSpacing: Number(design.customizations?.descriptionLetterSpacing || 0), textDecorationLine: (design.customizations?.descriptionTextDecoration || 'none') as 'none' | 'underline' | 'line-through', textTransform: (design.customizations?.descriptionTextTransform || 'none') as 'none' | 'uppercase' | 'lowercase' | 'capitalize' }]} numberOfLines={3} editingText={editingText} movingText={movingText} offset={textOffsets.description} onEditText={(kind) => { if (kind) onSelectTextElement('$description'); onEditText(kind); }} onToggleMove={onToggleMove} onChangeText={onChangeText} onOffsetChange={onOffsetChange} />
         <Text style={styles.canvasPrice}>Add price next</Text>
       </View>
       {design.templateId === 'custom' && !source && avatar ? <OfferAvatarSprite avatar={avatar} size={175} style={[styles.canvasAvatar, design.layout === 'left' && styles.canvasAvatarLeft, design.layout === 'center' && styles.canvasAvatarCenter]} /> : null}
@@ -631,9 +640,21 @@ const CanvasPreview: React.FC<{
       <View style={[styles.canvasPaper, previewFrameSize || styles.canvasPaperMeasuring]}>
         {poster ? (
           <View onLayout={(event) => setCanvasWidth(event.nativeEvent.layout.width)} style={[styles.canvasCard, { backgroundColor: poster.backgroundColor || design.primaryColor }]}>
-            {poster.background?.type === 'gradient' || poster.background?.type === 'linear-gradient' ? <LinearGradient colors={gradientStops(poster.background.colors, poster.background.from || design.primaryColor, poster.background.to || design.secondaryColor)} style={styles.canvasImage} /> : null}
-            {(poster.backgroundImageUrl || poster.background?.imageUrl) ? <Image source={{ uri: poster.backgroundImageUrl || poster.background?.imageUrl }} style={[styles.canvasImage, { opacity: poster.background?.opacity ?? 1 }]} resizeMode="cover" /> : null}
-            {poster.overlay?.color ? <View pointerEvents="none" style={[styles.canvasImage, { backgroundColor: poster.overlay.color, opacity: poster.overlay.opacity ?? 0.25 }]} /> : null}
+            <Pressable
+              accessibilityLabel="Canvas"
+              style={StyleSheet.absoluteFill}
+              onPress={(event) => {
+                const now = Date.now();
+                const { locationX: x, locationY: y } = event.nativeEvent;
+                const last = lastCanvasTapRef.current;
+                if (last && now - last.time < 320 && Math.hypot(x - last.x, y - last.y) < 24) {
+                  lastCanvasTapRef.current = null;
+                  onDoubleTapEmpty({ x: x / Math.max(posterScale, 0.01), y: y / Math.max(posterScale, 0.01) });
+                } else lastCanvasTapRef.current = { time: now, x, y };
+              }}
+            />
+            {poster.background?.type === 'gradient' || poster.background?.type === 'linear-gradient' ? <LinearGradient pointerEvents="none" colors={gradientStops(poster.background.colors, poster.background.from || design.primaryColor, poster.background.to || design.secondaryColor)} style={styles.canvasImage} /> : null}
+            {(poster.backgroundImageUrl || poster.background?.imageUrl) ? <View pointerEvents="none" style={StyleSheet.absoluteFill}><Image source={{ uri: poster.backgroundImageUrl || poster.background?.imageUrl }} style={[styles.canvasImage, { opacity: poster.background?.opacity ?? 1 }]} resizeMode="cover" /></View> : null}
             {poster.elements.slice().sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)).map(renderPosterElement)}
             {selectedEditableElement ? <View pointerEvents="none" style={[positionFor(selectedEditableElement, poster), styles.selectedElementFrame]} /> : null}
             {design.templateId === 'custom' && avatar ? <MovablePosterElement style={styles.blankAvatarOverlay} baseTransform={[{ translateX: avatarOffset.x * posterScale }, { translateY: avatarOffset.y * posterScale }]} onSelect={onSelectAvatar} onTransformCommit={(scale) => onResizeAvatar(scale)} onCommit={(delta) => onMoveAvatar({ x: delta.x / Math.max(posterScale, 0.01), y: delta.y / Math.max(posterScale, 0.01) })}><OfferAvatarSprite avatar={avatar} size={Math.max(72, Math.round((canvasWidth || 320) * 0.23 * avatarScale))} /></MovablePosterElement> : null}
@@ -646,17 +667,17 @@ const CanvasPreview: React.FC<{
 };
 
 export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) => {
-  const { accessToken } = useApp();
-  const { businessId, designMode } = route.params;
+  const { accessToken, currentUser } = useApp();
+  const { businessId, designMode, initialTemplateId, initialDesign, initialTitle, initialDescription, initialCategory, initialImageUrls } = route.params;
   const [business, setBusiness] = useState<Business | null>(null);
   const [templates, setTemplates] = useState<OfferCardTemplate[]>([]);
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('');
-  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [title, setTitle] = useState(initialTitle || '');
+  const [description, setDescription] = useState(initialDescription || '');
+  const [category, setCategory] = useState(initialCategory || '');
+  const [imageUrls, setImageUrls] = useState<string[]>(initialImageUrls || []);
   // Start every new design on a truly empty canvas. Templates are choices,
   // not implicit content, and avatars are added as explicit layers.
-  const [cardDesign, setCardDesign] = useState<OfferCardDesign>(() => makeBlankDesign());
+  const [cardDesign, setCardDesign] = useState<OfferCardDesign>(() => initialDesign || makeBlankDesign());
   const [activeTool, setActiveTool] = useState<EditorTool>(designMode === 'custom' ? 'text' : 'templates');
   const [templateCategory, setTemplateCategory] = useState('All');
   const templateScrollRef = useRef<ScrollView>(null);
@@ -671,9 +692,38 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
   const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
   const [selectedTextElementId, setSelectedTextElementId] = useState<string>('$title');
-  const [avatarOffset, setAvatarOffset] = useState<TextOffset>({ x: 0, y: 0 });
-  const [avatarScale, setAvatarScale] = useState(1);
+  const [avatarOffset, setAvatarOffset] = useState<TextOffset>({ x: Number(initialDesign?.customizations?.avatarOffsetX || 0), y: Number(initialDesign?.customizations?.avatarOffsetY || 0) });
+  const [avatarScale, setAvatarScale] = useState(Number(initialDesign?.customizations?.avatarScale || 1));
   const [avatarSelected, setAvatarSelected] = useState(false);
+  const [panelExpanded, setPanelExpanded] = useState(true);
+  const [editorLandscape, setEditorLandscape] = useState(false);
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const panelMotion = useRef(new Animated.Value(0)).current;
+  const collapseTools = useCallback(() => {
+    Animated.timing(panelMotion, { toValue: 1, duration: 180, useNativeDriver: true }).start(({ finished }) => {
+      if (finished) setPanelExpanded(false);
+      panelMotion.setValue(0);
+    });
+  }, [panelMotion]);
+  const panelGesture = useMemo(() => PanResponder.create({
+    onMoveShouldSetPanResponder: (_, gesture) => editorLandscape
+      ? gesture.dx > 18 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.5
+      : gesture.dy > 18 && Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.5,
+    onPanResponderRelease: (_, gesture) => {
+      if (editorLandscape ? gesture.dx > 35 : gesture.dy > 35) collapseTools();
+    },
+  }), [editorLandscape, collapseTools]);
+  useFocusEffect(useCallback(() => {
+    navigation.setOptions({ orientation: editorLandscape ? 'landscape' : 'portrait' });
+    return () => navigation.setOptions({ orientation: 'portrait' });
+  }, [navigation, editorLandscape]));
+  const [orientationModalOpen, setOrientationModalOpen] = useState(false);
+  const [pendingOrientation, setPendingOrientation] = useState<'vertical' | 'horizontal'>('vertical');
+  const [historyVersion, setHistoryVersion] = useState(0);
+  const undoStackRef = useRef<EditorSnapshot[]>([]);
+  const redoStackRef = useRef<EditorSnapshot[]>([]);
+  const restoringHistoryRef = useRef(false);
+  const snapshotRef = useRef<EditorSnapshot | null>(null);
   const continueInFlightRef = useRef(false);
 
   useEffect(() => {
@@ -684,6 +734,45 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
       hideSubscription.remove();
     };
   }, []);
+
+  const currentSnapshot = useMemo<EditorSnapshot>(() => ({ cardDesign, title, description, category, imageUrls, posterTextValues }), [cardDesign, title, description, category, imageUrls, posterTextValues]);
+  useEffect(() => {
+    const previous = snapshotRef.current;
+    snapshotRef.current = currentSnapshot;
+    if (!previous || restoringHistoryRef.current) {
+      restoringHistoryRef.current = false;
+      return;
+    }
+    if (JSON.stringify(previous) === JSON.stringify(currentSnapshot)) return;
+    undoStackRef.current = [...undoStackRef.current.slice(-29), previous];
+    redoStackRef.current = [];
+    setHistoryVersion((value) => value + 1);
+  }, [currentSnapshot]);
+
+  const restoreSnapshot = useCallback((snapshot: EditorSnapshot) => {
+    restoringHistoryRef.current = true;
+    setCardDesign(snapshot.cardDesign);
+    setTitle(snapshot.title);
+    setDescription(snapshot.description);
+    setCategory(snapshot.category);
+    setImageUrls(snapshot.imageUrls);
+    setPosterTextValues(snapshot.posterTextValues);
+    setHistoryVersion((value) => value + 1);
+  }, []);
+
+  const undo = useCallback(() => {
+    const previous = undoStackRef.current.pop();
+    if (!previous || !snapshotRef.current) return;
+    redoStackRef.current.push(snapshotRef.current);
+    restoreSnapshot(previous);
+  }, [restoreSnapshot]);
+
+  const redo = useCallback(() => {
+    const next = redoStackRef.current.pop();
+    if (!next || !snapshotRef.current) return;
+    undoStackRef.current.push(snapshotRef.current);
+    restoreSnapshot(next);
+  }, [restoreSnapshot]);
 
   useFocusEffect(useCallback(() => {
     continueInFlightRef.current = false;
@@ -699,26 +788,32 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
       const item = response.data.find((candidate) => candidate._id === businessId) || null;
       setBusiness(item);
       if (item) {
-        setCategory(item.category);
+        setCategory((current) => current || item.category);
       }
     }).catch(() => Alert.alert('Business unavailable', 'Please return and select a valid business profile.'));
   }, [accessToken, businessId]);
 
   useEffect(() => {
-    if (designMode !== 'templates') return;
     listOfferTemplates().then((response) => {
       const nextTemplates = Array.isArray(response.data)
         ? response.data.filter((template) => template && typeof template === 'object').map(toOfferCardTemplate)
         : [];
       setTemplates(nextTemplates);
+      const requested = initialTemplateId
+        ? nextTemplates.find((template) => template.id === initialTemplateId) || OFFER_CARD_TEMPLATES.find((template) => template.id === initialTemplateId)
+        : undefined;
+      if (requested && !initialDesign) {
+        setCardDesign((current) => ({ ...current, templateId: requested.id, templateVersion: requested.version, templateSource: requested.source || 'admin', previewUrl: requested.previewUrl, canvas: requested.canvas, dynamicFields: requested.dynamicFields || {}, avatarId: '', primaryColor: requested.primaryColor, secondaryColor: requested.secondaryColor, layout: requested.layout }));
+        setSelectedTextElementId(requested.canvas?.elements.find((element) => element.editable !== false && isTextElement(element))?.id || '$title');
+      }
     }).catch(() => {});
-  }, [designMode]);
+  }, [designMode, initialDesign, initialTemplateId]);
 
   useEffect(() => {
     listTemplateStickers().then((response) => setStickers(response.data || [])).catch(() => setStickers([]));
   }, []);
 
-  const allTemplates = useMemo(() => designMode === 'templates' ? [...templates, ...OFFER_CARD_TEMPLATES] : [], [designMode, templates]);
+  const allTemplates = useMemo(() => templates.length ? templates : OFFER_CARD_TEMPLATES, [templates]);
   const templateCategories = useMemo(() => ['All', ...Array.from(new Set(allTemplates.map((template) => template.category).filter(Boolean) as string[]))], [allTemplates]);
   const visibleTemplates = useMemo(() => templateCategory === 'All' ? allTemplates : allTemplates.filter((template) => template.category?.toLowerCase() === templateCategory.toLowerCase()), [allTemplates, templateCategory]);
   const selectTemplateCategory = (category: string) => {
@@ -778,6 +873,7 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
     letterSpacing: selectedTextElement?.letterSpacing ?? Number(cardDesign.customizations?.[`${selectedTextPrefix}LetterSpacing`] || 0),
     textDecorationLine: selectedTextElement?.textDecorationLine || String(cardDesign.customizations?.[`${selectedTextPrefix}TextDecoration`] || 'none'),
     textTransform: selectedTextElement?.textTransform || String(cardDesign.customizations?.[`${selectedTextPrefix}TextTransform`] || 'none'),
+    fontFamily: selectedTextElement?.fontFamily || String(cardDesign.customizations?.[`${selectedTextPrefix}FontFamily`] || 'System'),
   };
 
   useEffect(() => {
@@ -804,11 +900,11 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
         ...current.canvas,
         elements: current.canvas.elements.map((element) => element.id === id ? {
           ...element,
-          x: Math.max(0, Math.min(current.canvas!.width - element.width, element.x + delta.x)),
-          y: Math.max(0, Math.min(current.canvas!.height - element.height, element.y + delta.y)),
+          x: Math.max(0, Math.min(current.canvas!.width - element.width, (element.position?.x ?? element.x) + delta.x)),
+          y: Math.max(0, Math.min(current.canvas!.height - element.height, (element.position?.y ?? element.y) + delta.y)),
           position: {
-            x: Math.max(0, Math.min(current.canvas!.width - element.width, element.x + delta.x)),
-            y: Math.max(0, Math.min(current.canvas!.height - element.height, element.y + delta.y)),
+            x: Math.max(0, Math.min(current.canvas!.width - element.width, (element.position?.x ?? element.x) + delta.x)),
+            y: Math.max(0, Math.min(current.canvas!.height - element.height, (element.position?.y ?? element.y) + delta.y)),
           },
         } : element),
       },
@@ -851,7 +947,7 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
     setSelectedImageId((current) => current === id ? null : current);
     setSelectedShapeId((current) => current === id ? null : current);
   }, []);
-  const updateSelectedTextStyle = useCallback((patch: Partial<Pick<OfferTemplateElement, 'fontSize' | 'fontWeight' | 'fontStyle' | 'textAlign' | 'color' | 'letterSpacing' | 'textDecorationLine' | 'textTransform'>>) => {
+  const updateSelectedTextStyle = useCallback((patch: Partial<Pick<OfferTemplateElement, 'fontSize' | 'fontWeight' | 'fontStyle' | 'fontFamily' | 'textAlign' | 'color' | 'letterSpacing' | 'textDecorationLine' | 'textTransform'>>) => {
     setCardDesign((current) => {
       if (current.canvas && !selectedTextElementId.startsWith('$')) {
         return { ...current, canvas: { ...current.canvas, elements: current.canvas.elements.map((element) => element.id === selectedTextElementId ? { ...element, ...patch } : element) } };
@@ -860,6 +956,7 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
       const nextCustomizations = { ...(current.customizations || {}) };
       if (patch.fontWeight !== undefined) nextCustomizations[`${prefix}FontWeight`] = patch.fontWeight;
       if (patch.fontStyle !== undefined) nextCustomizations[`${prefix}FontStyle`] = patch.fontStyle;
+      if (patch.fontFamily !== undefined) nextCustomizations[`${prefix}FontFamily`] = patch.fontFamily;
       if (patch.textAlign !== undefined) nextCustomizations[`${prefix}TextAlign`] = patch.textAlign;
       if (patch.color !== undefined) nextCustomizations[`${prefix}Color`] = patch.color;
       if (patch.letterSpacing !== undefined) nextCustomizations[`${prefix}LetterSpacing`] = patch.letterSpacing;
@@ -875,21 +972,27 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
       };
     });
   }, [selectedTextElementId]);
-  const addTextLayer = useCallback(() => {
+  const addTextLayerAt = useCallback((position?: { x: number; y: number }) => {
     const id = `custom-text-${Date.now()}`;
     setCardDesign((current) => {
       const canvas = current.canvas || makeCanvasFromDesign(current);
       const zIndex = Math.max(...canvas.elements.map((element) => element.zIndex || 0), 0) + 1;
+      const width = Math.round(canvas.width * 0.8);
+      const height = Math.round(canvas.height * 0.1);
+      const x = Math.max(0, Math.min(canvas.width - width, Math.round((position?.x ?? canvas.width * 0.1) - width / 2)));
+      const y = Math.max(0, Math.min(canvas.height - height, Math.round((position?.y ?? canvas.height * 0.22) - height / 2)));
       const element: OfferTemplateElement = {
-        id, type: 'text', text: '', content: '', x: Math.round(canvas.width * 0.1), y: Math.round(canvas.height * 0.22),
-        width: Math.round(canvas.width * 0.8), height: Math.round(canvas.height * 0.1), zIndex, color: '#111827', fontSize: 58,
+        id, type: 'text', text: '', content: '', x, y,
+        width, height, zIndex, color: '#111827', fontSize: 58,
         fontWeight: '700', textAlign: 'center', textAlignVertical: 'center', editable: true,
       };
       return { ...current, canvas: { ...canvas, elements: [...canvas.elements, element] } };
     });
     setSelectedTextElementId(id);
     setPosterTextValues((current) => ({ ...current, [id]: '' }));
+    setEditingText(`poster:${id}`);
   }, []);
+  const addTextLayer = useCallback(() => addTextLayerAt(), [addTextLayerAt]);
   const addShapeLayer = useCallback((type: 'rectangle' | 'circle') => {
     const id = `custom-shape-${Date.now()}`;
     setCardDesign((current) => {
@@ -1081,6 +1184,7 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
     setSelectedTextElementId(template.canvas?.elements.find((element) => element.editable !== false && isTextElement(element))?.id || '$title');
     setAvatarOffset({ x: 0, y: 0 });
     setCardDesign((current) => ({ ...current, templateId: template.id, templateVersion: template.version, templateSource: template.source || 'system', previewUrl: template.previewUrl, canvas: template.canvas, dynamicFields: template.dynamicFields || {}, avatarId: '', primaryColor: template.primaryColor, secondaryColor: template.secondaryColor, layout: template.layout }));
+    void recordOfferTemplateUsage(currentUser?.id, template).catch(() => undefined);
   };
 
   const selectBlankTemplate = () => {
@@ -1099,6 +1203,49 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
     setCardDesign((current) => ({ ...current, ...makeBlankDesign() }));
   };
 
+  const creationId = useRef(`creation-${businessId}-${Date.now()}`);
+  const saveCreation = async () => {
+    if (continueInFlightRef.current || loading) return;
+    if (!business || !currentUser?.id) return Alert.alert('Business unavailable', 'Please return and select a valid business profile.');
+    continueInFlightRef.current = true;
+    setLoading(true);
+    Keyboard.dismiss();
+    const id = creationId.current;
+    try {
+    await saveOfferDesignCreation(currentUser?.id, {
+      id,
+      name: title.trim() || activeTemplate?.name || 'My offer design',
+      category: category || activeTemplate?.category,
+      templateId: cardDesign.templateId,
+      previewUrl: cardDesign.previewUrl || imageUrls[0],
+      design: cardDesign,
+      title,
+      description,
+      imageUrls,
+      updatedAt: new Date().toISOString(),
+    });
+    continueInFlightRef.current = false;
+    continueToDetails();
+    } catch {
+      continueInFlightRef.current = false;
+      setLoading(false);
+      Alert.alert('Design not saved', 'Your edits are still here. Please try saving again.');
+    }
+  };
+
+  const renderTextToolbar = () => <ScrollView horizontal keyboardShouldPersistTaps="always" contentContainerStyle={styles.choiceRow}>
+    <Pressable style={styles.choice} onPress={() => Alert.alert('Font', 'Choose a font', FONT_FAMILY_OPTIONS.map((font) => ({ text: font.label, onPress: () => updateSelectedTextStyle({ fontFamily: font.value }) })))}><Text>Font ▼</Text></Pressable>
+    <Pressable style={styles.choice} onPress={() => Alert.alert('Font size', 'Choose a size', [16, 24, 32, 48, 64, 96].map((fontSize) => ({ text: String(fontSize), onPress: () => updateSelectedTextStyle({ fontSize }) })))}><Text>{Math.round(selectedTextSettings.fontSize)} ▼</Text></Pressable>
+    <Pressable style={styles.choice} onPress={() => updateSelectedTextStyle({ fontSize: Math.max(8, selectedTextSettings.fontSize - 2) })}><Text>A-</Text></Pressable>
+    <Pressable style={styles.choice} onPress={() => updateSelectedTextStyle({ fontSize: Math.min(320, selectedTextSettings.fontSize + 2) })}><Text>A+</Text></Pressable>
+    <Pressable style={styles.choice} onPress={() => updateSelectedTextStyle({ fontWeight: selectedTextSettings.fontWeight === '800' ? '400' : '800' })}><Text>Bold</Text></Pressable>
+    <Pressable style={styles.choice} onPress={() => updateSelectedTextStyle({ fontStyle: selectedTextSettings.fontStyle === 'italic' ? 'normal' : 'italic' })}><Text>Italic</Text></Pressable>
+    <Pressable style={styles.choice} onPress={() => updateSelectedTextStyle({ textDecorationLine: selectedTextSettings.textDecorationLine === 'underline' ? 'none' : 'underline' })}><Text>Underline</Text></Pressable>
+    {(['left', 'center', 'right'] as const).map((textAlign) => <Pressable key={textAlign} style={styles.choice} onPress={() => updateSelectedTextStyle({ textAlign })}><Text>{textAlign}</Text></Pressable>)}
+    {TEXT_COLOR_OPTIONS.map((color) => <Pressable accessibilityLabel={`Text color ${color}`} key={color} onPress={() => updateSelectedTextStyle({ color })} style={[styles.textColorChoice, { backgroundColor: color }]} />)}
+    <Pressable style={styles.choice} onPress={() => { Keyboard.dismiss(); setEditingText(null); setActiveTool('text'); }}><Text>More</Text></Pressable>
+  </ScrollView>;
+
   const renderTextPanel = () => {
     const minimumFontSize = selectedTextElement ? 8 : selectedTextPrefix === 'description' ? 11 : 16;
     const maximumFontSize = selectedTextElement ? 320 : selectedTextPrefix === 'description' ? 48 : 96;
@@ -1112,7 +1259,9 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
       </Pressable>
       <View style={styles.controlLabelRow}><Text style={styles.inputLabel}>Font size</Text><Text style={styles.controlValue}>{Math.round(selectedTextSettings.fontSize)} px</Text></View>
       <Slider style={styles.fullSlider} minimumValue={minimumFontSize} maximumValue={maximumFontSize} step={1} value={selectedTextSettings.fontSize} onValueChange={(value) => updateSelectedTextStyle({ fontSize: value })} minimumTrackTintColor={theme.colors.primary} maximumTrackTintColor={theme.colors.border} thumbTintColor={theme.colors.primary} />
+      <View style={styles.choiceRow}><Pressable accessibilityLabel="Decrease font size" onPress={() => updateSelectedTextStyle({ fontSize: Math.max(minimumFontSize, selectedTextSettings.fontSize - 2) })} style={styles.choice}><Text>A-</Text></Pressable><Pressable accessibilityLabel="Increase font size" onPress={() => updateSelectedTextStyle({ fontSize: Math.min(maximumFontSize, selectedTextSettings.fontSize + 2) })} style={styles.choice}><Text>A+</Text></Pressable><Pressable onPress={() => updateSelectedTextStyle({ fontWeight: selectedTextSettings.fontWeight === '800' ? '400' : '800' })} style={styles.choice}><Text>Bold</Text></Pressable></View>
       <Text style={styles.inputLabel}>Weight</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.choiceRow}>{FONT_WEIGHT_OPTIONS.map((option) => <Pressable key={option.value} onPress={() => updateSelectedTextStyle({ fontWeight: option.value })} style={[styles.choice, selectedTextSettings.fontWeight === option.value && styles.choiceActive]}><Text style={[styles.choiceText, { fontWeight: option.value }]}>{option.label}</Text></Pressable>)}</ScrollView>
+      <Text style={styles.inputLabel}>Font family</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.choiceRow}>{FONT_FAMILY_OPTIONS.map((option) => <Pressable key={option.value} onPress={() => updateSelectedTextStyle({ fontFamily: option.value })} style={[styles.choice, selectedTextSettings.fontFamily === option.value && styles.choiceActive]}><Text style={styles.choiceText}>{option.label}</Text></Pressable>)}</ScrollView>
       <Text style={styles.inputLabel}>Style</Text><View style={styles.choiceRow}>
         <Pressable onPress={() => updateSelectedTextStyle({ fontStyle: selectedTextSettings.fontStyle === 'italic' ? 'normal' : 'italic' })} style={[styles.choice, selectedTextSettings.fontStyle === 'italic' && styles.choiceActive]}><MaterialCommunityIcons name="format-italic" size={18} color={theme.colors.textSecondary} /><Text style={styles.choiceText}>Italic</Text></Pressable>
         <Pressable onPress={() => updateSelectedTextStyle({ textDecorationLine: selectedTextSettings.textDecorationLine === 'underline' ? 'none' : 'underline' })} style={[styles.choice, selectedTextSettings.textDecorationLine === 'underline' && styles.choiceActive]}><MaterialCommunityIcons name="format-underline" size={18} color={theme.colors.textSecondary} /><Text style={styles.choiceText}>Underline</Text></Pressable>
@@ -1150,6 +1299,27 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
     </View> : null}
   </View>;
 
+  const currentOrientation = editorLandscape ? 'horizontal' : 'vertical';
+  const applyOrientation = (orientation: 'vertical' | 'horizontal') => {
+    setEditorLandscape(orientation === 'horizontal');
+  };
+
+  const renderMorePanel = () => <View>
+    <Text style={styles.panelTitle}>More tools</Text>
+    <View style={styles.moreGrid}>
+      <Pressable onPress={() => { setActiveTool('stickers'); setPanelExpanded(true); }} style={styles.moreTool}><MaterialCommunityIcons name="sticker-circle-outline" size={21} color={theme.colors.primary} /><Text style={styles.moreToolText}>Sticker</Text></Pressable>
+      <Pressable onPress={() => { setActiveTool('templates'); setPanelExpanded(true); }} style={styles.moreTool}><MaterialCommunityIcons name="view-grid-outline" size={21} color={theme.colors.primary} /><Text style={styles.moreToolText}>Templates</Text></Pressable>
+      <Pressable onPress={undo} style={styles.moreTool}><MaterialCommunityIcons name="undo" size={21} color={theme.colors.primary} /><Text style={styles.moreToolText}>Undo</Text></Pressable>
+      <Pressable onPress={redo} style={styles.moreTool}><MaterialCommunityIcons name="redo" size={21} color={redoStackRef.current.length ? theme.colors.primary : theme.colors.textMuted} /><Text style={styles.moreToolText}>Redo</Text></Pressable>
+    </View>
+    <Text style={styles.panelHint}>Move tools between the bottom and side of the editor.</Text>
+    <Text style={styles.inputLabel}>Editor orientation</Text>
+    <View style={styles.choiceRow}>
+      <Pressable onPress={() => { setPendingOrientation('vertical'); setOrientationModalOpen(true); }} style={[styles.orientationChoice, currentOrientation === 'vertical' && styles.choiceActive]}><MaterialCommunityIcons name="cellphone" size={20} color={theme.colors.primary} /><View><Text style={styles.choiceText}>Vertical</Text><Text style={styles.orientationRatio}>Portrait</Text></View></Pressable>
+      <Pressable onPress={() => { setPendingOrientation('horizontal'); setOrientationModalOpen(true); }} style={[styles.orientationChoice, currentOrientation === 'horizontal' && styles.choiceActive]}><MaterialCommunityIcons name="tablet" size={20} color={theme.colors.primary} /><View><Text style={styles.choiceText}>Horizontal</Text><Text style={styles.orientationRatio}>Landscape</Text></View></Pressable>
+    </View>
+  </View>;
+
   const renderToolPanel = () => {
     if (activeTool === 'templates') return <View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryScroll}>{templateCategories.map((item) => <Pressable key={item} onPress={() => selectTemplateCategory(item)} style={[styles.filterChip, templateCategory === item && styles.filterChipActive]}><Text style={[styles.filterChipText, templateCategory === item && styles.filterChipTextActive]}>{item}</Text></Pressable>)}</ScrollView>
@@ -1166,33 +1336,69 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
     if (activeTool === 'brand') return <View><Text style={styles.panelTitle}>Brand colors</Text><Text style={styles.panelHint}>Pick a bright palette for your offer card.</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.colorScroll}>{OFFER_CARD_COLORS.map(([primaryColor, secondaryColor]) => <Pressable key={primaryColor} onPress={() => setCardDesign((current) => ({ ...current, primaryColor, secondaryColor }))} style={[styles.colorTile, cardDesign.primaryColor === primaryColor && styles.colorTileActive]}><LinearGradient colors={[primaryColor, secondaryColor]} style={styles.colorSwatch} /></Pressable>)}</ScrollView></View>;
     if (activeTool === 'stickers') return renderStickerPanel();
     if (activeTool === 'shapes') return renderShapePanel();
+    if (activeTool === 'more') return renderMorePanel();
     if (activeTool === 'text') return renderTextPanel();
     return null;
   };
 
   return (
-    <ScreenContainer edges={['top', 'left', 'right', 'bottom']} backgroundColor="#F5F5F7">
-      <LinearGradient colors={[theme.colors.primaryBright, theme.colors.primary, theme.colors.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.topBar}>
+    <ScreenContainer edges={['top', 'left', 'right', 'bottom']} backgroundColor="#17232D">
+      <LinearGradient colors={['#16232D', '#213640', '#29444B']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.topBar}>
         <Pressable onPress={navigation.goBack} style={styles.topIcon}><MaterialCommunityIcons name="arrow-left" size={23} color="#FFFFFF" /></Pressable>
         <View style={styles.topTitleWrap}><Text style={styles.topTitle}>Design offer</Text><Text style={styles.topSubtitle}>{business?.name || 'Your business'}</Text></View>
-        <Pressable onPress={continueToDetails} disabled={loading} style={styles.topContinue}><Text style={styles.topContinueText}>{loading ? 'Saving…' : 'Continue'}</Text><MaterialCommunityIcons name="arrow-right" size={17} color={theme.colors.primaryDark} /></Pressable>
+        <Pressable onPress={undo} disabled={!undoStackRef.current.length} style={styles.topAction}><MaterialCommunityIcons name="undo" size={19} color={undoStackRef.current.length ? '#FFFFFF' : 'rgba(255,255,255,0.42)'} /></Pressable>
+        <Pressable onPress={redo} disabled={!redoStackRef.current.length} style={styles.topAction}><MaterialCommunityIcons name="redo" size={19} color={redoStackRef.current.length ? '#FFFFFF' : 'rgba(255,255,255,0.42)'} /></Pressable>
+        <Pressable accessibilityLabel="Rotate editor" onPress={() => setEditorLandscape((value) => !value)} style={styles.topAction}><MaterialCommunityIcons name="phone-rotate-landscape" size={22} color="#FFFFFF" /></Pressable>
+        <Pressable accessibilityLabel="Save design and continue" disabled={loading} onPress={saveCreation} style={styles.topSave}><Text style={styles.topSaveText}>Save</Text></Pressable>
+
       </LinearGradient>
-      <View style={styles.editorBody}><View style={styles.projectHeader}><View><Text style={styles.projectTitle}>Design offer</Text><Text style={styles.projectSubtitle}>{business?.name || 'Your business'}</Text></View><View style={styles.saved}><MaterialCommunityIcons name="cloud-check-outline" size={16} color={theme.colors.success} /><Text style={styles.savedText}>Saved</Text></View></View><CanvasPreview business={business} template={activeTemplate} design={cardDesign} title={title} description={description} category={category} imageUrl={imageUrls[0]} textValues={posterTextValues} editingText={editingText} movingText={movingText} textOffsets={textOffsets} onEditText={setEditingText} onToggleMove={toggleMoveText} onChangeText={changeCanvasText} onOffsetChange={changeTextOffset} onMoveElement={moveCanvasElement} onResizeElement={resizeCanvasElement} onRotateElement={rotateCanvasElement} onDeleteElement={deleteCanvasElement} selectedStickerId={selectedStickerId} onSelectSticker={(id) => { setSelectedStickerId(id); if (id) { setSelectedImageId(null); setSelectedShapeId(null); } }} selectedImageId={selectedImageId} onSelectImage={(id) => { setSelectedImageId(id); if (id) { setSelectedStickerId(null); setSelectedShapeId(null); } }} selectedShapeId={selectedShapeId} onSelectShape={(id) => { setSelectedShapeId(id); if (id) { setSelectedStickerId(null); setSelectedImageId(null); } }} onSelectTextElement={setSelectedTextElementId} avatarOffset={avatarOffset} onMoveAvatar={moveAvatar} avatarScale={avatarScale} avatarSelected={avatarSelected} onSelectAvatar={() => { setAvatarSelected(true); setSelectedImageId(null); setSelectedShapeId(null); setSelectedStickerId(null); }} onResizeAvatar={resizeAvatar} /><View style={styles.pageDots}><View style={styles.pageDotActive} /><View style={styles.pageDot} /></View></View>
-       {!keyboardVisible ? <View style={styles.panel}><ScrollView style={styles.panelContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">{renderToolPanel()}</ScrollView></View> : null}
-       {!keyboardVisible ? <View style={styles.bottomToolsBar}><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.bottomTools}>
-         {TOOLS.map((tool) => <Pressable key={tool.id} onPress={() => { Keyboard.dismiss(); setEditingText(null); setMovingText(null); setActiveTool(tool.id); }} style={[styles.bottomTool, activeTool === tool.id && styles.bottomToolActive]}>
-           <MaterialCommunityIcons name={tool.icon} size={22} color={activeTool === tool.id ? theme.colors.primary : theme.colors.textSecondary} />
-           <Text style={[styles.bottomToolLabel, activeTool === tool.id && styles.bottomToolLabelActive]}>{tool.label}</Text>
-           {tool.id === 'brand' ? <Text style={styles.proBadge}>PRO</Text> : null}
-         </Pressable>)}
-       </ScrollView></View> : null}
+      <KeyboardAvoidingView style={[styles.workspace, editorLandscape && styles.landscapeWorkspace]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <View style={styles.editorBody}><View style={styles.projectHeader}><View><Text style={styles.projectTitle}>Design offer</Text><Text style={styles.projectSubtitle}>{business?.name || 'Your business'}</Text></View><View style={styles.saved}><MaterialCommunityIcons name="cloud-check-outline" size={16} color="#68D391" /><Text style={styles.savedText}>Ready to save</Text></View></View><CanvasPreview business={business} template={activeTemplate} design={cardDesign} title={title} description={description} category={category} imageUrl={imageUrls[0]} textValues={posterTextValues} editingText={editingText} movingText={movingText} textOffsets={textOffsets} onEditText={setEditingText} onToggleMove={toggleMoveText} onChangeText={changeCanvasText} onOffsetChange={changeTextOffset} onMoveElement={moveCanvasElement} onResizeElement={resizeCanvasElement} onRotateElement={rotateCanvasElement} onDeleteElement={deleteCanvasElement} selectedStickerId={selectedStickerId} onSelectSticker={(id) => { setSelectedStickerId(id); setPanelExpanded(true); if (id) { setSelectedImageId(null); setSelectedShapeId(null); } }} selectedImageId={selectedImageId} onSelectImage={(id) => { setSelectedImageId(id); setPanelExpanded(true); if (id) { setSelectedStickerId(null); setSelectedShapeId(null); } }} selectedShapeId={selectedShapeId} onSelectShape={(id) => { setSelectedShapeId(id); setPanelExpanded(true); if (id) { setSelectedStickerId(null); setSelectedImageId(null); } }} onSelectTextElement={(id) => { setSelectedTextElementId(id); setActiveTool('text'); setPanelExpanded(true); }} onDoubleTapEmpty={(position) => { addTextLayerAt(position); setActiveTool('text'); setPanelExpanded(true); }} avatarOffset={avatarOffset} onMoveAvatar={moveAvatar} avatarScale={avatarScale} avatarSelected={avatarSelected} onSelectAvatar={() => { setAvatarSelected(true); setPanelExpanded(true); setSelectedImageId(null); setSelectedShapeId(null); setSelectedStickerId(null); }} onResizeAvatar={resizeAvatar} /><View style={styles.pageDots}><View style={styles.pageDotActive} /><View style={styles.pageDot} /></View></View>
+      {panelExpanded ? <Animated.View style={[styles.toolsDock, editorLandscape ? { width: Math.min(300, windowWidth * 0.38), height: '100%' } : { height: keyboardVisible ? 130 : Math.min(340, windowHeight * 0.4) }, { transform: editorLandscape ? [{ translateX: panelMotion.interpolate({ inputRange: [0, 1], outputRange: [0, 320] }) }] : [{ translateY: panelMotion.interpolate({ inputRange: [0, 1], outputRange: [0, 400] }) }] }]}>
+        <View {...panelGesture.panHandlers}>
+          <Pressable accessibilityLabel="Collapse tools" onPress={collapseTools} style={styles.dockHeader}>
+            {editorLandscape ? <Text style={styles.panelTitle}>Edit Tools</Text> : null}
+            <MaterialCommunityIcons name={editorLandscape ? 'close' : 'chevron-down'} size={22} color={theme.colors.primary} />
+          </Pressable>
+        </View>
+        <ScrollView keyboardShouldPersistTaps="always" style={styles.toolOptions} showsVerticalScrollIndicator={false}>
+          {editorLandscape ? TOOLS.map((tool) => <Pressable key={tool.id} onPress={() => setActiveTool(tool.id)} style={styles.sideTool}>
+            <MaterialCommunityIcons name={tool.icon} size={20} color={theme.colors.primary} /><Text style={styles.choiceText}>{tool.label}</Text><MaterialCommunityIcons name="chevron-right" size={18} color={theme.colors.primary} />
+          </Pressable>) : null}
+          {keyboardVisible && activeTool === 'text' ? renderTextToolbar() : renderToolPanel()}
+        </ScrollView>
+        {!editorLandscape ? <View style={styles.bottomToolsBar}><ScrollView horizontal keyboardShouldPersistTaps="always" showsHorizontalScrollIndicator={false} contentContainerStyle={styles.bottomTools}>
+          {TOOLS.filter((tool) => ['templates', 'text', 'uploads', 'shapes', 'brand', 'more'].includes(tool.id)).map((tool) => <Pressable accessibilityLabel={tool.label} key={tool.id} onPress={() => setActiveTool(tool.id)} style={[styles.bottomTool, activeTool === tool.id && styles.bottomToolActive]}>
+            <MaterialCommunityIcons name={tool.icon} size={22} color={theme.colors.primary} /><Text style={styles.bottomToolLabel}>{tool.label}</Text>
+          </Pressable>)}
+        </ScrollView></View> : null}
+      </Animated.View> : <Pressable accessibilityLabel="Open tools" onPress={() => setPanelExpanded(true)} style={[styles.reopenTools, editorLandscape && styles.reopenSide]}><Text style={styles.reopenLabel}>{editorLandscape ? '<' : '▲'}</Text></Pressable>}
+      </KeyboardAvoidingView>
+       <Modal transparent animationType="slide" visible={orientationModalOpen} onRequestClose={() => setOrientationModalOpen(false)}>
+         <Pressable style={styles.orientationBackdrop} onPress={() => setOrientationModalOpen(false)}>
+           <View style={styles.orientationSheet} onStartShouldSetResponder={() => true}><View style={styles.sheetHandle} /><View style={styles.orientationSheetHeader}><Text style={styles.orientationSheetTitle}>Editor Orientation</Text><Pressable onPress={() => setOrientationModalOpen(false)}><MaterialCommunityIcons name="close" size={22} color={theme.colors.text} /></Pressable></View>
+             <View style={styles.orientationModalChoices}><Pressable onPress={() => setPendingOrientation('vertical')} style={[styles.orientationModalChoice, pendingOrientation === 'vertical' && styles.choiceActive]}><MaterialCommunityIcons name="cellphone" size={34} color={theme.colors.primary} /><Text style={styles.orientationModalLabel}>Vertical</Text><Text style={styles.orientationRatio}>Portrait</Text></Pressable><Pressable onPress={() => setPendingOrientation('horizontal')} style={[styles.orientationModalChoice, pendingOrientation === 'horizontal' && styles.choiceActive]}><MaterialCommunityIcons name="tablet" size={34} color={theme.colors.primary} /><Text style={styles.orientationModalLabel}>Horizontal</Text><Text style={styles.orientationRatio}>Landscape</Text></Pressable></View>
+             <Pressable onPress={() => { applyOrientation(pendingOrientation); setOrientationModalOpen(false); }} style={styles.applyOrientation}><Text style={styles.applyOrientationText}>Apply</Text></Pressable>
+           </View>
+         </Pressable>
+       </Modal>
     </ScreenContainer>
   );
 };
 
 const styles = StyleSheet.create({
-  topBar: { minHeight: 58, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 7 }, topIcon: { width: 40, height: 42, alignItems: 'center', justifyContent: 'center' }, topTitleWrap: { flex: 1, paddingHorizontal: 3 }, topTitle: { ...theme.typography.bodyBold, color: theme.colors.textInverse }, topSubtitle: { ...theme.typography.tiny, color: 'rgba(255,255,255,0.78)', marginTop: 1 }, topContinue: { minHeight: 36, flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 18, backgroundColor: theme.colors.surface, paddingHorizontal: 13 }, topContinueText: { ...theme.typography.caption, color: theme.colors.primaryDark, fontWeight: '900' },
-  editorBody: { flex: 1, minHeight: 0 }, projectHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingTop: 12, paddingBottom: 4 }, projectTitle: { ...theme.typography.bodyBold, color: theme.colors.text }, projectSubtitle: { ...theme.typography.tiny, color: theme.colors.textMuted, marginTop: 2 }, saved: { flexDirection: 'row', alignItems: 'center', gap: 4 }, savedText: { ...theme.typography.tiny, color: theme.colors.success, fontWeight: '800' },
+  workspace: { flex: 1, minHeight: 0 },
+  landscapeWorkspace: { flexDirection: 'row' },
+  toolsDock: { backgroundColor: theme.colors.surface, flexShrink: 1, borderColor: theme.colors.border, borderWidth: 1 },
+  dockHeader: { minHeight: 32, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around' },
+  toolOptions: { flex: 1, minHeight: 0, paddingHorizontal: 12 },
+  sideTool: { minHeight: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  reopenTools: { alignSelf: 'center', width: 44, height: 32, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.surface, borderRadius: 12 },
+  reopenSide: { alignSelf: 'center', width: 32, height: 44 },
+  reopenLabel: { color: theme.colors.primary, fontSize: 20 },
+
+  topBar: { minHeight: 58, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 5 }, topIcon: { width: 36, height: 42, alignItems: 'center', justifyContent: 'center' }, topAction: { width: 30, height: 38, alignItems: 'center', justifyContent: 'center' }, topTitleWrap: { flex: 1, paddingHorizontal: 2 }, topTitle: { ...theme.typography.bodyBold, color: theme.colors.textInverse }, topSubtitle: { ...theme.typography.tiny, color: 'rgba(255,255,255,0.78)', marginTop: 1 }, topSave: { minHeight: 34, justifyContent: 'center', paddingHorizontal: 7 }, topSaveText: { ...theme.typography.tiny, color: '#FFFFFF', fontWeight: '900' }, topContinue: { minHeight: 34, flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: 18, backgroundColor: theme.colors.primary, paddingHorizontal: 10 }, topContinueText: { ...theme.typography.tiny, color: theme.colors.textInverse, fontWeight: '900' },
+  editorBody: { flex: 1, minHeight: 0 }, projectHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingTop: 8, paddingBottom: 4 }, projectTitle: { ...theme.typography.bodyBold, color: '#FFFFFF' }, projectSubtitle: { ...theme.typography.tiny, color: 'rgba(255,255,255,0.62)', marginTop: 2 }, saved: { flexDirection: 'row', alignItems: 'center', gap: 4 }, savedText: { ...theme.typography.tiny, color: '#68D391', fontWeight: '800' },
   canvasStage: { flex: 1, minHeight: 0, alignItems: 'center', justifyContent: 'center', paddingHorizontal: CANVAS_STAGE_HORIZONTAL_PADDING, paddingVertical: CANVAS_STAGE_VERTICAL_PADDING }, canvasPaper: { backgroundColor: '#FFFFFF', padding: CANVAS_FRAME_PADDING, shadowColor: '#556070', shadowOpacity: 0.2, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 5 }, canvasPaperMeasuring: { width: 1, height: 1, opacity: 0 }, canvasCard: { flex: 1, borderRadius: 3, overflow: 'hidden', position: 'relative' }, blankAvatarOverlay: { position: 'absolute', right: 12, bottom: 12, zIndex: 20 }, avatarResizeControls: { position: 'absolute', right: 0, top: -36, flexDirection: 'row', gap: 5, padding: 3, borderRadius: 10, backgroundColor: 'rgba(17,24,39,0.88)' }, avatarResizeButton: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.16)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.72)' }, blankTemplateThumb: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D5D8DE' }, canvasImage: { ...StyleSheet.absoluteFill, opacity: 0.48 }, canvasImageFallback: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.12)' }, canvasShade: { ...StyleSheet.absoluteFill }, canvasTop: { position: 'absolute', top: 16, left: 16, right: 16, zIndex: 3, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, canvasCategory: { maxWidth: '65%', color: '#FFFFFF', fontSize: 9, fontWeight: '900', letterSpacing: 0.8 }, canvasBadge: { borderRadius: 99, backgroundColor: '#FFFFFF', paddingHorizontal: 9, paddingVertical: 5 }, canvasBadgeText: { color: theme.colors.accent, fontSize: 9, fontWeight: '900' }, canvasCopy: { position: 'absolute', left: 17, bottom: 22, width: '62%', zIndex: 4 }, canvasCopyLeft: { left: '38%', width: '57%' }, canvasCopyBottom: { width: '88%', bottom: 19 }, canvasCopyCenter: { left: '4%', width: '92%', alignItems: 'center' }, canvasMovableText: { alignSelf: 'stretch', position: 'relative' }, canvasTextTouch: { width: '100%', borderWidth: 1, borderColor: 'transparent', borderRadius: 5 }, canvasTextSelected: { borderColor: 'rgba(255,255,255,0.82)', borderStyle: 'dashed', paddingHorizontal: 4, marginHorizontal: -4 }, canvasMoveHandle: { position: 'absolute', right: -12, top: -12, width: 25, height: 25, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: theme.colors.primary, elevation: 3, zIndex: 8 }, canvasMoveHandleActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primaryDark }, canvasTextInput: { minWidth: 120, padding: 0, includeFontPadding: false }, canvasTitle: { color: '#FFFFFF', textShadowColor: 'rgba(0,0,0,0.22)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4 }, canvasDescription: { color: 'rgba(255,255,255,0.95)', marginTop: 5, lineHeight: 20, fontWeight: '600', textShadowColor: 'rgba(0,0,0,0.2)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }, posterText: { includeFontPadding: false }, canvasPrice: { color: '#FFFFFF', fontSize: 16, fontWeight: '900', marginTop: 12 }, canvasAvatar: { position: 'absolute', right: -15, bottom: -8, width: 175, height: 210, resizeMode: 'contain', zIndex: 3 }, canvasAvatarLeft: { left: -18, right: undefined }, canvasAvatarCenter: { left: '50%', right: undefined, marginLeft: -87 }, moveHint: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99, backgroundColor: theme.colors.primaryLight }, moveHintText: { ...theme.typography.tiny, color: theme.colors.primaryDark, fontWeight: '800' }, pageDots: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingBottom: 9 }, pageDotActive: { width: 18, height: 7, borderRadius: 5, backgroundColor: '#9EA4AD' }, pageDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#D6D9DE' }, stickerScroll: { gap: 8, paddingVertical: 9 }, avatarChoice: { width: 68, alignItems: 'center', padding: 4, borderRadius: 10, borderWidth: 1, borderColor: 'transparent' }, avatarChoiceActive: { borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight }, stickerName: { ...theme.typography.tiny, color: theme.colors.textSecondary, marginTop: 3, textAlign: 'center', maxWidth: 78 }, stickerGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 7 }, stickerTile: { width: 76, minHeight: 76, alignItems: 'center', justifyContent: 'center', padding: 5, borderRadius: 10, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.background }, stickerImage: { width: 48, height: 48 }, stickerEmoji: { fontSize: 40, lineHeight: 48 }, emptySticker: { minHeight: 58, alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 10 },
   panel: { maxHeight: 320, minHeight: 150, backgroundColor: theme.colors.surface, borderTopWidth: 1, borderTopColor: theme.colors.border, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 }, panelContent: { flex: 1 }, panelTitle: { ...theme.typography.bodyBold, color: theme.colors.text }, panelHint: { ...theme.typography.caption, color: theme.colors.textMuted, marginTop: 2 }, categoryScroll: { flexDirection: 'row', gap: 6, paddingVertical: 5 }, filterChip: { flexShrink: 0, borderRadius: 99, borderWidth: 1, borderColor: theme.colors.border, paddingHorizontal: 8, paddingVertical: 3 }, filterChipActive: { backgroundColor: theme.colors.primaryLight, borderColor: theme.colors.primary }, filterChipText: { ...theme.typography.tiny, color: theme.colors.textSecondary, fontWeight: '800' }, filterChipTextActive: { color: theme.colors.primaryDark }, templateScroll: { flexDirection: 'row', gap: 7, paddingBottom: 1 }, templateCard: { width: 80, position: 'relative', padding: 3, borderRadius: 10, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.background }, templateCardActive: { borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight }, templateThumb: { width: '100%', height: TEMPLATE_THUMB_HEIGHT, borderRadius: 7, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }, templateCanvasThumb: { backgroundColor: theme.colors.surfaceAlt }, templateCardName: { ...theme.typography.tiny, color: theme.colors.text, marginTop: 3, textAlign: 'center', fontWeight: '800', minHeight: 22 }, templateCheck: { position: 'absolute', right: 5, top: 5, width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.primary }, disabled: { opacity: 0.55 },
   panelImageWrap: { height: 104, marginTop: 9, borderRadius: 13, overflow: 'hidden', backgroundColor: theme.colors.surfaceAlt }, panelImage: { width: '100%', height: '100%' }, panelImageButton: { position: 'absolute', left: 9, bottom: 8, flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(0,0,0,0.64)', borderRadius: 99, paddingHorizontal: 10, paddingVertical: 6 }, panelImageButtonText: { ...theme.typography.tiny, color: theme.colors.textInverse, fontWeight: '800' }, removeImage: { position: 'absolute', right: 9, top: 8, width: 31, height: 31, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.surface }, uploadBox: { minHeight: 98, marginTop: 9, borderRadius: 13, borderWidth: 1.5, borderStyle: 'dashed', borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight, alignItems: 'center', justifyContent: 'center' }, uploadTitle: { ...theme.typography.bodyBold, color: theme.colors.primary, marginTop: 4 },
@@ -1200,7 +1406,10 @@ const styles = StyleSheet.create({
   flex: { flex: 1 }, panelHeadingRow: { flexDirection: 'row', alignItems: 'center', gap: 10 }, compactAction: { minHeight: 34, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, borderRadius: 9, borderWidth: 1, borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight }, compactActionText: { ...theme.typography.tiny, color: theme.colors.primaryDark, fontWeight: '900' }, shapeAddButton: { minHeight: 38, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: theme.colors.primary, borderRadius: 9, paddingHorizontal: 11, backgroundColor: theme.colors.primaryLight },
   layerPicker: { gap: 7, paddingVertical: 9 }, layerChip: { maxWidth: 130, minHeight: 32, justifyContent: 'center', borderRadius: 9, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.background, paddingHorizontal: 10 }, layerChipActive: { borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight }, layerChipText: { ...theme.typography.tiny, color: theme.colors.textSecondary, textTransform: 'capitalize' }, layerChipTextActive: { color: theme.colors.primaryDark, fontWeight: '900' }, editorTextInput: { minHeight: 52, textAlignVertical: 'top' }, moveTextButton: { minHeight: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8, borderRadius: 9, borderWidth: 1, borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight, paddingHorizontal: 10 }, moveTextButtonActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primaryDark }, moveTextButtonText: { ...theme.typography.tiny, color: theme.colors.primaryDark, fontWeight: '900' }, moveTextButtonTextActive: { color: theme.colors.textInverse },
   controlLabelRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }, controlValue: { ...theme.typography.tiny, color: theme.colors.primary, fontWeight: '900', marginBottom: 4 }, sliderRow: { flexDirection: 'row', alignItems: 'center', gap: 5 }, slider: { flex: 1, height: 34 }, fullSlider: { width: '100%', height: 34 }, stepButton: { width: 32, height: 32, borderRadius: 9, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.background }, rotationHint: { flex: 1, textAlign: 'center', color: theme.colors.textMuted, fontSize: 10, lineHeight: 13 }, iconChoice: { width: 44, minHeight: 34, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.colors.border, borderRadius: 9 }, textColorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 }, textColorChoice: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#CBD0D8' }, textColorChoiceActive: { borderWidth: 3, borderColor: theme.colors.primary },
+  orientationChoice: { minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 10, paddingHorizontal: 11, flex: 1 }, orientationRatio: { ...theme.typography.tiny, color: theme.colors.textMuted, marginTop: 1 },
+  orientationBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(2,6,23,0.42)' }, orientationSheet: { padding: 16, paddingBottom: 26, borderTopLeftRadius: 24, borderTopRightRadius: 24, backgroundColor: theme.colors.surface }, sheetHandle: { width: 38, height: 4, alignSelf: 'center', borderRadius: 2, backgroundColor: theme.colors.border, marginBottom: 14 }, orientationSheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, orientationSheetTitle: { ...theme.typography.h3, color: theme.colors.text }, orientationModalChoices: { flexDirection: 'row', gap: 10, marginTop: 18 }, orientationModalChoice: { flex: 1, minHeight: 132, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.background }, orientationModalLabel: { ...theme.typography.bodyBold, color: theme.colors.text, marginTop: 8 }, applyOrientation: { minHeight: 50, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: theme.colors.primary, marginTop: 18 }, applyOrientationText: { ...theme.typography.bodyBold, color: theme.colors.textInverse },
+  moreGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 10 }, moreTool: { width: '22%', minWidth: 62, minHeight: 54, alignItems: 'center', justifyContent: 'center', gap: 4, borderRadius: 10, backgroundColor: theme.colors.background, borderWidth: 1, borderColor: theme.colors.border }, moreToolText: { ...theme.typography.tiny, color: theme.colors.textSecondary, fontWeight: '800' },
   selectedStickerBar: { minHeight: 54, marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 7, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight, paddingHorizontal: 10, paddingVertical: 7 }, selectedStickerTitle: { ...theme.typography.caption, color: theme.colors.primaryDark, fontWeight: '900' }, stickerEditButton: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border }, stickerDeleteButton: { borderColor: '#F8B4B4' }, optionalLabel: { color: theme.colors.textMuted, fontWeight: '600' },
   selectedElementFrame: { zIndex: 1000, borderWidth: 1.5, borderColor: '#FFFFFF', borderStyle: 'dashed' }, canvasElementControl: { position: 'absolute', top: 4, width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(17,24,39,0.88)', borderWidth: 1, borderColor: '#FFFFFF' }, canvasElementControlLeft: { left: 4 }, canvasElementControlRight: { right: 4 }, canvasElementControlBottomLeft: { left: 4, top: undefined, bottom: 4 }, canvasElementControlBottomRight: { right: 4, top: undefined, bottom: 4 }, canvasElementDelete: { left: '50%', marginLeft: -14, top: undefined, bottom: 4, backgroundColor: 'rgba(185,28,28,0.9)' },
-  bottomToolsBar: { backgroundColor: theme.colors.surface, borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 2, paddingHorizontal: 8, paddingBottom: 4 }, bottomTools: { flexGrow: 1, justifyContent: 'space-between', paddingHorizontal: 0 }, bottomTool: { flex: 1, minWidth: 0, maxWidth: 76, alignItems: 'center', justifyContent: 'center', position: 'relative', paddingVertical: 2 }, bottomToolActive: { borderBottomWidth: 2, borderBottomColor: theme.colors.primary }, bottomToolLabel: { ...theme.typography.tiny, color: theme.colors.textSecondary, fontSize: 9, lineHeight: 11, marginTop: 2, fontWeight: '700' }, bottomToolLabelActive: { color: theme.colors.primary }, proBadge: { position: 'absolute', top: -3, right: 4, color: '#F0A51D', fontSize: 7, fontWeight: '900' },
+  bottomToolsBar: { minHeight: 48, flexShrink: 0, backgroundColor: theme.colors.surface, borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 2, paddingHorizontal: 8, paddingBottom: 4 }, bottomTools: { flexGrow: 1, justifyContent: 'space-between', paddingHorizontal: 0 }, bottomTool: { flex: 1, minWidth: 0, maxWidth: 76, alignItems: 'center', justifyContent: 'center', position: 'relative', paddingVertical: 2 }, bottomToolActive: { borderBottomWidth: 2, borderBottomColor: theme.colors.primary }, bottomToolLabel: { ...theme.typography.tiny, color: theme.colors.textSecondary, fontSize: 9, lineHeight: 11, marginTop: 2, fontWeight: '700' }, bottomToolLabelActive: { color: theme.colors.primary }, proBadge: { position: 'absolute', top: -3, right: 4, color: '#F0A51D', fontSize: 7, fontWeight: '900' }, panelToggle: { minHeight: 25, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, borderTopWidth: 1, borderTopColor: theme.colors.border }, panelToggleText: { ...theme.typography.tiny, color: theme.colors.primary, fontWeight: '900' },
 });

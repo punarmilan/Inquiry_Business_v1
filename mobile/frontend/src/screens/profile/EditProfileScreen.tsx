@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Dimensions, findNodeHandle, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import * as ImagePicker from 'expo-image-picker';
@@ -18,6 +18,7 @@ const SUPPORTED_PROFILE_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 export const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
   const { currentUser, updateProfile } = useApp();
   const scrollRef = useRef<ScrollView>(null);
+  const scrollOffsetRef = useRef(0);
   const tabBarHeight = useBottomTabBarHeight();
   const [name, setName] = useState(currentUser?.name || '');
   const [email, setEmail] = useState(currentUser?.email || '');
@@ -70,18 +71,32 @@ export const EditProfileScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
-  const revealFocusedInput = (target: number) => {
-    setTimeout(() => scrollRef.current?.scrollResponderScrollNativeHandleToKeyboard(target, 32, true), 120);
+  const revealFocusedInput = () => {
+    setTimeout(() => {
+      const focusedInput = TextInput.State.currentlyFocusedInput();
+      const scrollView = scrollRef.current;
+      if (!focusedInput || !scrollView) return;
+      const keyboardTop = Math.min(Keyboard.metrics()?.screenY ?? Number.POSITIVE_INFINITY, Dimensions.get('window').height);
+      focusedInput.measureInWindow((_x, y, _width, height) => {
+        if (Number.isFinite(keyboardTop)) {
+          const hiddenByKeyboard = y + height + 28 - keyboardTop;
+          if (hiddenByKeyboard > 0) scrollView.scrollTo({ y: scrollOffsetRef.current + hiddenByKeyboard, animated: true });
+          return;
+        }
+        const nativeHandle = findNodeHandle(focusedInput as any);
+        if (nativeHandle) scrollView.scrollResponderScrollNativeHandleToKeyboard(nativeHandle, 96, true);
+      });
+    }, 250);
   };
 
-  return <ScreenContainer><KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><View style={styles.top}><Pressable onPress={navigation.goBack} style={styles.back}><MaterialCommunityIcons name="arrow-left" size={24} /></Pressable><Text style={styles.title}>Edit Profile</Text></View><ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + 24 }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}>
+  return <ScreenContainer><KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><View style={styles.top}><Pressable onPress={navigation.goBack} style={styles.back}><MaterialCommunityIcons name="arrow-left" size={24} /></Pressable><Text style={styles.title}>Edit Profile</Text></View><ScrollView ref={scrollRef} onScroll={(event) => { scrollOffsetRef.current = event.nativeEvent.contentOffset.y; }} scrollEventThrottle={16} style={{ flex: 1 }} contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + 24 }]} keyboardShouldPersistTaps="always" keyboardDismissMode="none" automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}>
     <Text style={styles.photoLabel}>Profile photo</Text>
     <Pressable onPress={pickProfilePhoto} style={styles.photoPicker} accessibilityRole="button" accessibilityLabel="Add profile photo">
       <Avatar uri={avatar || undefined} name={name || 'User'} size={104} />
       <View style={styles.photoEdit}><MaterialCommunityIcons name="camera-plus-outline" size={18} color={theme.colors.textInverse} /></View>
     </Pressable>
     <Text style={styles.photoHint}>Tap to add or change your profile picture.</Text>
-    <Input label="Name" value={name} onChangeText={setName} onFocus={(event) => revealFocusedInput(event.nativeEvent.target)} /><Input label="Phone" value={currentUser?.phone || ''} editable={false} /><Input label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" onFocus={(event) => revealFocusedInput(event.nativeEvent.target)} /><Input label="Address" value={address} onChangeText={setAddress} multiline textAlignVertical="top" onFocus={(event) => revealFocusedInput(event.nativeEvent.target)} /><Text style={styles.hint}>Saved city and area for discovery are managed from the location header.</Text><Button label="Save changes" onPress={save} loading={loading} fullWidth />
+    <Input label="Name" value={name} onChangeText={setName} onFocus={revealFocusedInput} /><Input label="Phone" value={currentUser?.phone || ''} editable={false} /><Input label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" onFocus={revealFocusedInput} /><Input label="Address" value={address} onChangeText={setAddress} multiline textAlignVertical="top" onFocus={revealFocusedInput} /><Text style={styles.hint}>Saved city and area for discovery are managed from the location header.</Text><Button label="Save changes" onPress={save} loading={loading} fullWidth />
   </ScrollView></KeyboardAvoidingView></ScreenContainer>;
 };
-const styles = StyleSheet.create({ top: { height: 58, backgroundColor: theme.colors.surface, flexDirection: 'row', alignItems: 'center' }, back: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center' }, title: { ...theme.typography.h3, color: theme.colors.text }, content: { padding: 20 }, photoLabel: { ...theme.typography.bodyBold, color: theme.colors.text, textAlign: 'center', marginBottom: 10 }, photoPicker: { alignSelf: 'center', position: 'relative', marginBottom: 8 }, photoEdit: { position: 'absolute', right: 0, bottom: 0, width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.primary, borderWidth: 3, borderColor: theme.colors.surface }, photoHint: { ...theme.typography.caption, color: theme.colors.textSecondary, textAlign: 'center', marginBottom: 22 }, hint: { ...theme.typography.caption, color: theme.colors.textSecondary, marginBottom: 18 } });
+const styles = StyleSheet.create({ top: { height: 58, backgroundColor: theme.colors.surface, flexDirection: 'row', alignItems: 'center' }, back: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center' }, title: { ...theme.typography.h3, color: theme.colors.text }, content: { flexGrow: 1, padding: 20 }, photoLabel: { ...theme.typography.bodyBold, color: theme.colors.text, textAlign: 'center', marginBottom: 10 }, photoPicker: { alignSelf: 'center', position: 'relative', marginBottom: 8 }, photoEdit: { position: 'absolute', right: 0, bottom: 0, width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.primary, borderWidth: 3, borderColor: theme.colors.surface }, photoHint: { ...theme.typography.caption, color: theme.colors.textSecondary, textAlign: 'center', marginBottom: 22 }, hint: { ...theme.typography.caption, color: theme.colors.textSecondary, marginBottom: 18 } });

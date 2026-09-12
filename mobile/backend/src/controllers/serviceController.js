@@ -53,7 +53,7 @@ const listProviders = asyncHandler(async (req, res) => {
   };
   if (category) workerFilter.categories = category._id;
   const workers = await Worker.find(workerFilter)
-    .select('_id name photoUrl categories city serviceAreas ratingAverage ratingCount completedBookings availability experienceYears')
+    .select('_id name photoUrl categories city serviceAreas ratingAverage ratingCount completedBookings availability experienceYears verificationStatus')
     .populate('categories', 'name icon basePrice priceUnit')
     .sort({ availability: 1, ratingAverage: -1, completedBookings: -1, name: 1 });
 
@@ -75,7 +75,7 @@ const listSavedProviders = asyncHandler(async (req, res) => {
     isActive: true,
     verificationStatus: 'verified',
   })
-    .select('_id name photoUrl categories city serviceAreas ratingAverage ratingCount completedBookings availability experienceYears')
+    .select('_id name photoUrl categories city serviceAreas ratingAverage ratingCount completedBookings availability experienceYears verificationStatus')
     .populate('categories', 'name icon basePrice priceUnit')
     .populate('city', 'name state slug localities');
   const providerById = new Map(providers.map((provider) => [String(provider._id), provider]));
@@ -226,9 +226,10 @@ const rateBooking = asyncHandler(async (req, res) => {
 const openBookingChat = asyncHandler(async (req, res) => {
   const booking = await ServiceBooking.findOne({ _id: req.params.id, customer: req.user._id }).populate('worker');
   if (!booking) throw new ApiError(404, 'Booking not found', 'BOOKING_NOT_FOUND');
-  if (!booking.worker?.user || !['assigned', 'in_progress', 'completed'].includes(booking.status)) {
+  if (!booking.worker?.user) {
     throw new ApiError(409, 'Chat becomes available after a worker is assigned', 'BOOKING_CHAT_UNAVAILABLE');
   }
+  chatService.assertBookingChatAvailable(booking);
   const chat = await chatService.findOrCreateBookingChat({
     bookingId: booking._id,
     customerId: booking.customer,
@@ -327,9 +328,10 @@ const updateProviderAvailability = asyncHandler(async (req, res) => {
 const openProviderBookingChat = asyncHandler(async (req, res) => {
   const provider = await getProvider(req);
   const booking = await ServiceBooking.findOne({ _id: req.params.id, worker: provider._id }).populate('customer', 'name phone photoUrl');
-  if (!booking || !['assigned', 'in_progress', 'completed'].includes(booking.status)) {
+  if (!booking) {
     throw new ApiError(409, 'Chat becomes available after you accept this booking', 'BOOKING_CHAT_UNAVAILABLE');
   }
+  chatService.assertBookingChatAvailable(booking);
   const chat = await chatService.findOrCreateBookingChat({ bookingId: booking._id, customerId: booking.customer._id, workerUserId: provider.user });
   res.json({ success: true, chat, customer: booking.customer });
 });

@@ -19,12 +19,4 @@ export const onboardingStyles = StyleSheet.create({
     gap: 18,
     backgroundColor: ONBOARDING_COLORS.paper,
   },
-  loadingLogo: {
-    width: 68,
-    height: 68,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#DDF9F2',
-  },
 });

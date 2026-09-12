@@ -1,5 +1,6 @@
 import { NavigatorScreenParams } from '@react-navigation/native';
 import type { Offer } from '../types/hyperlocal';
+import type { OfferCardDesign } from '../config/offerCardDesigner';
 
 export type ProfileEditSection = 'profile' | 'kyc' | 'wallet';
 
@@ -16,10 +17,21 @@ export type AuthStackParamList = {
 export type LiveLocationParams = { jobId?: string; bookingId?: string; contextType?: 'job' | 'booking'; otherUserName: string };
 
 export type PostStackParamList = {
+  PostMenu: undefined;
   PostEntry: undefined;
   BusinessSetup: { businessId?: string } | undefined;
   Plans: { businessId: string };
-  OfferDesignEditor: { businessId: string; designMode: 'custom' | 'templates' };
+  TemplateLibrary: { businessId: string };
+  OfferDesignEditor: {
+    businessId: string;
+    designMode: 'custom' | 'templates';
+    initialTemplateId?: string;
+    initialDesign?: OfferCardDesign;
+    initialTitle?: string;
+    initialDescription?: string;
+    initialCategory?: string;
+    initialImageUrls?: string[];
+  };
   CreateOffer: {
     businessId: string;
     offer?: Offer;
