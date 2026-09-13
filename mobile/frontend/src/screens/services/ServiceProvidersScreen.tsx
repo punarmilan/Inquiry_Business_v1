@@ -87,6 +87,7 @@ const ProviderCard = ({ provider, categoryName, locality, index, onCall, onWhats
         <View style={styles.nameRow}><Text style={styles.name}>{provider.name}</Text>{rated ? <View style={[styles.rating, { backgroundColor: highRating ? '#EAFBEF' : '#FFF8E2' }]}><MaterialCommunityIcons name="star" size={17} color={highRating ? '#41B62B' : '#DDA800'} /><Text style={styles.ratingValue}>{provider.ratingAverage.toFixed(1)}<Text style={styles.ratingCount}> ({provider.ratingCount})</Text></Text></View> : null}</View>
         <Text style={styles.category}>{categoryName}</Text>
         <View style={styles.areaLine}><MaterialCommunityIcons name="map-marker" size={16} color="#354351" /><Text style={styles.areaText}>Home Visit Available in {locality}</Text></View>
+        {provider.verificationStatus === 'verified' ? <View accessibilityLabel="Verified provider" style={styles.verifiedBadge}><MaterialCommunityIcons name="shield-check" size={15} color="#168447" /><Text style={styles.verifiedText}>Verified provider</Text></View> : null}
       </View>
     </View>
     <Text style={styles.description}>Local {categoryName.toLowerCase()} professional available for service in your area.</Text>
@@ -118,6 +119,7 @@ const styles = StyleSheet.create({
   ratingValue: { fontSize: 12, fontWeight: '700', color: '#1A5940' }, ratingCount: { fontSize: 10, color: '#374B42', fontWeight: '400' },
   category: { fontSize: 13, color: '#008B9B', lineHeight: 18, marginTop: 3 },
   areaLine: { flexDirection: 'row', alignItems: 'flex-start', gap: 3, marginTop: 4 }, areaText: { flex: 1, fontSize: 12, lineHeight: 17, color: '#4D586B' },
+  verifiedBadge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 4, marginTop: 6, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, backgroundColor: '#EAF8EF' }, verifiedText: { color: '#168447', fontSize: 11, fontWeight: '700' },
   description: { fontSize: 13, color: '#596579', lineHeight: 18, marginTop: 14 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 6, borderTopWidth: 1, borderTopColor: '#EEF2F5', marginTop: 12, paddingTop: 10 },
   action: { flex: 1, minHeight: 43, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: 4, borderRadius: 25 },

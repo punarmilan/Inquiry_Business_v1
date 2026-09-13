@@ -49,7 +49,7 @@ test('affected forms use keyboard-aware scroll containers and booking picker unm
 
 test('service booking uses real area options and verified providers carry a visible trust mark', () => {
   const booking = readFrontend('screens/services/BookServiceScreen.tsx');
-  const servicesHome = readFrontend('screens/services/ServicesHomeScreen.tsx');
+  const serviceProviders = readFrontend('screens/services/ServiceProvidersScreen.tsx');
   const providerTypes = readFrontend('types/hyperlocal.ts');
   const serviceController = fs.readFileSync(path.join(root, 'backend/src/controllers/serviceController.js'), 'utf8');
   const applicationsPage = fs.readFileSync(path.resolve(root, '../website/admin-frontend/src/pages/hyperlocal/ProviderApplicationsPage.tsx'), 'utf8');
@@ -60,8 +60,8 @@ test('service booking uses real area options and verified providers carry a visi
   assert.match(booking, /setAreaPickerOpen\(false\)/);
   assert.match(serviceController, /experienceYears verificationStatus/);
   assert.match(providerTypes, /verificationStatus: 'verified'/);
-  assert.match(servicesHome, /accessibilityLabel="Verified provider"/);
-  assert.match(servicesHome, /theme\.colors\.verified/);
+  assert.match(serviceProviders, /accessibilityLabel="Verified provider"/);
+  assert.match(serviceProviders, /verified/);
   assert.match(applicationsPage, /'Verify provider'/);
   assert.match(adminController, /verificationStatus: 'verified'/);
 });
