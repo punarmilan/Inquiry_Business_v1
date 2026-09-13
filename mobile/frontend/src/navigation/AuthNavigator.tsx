@@ -6,7 +6,6 @@ import { SplashScreen } from '../screens/auth/SplashScreen';
 import { PhoneEntryScreen } from '../screens/auth/PhoneEntryScreen';
 import { OtpVerificationScreen } from '../screens/auth/OtpVerificationScreen';
 import { ProfileSetupScreen } from '../screens/auth/ProfileSetupScreen';
-import { ProviderRegistrationScreen } from '../screens/auth/ProviderRegistrationScreen';
 import { LegalDocumentScreen } from '../screens/auth/LegalDocumentScreen';
 
 const Stack = createNativeStackNavigator<AuthStackParamList>();
@@ -18,7 +17,6 @@ export const AuthNavigator: React.FC = () => {
       <Stack.Screen name="Splash" component={SplashScreen} />
       <Stack.Screen name="PhoneEntry" component={PhoneEntryScreen} />
       <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
-      <Stack.Screen name="ProviderRegistration" component={ProviderRegistrationScreen} />
       <Stack.Screen name="LegalDocument" component={LegalDocumentScreen} />
       <Stack.Screen name="OtpVerification" component={OtpVerificationScreen} />
     </Stack.Navigator>

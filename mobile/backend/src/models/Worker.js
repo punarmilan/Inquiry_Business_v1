@@ -2,10 +2,12 @@ const mongoose = require('mongoose');
 
 const workerSchema = new mongoose.Schema(
   {
-    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
+    // Public service providers are directory entries and do not require a user login.
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', unique: true, sparse: true },
     name: { type: String, required: true, trim: true, maxlength: 120 },
     photoUrl: { type: String, trim: true, maxlength: 2048, default: '' },
     phone: { type: String, required: true, trim: true, maxlength: 24, unique: true },
+    whatsapp: { type: String, trim: true, maxlength: 24, default: '' },
     categories: [{ type: mongoose.Schema.Types.ObjectId, ref: 'ServiceCategory', required: true }],
     experienceYears: { type: Number, min: 0, max: 60, default: 0 },
     city: { type: mongoose.Schema.Types.ObjectId, ref: 'City', required: true, index: true },

@@ -1,99 +1,86 @@
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
+import { ActivityIndicator, Alert, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScreenContainer } from '../../components/ScreenContainer';
-import { OfferCard } from '../../components/OfferCard';
 import { getOfferDetails, listSavedOffers, recordOfferEvent, submitReport, toggleSavedOffer } from '../../services/api';
 import type { Offer, Business } from '../../types/hyperlocal';
 import type { OffersStackParamList } from '../../navigation/types';
 import { useApp } from '../../context/AppContext';
-import { theme } from '../../theme';
+import { colors, IconName, money, OfferArtwork, openContact, RemotePhoto, RoundAction, whatsappUrl } from './OfferUI';
 
 type Props = NativeStackScreenProps<OffersStackParamList, 'OfferDetails'>;
-
 export const OfferDetailsScreen: React.FC<Props> = ({ route, navigation }) => {
   const { accessToken } = useApp();
+  const insets = useSafeAreaInsets();
   const [offer, setOffer] = useState<Offer | null>(null);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [retry, setRetry] = useState(0);
   useFocusEffect(useCallback(() => {
     let active = true;
-    setLoading(true);
+    setLoading(true); setError('');
     Promise.all([
       getOfferDetails(route.params.offerId, route.params.latitude == null ? undefined : { latitude: route.params.latitude, longitude: route.params.longitude! }),
-      accessToken ? listSavedOffers(accessToken).catch(() => ({ data: [] })) : Promise.resolve({ data: [] as Offer[] }),
-    ])
-      .then(([response, savedResponse]) => { if (active) { setOffer(response.offer); setSaved(savedResponse.data.some((item) => item._id === route.params.offerId)); } })
-      .catch((error) => Alert.alert('Offer unavailable', error.message))
-      .finally(() => active && setLoading(false));
+      accessToken ? listSavedOffers(accessToken).catch(() => ({ data: [] as Offer[] })) : Promise.resolve({ data: [] as Offer[] }),
+    ]).then(([response, savedResponse]) => { if (active) { setOffer(response.offer); setSaved(savedResponse.data.some(item => item._id === route.params.offerId)); } })
+      .catch(e => { if (active) setError(e.message || 'Could not load this offer.'); })
+      .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [accessToken, route.params.offerId, route.params.latitude, route.params.longitude]));
+  }, [accessToken, route.params.offerId, route.params.latitude, route.params.longitude, retry]));
 
-  if (loading) return <ScreenContainer style={styles.center}><ActivityIndicator color={theme.colors.primary} /></ScreenContainer>;
-  if (!offer) return <ScreenContainer style={styles.center}><Text>Offer not found.</Text></ScreenContainer>;
-  const business = offer.business as Business;
-  const [longitude, latitude] = offer.location.coordinates;
-  const trackAndOpen = (event: 'call' | 'whatsapp' | 'directions', url: string) => {
-    recordOfferEvent(offer._id, event).catch(() => undefined);
-    Linking.openURL(url).catch(() => Alert.alert('Unable to open', 'Please try again.'));
+  const share = async () => {
+    if (!offer) return;
+    try { const result = await Share.share({ message: [offer.title + ' — ' + money(offer.offerPrice), offer.description, offer.address, offer.phone || ''].join('\n') }); if (result.action === Share.sharedAction) recordOfferEvent(offer._id, 'share').catch(() => undefined); }
+    catch { Alert.alert('Unable to share', 'Please try again.'); }
   };
-
-  return (
-    <ScreenContainer edges={['top', 'left', 'right']}>
-      <View style={styles.topbar}>
-        <Pressable onPress={navigation.goBack} style={styles.icon}><MaterialCommunityIcons name="arrow-left" size={24} /></Pressable>
-        <Text style={styles.topTitle}>Offer details</Text>
-        <Pressable onPress={() => Share.share({ message: `${offer.title} — ₹${offer.offerPrice}` }).then(() => recordOfferEvent(offer._id, 'share'))} style={styles.icon}><MaterialCommunityIcons name="share-variant-outline" size={23} /></Pressable>
-      </View>
-      <ScrollView contentContainerStyle={styles.content}>
-        <OfferCard offer={offer} variant="hero" onPress={() => undefined} />
-        <View style={styles.discount}><Text style={styles.discountText}>{Math.round(offer.discountPercentage)}% OFF</Text></View>
-        <Text style={styles.title}>{offer.title}</Text>
-        <Pressable onPress={() => navigation.navigate('BusinessDetails', { businessId: business._id })} style={styles.businessRow}>
-          <View style={styles.businessLogo}><MaterialCommunityIcons name="storefront-outline" size={25} color={theme.colors.primary} /></View>
-          <View style={styles.flex}><View style={styles.nameRow}><Text style={styles.businessName}>{business.name}</Text>{business.verificationStatus === 'verified' && <MaterialCommunityIcons name="check-decagram" size={18} color={theme.colors.verified} />}</View><Text style={styles.category}>{business.category || offer.category}</Text></View>
-          <MaterialCommunityIcons name="chevron-right" size={22} color={theme.colors.textMuted} />
+  const save = async () => {
+    if (!accessToken) { Alert.alert('Sign in required', 'Please sign in to save offers.'); return; }
+    if (!offer || saving) return;
+    setSaving(true);
+    try { const result = await toggleSavedOffer(accessToken, offer._id); setSaved(result.saved); }
+    catch (e: any) { Alert.alert('Could not save', e.message); } finally { setSaving(false); }
+  };
+  const business = offer?.business as Business | undefined;
+  const contact = (event: 'call' | 'whatsapp' | 'directions', url: string) => { if (offer) recordOfferEvent(offer._id, event).catch(() => undefined); openContact(url); };
+  const whatsapp = offer?.whatsapp || business?.whatsapp;
+  const directions = () => { if (offer) contact('directions', 'https://www.google.com/maps/dir/?api=1&destination=' + offer.location.coordinates[1] + ',' + offer.location.coordinates[0]); };
+  return <ScreenContainer backgroundColor={colors.bg}>
+    <View style={s.top}><Pressable accessibilityLabel="Go back" onPress={navigation.goBack} style={s.icon}><MaterialCommunityIcons name="arrow-left" size={24} color={colors.ink} /></Pressable><Text style={s.topTitle}>Offer details</Text><Pressable accessibilityLabel="Share offer" onPress={share} style={s.icon}><MaterialCommunityIcons name="share-variant-outline" size={23} color={colors.ink} /></Pressable></View>
+    {loading ? <View style={s.center}><ActivityIndicator color={colors.teal} /></View> : error || !offer || !business ? <View style={s.center}><Text style={s.body}>{error || 'Offer unavailable.'}</Text><Pressable onPress={() => setRetry(n => n + 1)}><Text style={s.retry}>Retry</Text></Pressable></View> : <>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[s.content, { paddingBottom: 160 + insets.bottom }]}>
+        <OfferArtwork offer={offer} />
+        <View style={s.badge}><Text style={s.badgeText}>{Math.round(offer.discountPercentage)}% OFF</Text></View>
+        <Text style={s.title}>{offer.title}</Text>
+        <Pressable style={s.business} onPress={() => { recordOfferEvent(offer._id, 'business_profile_visit').catch(() => undefined); navigation.navigate('BusinessDetails', { businessId: business._id }); }}>
+          <RemotePhoto uri={business.logoUrl} style={s.logo} /><View style={s.flex}><View style={s.nameRow}><Text style={s.businessName}>{business.name}</Text>{business.verificationStatus === 'verified' && <MaterialCommunityIcons name="check-decagram" size={18} color="#209AF4" />}</View><Text style={s.body}>{business.category || offer.category}</Text></View><MaterialCommunityIcons name="chevron-right" size={24} color={colors.ink} />
         </Pressable>
-        <View style={styles.priceCard}><Text style={styles.original}>₹{offer.originalPrice.toLocaleString('en-IN')}</Text><Text style={styles.price}>₹{offer.offerPrice.toLocaleString('en-IN')}</Text><Text style={styles.saving}>Save ₹{(offer.originalPrice - offer.offerPrice).toLocaleString('en-IN')}</Text></View>
+        <View style={s.priceRow}><Text style={s.original}>{money(offer.originalPrice)}</Text><Text style={s.price}>{money(offer.offerPrice)}</Text><Text style={s.saving}>Save {money(Math.max(0, offer.originalPrice - offer.offerPrice))}</Text></View>
         <Info title="About this offer" body={offer.description} icon="text-box-outline" />
-        <Info title="Validity" body={`${new Date(offer.startsAt).toLocaleDateString()} – ${new Date(offer.expiresAt).toLocaleDateString()}`} icon="calendar-clock" />
+        <Info title="Validity" body={new Date(offer.startsAt).toLocaleDateString('en-IN') + ' – ' + new Date(offer.expiresAt).toLocaleDateString('en-IN')} icon="calendar-clock-outline" />
         <Info title="Terms & Conditions" body={offer.terms || 'Please confirm availability and terms with the business before purchase.'} icon="file-document-outline" />
-        <Text style={styles.sectionTitle}>Location</Text>
-        <Text style={styles.address}>{offer.address}</Text>
-        {offer.distanceKm != null && <Text style={styles.distance}>{offer.distanceKm} KM away</Text>}
-        <MapView pointerEvents="none" style={styles.map} initialRegion={{ latitude, longitude, latitudeDelta: 0.015, longitudeDelta: 0.015 }}><Marker coordinate={{ latitude, longitude }} title={business.name} /></MapView>
-        <View style={styles.actionGrid}>
-          <Action icon="directions" label="Directions" onPress={() => trackAndOpen('directions', `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`)} />
-          <Action icon="phone-outline" label="Call" onPress={() => trackAndOpen('call', `tel:${offer.phone || business.phone}`)} />
-          {(offer.whatsapp || business.whatsapp) ? <Action icon="whatsapp" label="WhatsApp" onPress={() => trackAndOpen('whatsapp', `https://wa.me/${(offer.whatsapp || business.whatsapp || '').replace(/\D/g, '')}`)} /> : null}
-          <Action icon={saved ? 'bookmark' : 'bookmark-outline'} label={saved ? 'Saved' : 'Save'} active={saved} onPress={() => accessToken && toggleSavedOffer(accessToken, offer._id).then((result) => { setSaved(result.saved); Alert.alert(result.saved ? 'Saved' : 'Removed', result.saved ? 'Offer added to Saved Offers.' : 'Offer removed from Saved Offers.'); }).catch((error) => Alert.alert('Could not update Saved Offers', error.message))} />
-        </View>
-        <Pressable onPress={() => {
-          if (!accessToken) return;
-          submitReport(accessToken, { targetType: 'offer', targetId: offer._id, reason: 'Incorrect information' })
-            .then(() => Alert.alert('Report received', 'Our moderation team will review this offer.'))
-            .catch((error) => Alert.alert('Could not report', error.message));
-        }} style={styles.report}><MaterialCommunityIcons name="flag-outline" size={18} color={theme.colors.danger} /><Text style={styles.reportText}>Report Offer</Text></Pressable>
+        <Info title="Location" body={offer.address + (offer.distanceKm != null ? ' · ' + offer.distanceKm + ' KM away' : '')} icon="map-marker" onPress={directions} />
+        <Pressable style={s.report} onPress={() => { if (!accessToken) { Alert.alert('Sign in required', 'Please sign in to report an offer.'); return; } Alert.alert('Report this offer?', 'Report incorrect information to the moderation team.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Report', onPress: () => { submitReport(accessToken, { targetType: 'offer', targetId: offer._id, reason: 'Incorrect information' }).then(() => Alert.alert('Report received')).catch(e => Alert.alert('Could not report', e.message)); } }]); }}><Text style={s.body}>Report offer</Text></Pressable>
       </ScrollView>
-    </ScreenContainer>
-  );
+      <View style={[s.dock, { bottom: 76 + insets.bottom }]}>
+        {whatsapp ? <RoundAction icon="whatsapp" label="WhatsApp" onPress={() => contact('whatsapp', whatsappUrl(whatsapp))} /> : null}
+        <RoundAction icon="directions" label="Directions" onPress={directions} /><RoundAction icon={saved ? 'bookmark' : 'bookmark-outline'} label={saving ? 'Saving' : saved ? 'Saved' : 'Save'} disabled={saving} onPress={save} /><RoundAction icon="share-variant" label="Share" onPress={share} />
+      </View>
+    </>}
+  </ScreenContainer>;
 };
-
-const Info = ({ title, body, icon }: { title: string; body: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }) => <View style={styles.info}><MaterialCommunityIcons name={icon} size={22} color={theme.colors.secondary} /><View style={styles.flex}><Text style={styles.infoTitle}>{title}</Text><Text style={styles.infoBody}>{body}</Text></View></View>;
-const Action = ({ icon, label, onPress, active = false }: { icon: keyof typeof MaterialCommunityIcons.glyphMap; label: string; onPress: () => void; active?: boolean }) => <Pressable onPress={onPress} style={[styles.action, active && { backgroundColor: theme.colors.primaryLight, borderColor: theme.colors.primary }]}><MaterialCommunityIcons name={icon} size={23} color={theme.colors.primary} /><Text style={styles.actionLabel}>{label}</Text></Pressable>;
-
-const styles = StyleSheet.create({
-  center: { alignItems: 'center', justifyContent: 'center' }, topbar: { height: 58, backgroundColor: theme.colors.surface, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10 }, icon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, topTitle: { flex: 1, ...theme.typography.h3, color: theme.colors.text },
-  content: { paddingBottom: 90 },
-  discount: { alignSelf: 'flex-start', margin: 18, marginBottom: 8, backgroundColor: theme.colors.primary, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10 }, discountText: { color: theme.colors.textInverse, fontWeight: '900' },
-  title: { ...theme.typography.h1, color: theme.colors.text, marginHorizontal: 18 }, businessRow: { margin: 18, padding: 14, borderRadius: 18, backgroundColor: theme.colors.surface, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: theme.colors.border },
-  businessLogo: { width: 48, height: 48, borderRadius: 15, backgroundColor: theme.colors.primaryLight, alignItems: 'center', justifyContent: 'center' }, flex: { flex: 1 }, nameRow: { flexDirection: 'row', alignItems: 'center', gap: 5 }, businessName: { ...theme.typography.bodyBold, color: theme.colors.text }, category: { ...theme.typography.caption, color: theme.colors.textSecondary, marginTop: 3 },
-  priceCard: { marginHorizontal: 18, padding: 18, backgroundColor: theme.colors.secondaryLight, borderRadius: 18, flexDirection: 'row', alignItems: 'baseline', gap: 10 }, original: { ...theme.typography.body, textDecorationLine: 'line-through', color: theme.colors.textMuted }, price: { fontSize: 26, fontWeight: '900', color: theme.colors.text }, saving: { ...theme.typography.caption, color: theme.colors.success, fontWeight: '800' },
-  info: { marginHorizontal: 18, marginTop: 18, flexDirection: 'row', gap: 12 }, infoTitle: { ...theme.typography.bodyBold, color: theme.colors.text }, infoBody: { ...theme.typography.body, color: theme.colors.textSecondary, marginTop: 5, lineHeight: 21 },
-  sectionTitle: { ...theme.typography.h3, color: theme.colors.text, marginHorizontal: 18, marginTop: 24 }, address: { ...theme.typography.body, color: theme.colors.textSecondary, marginHorizontal: 18, marginTop: 5 }, distance: { ...theme.typography.caption, color: theme.colors.secondary, fontWeight: '800', marginHorizontal: 18, marginTop: 4 },
-  map: { height: 180, margin: 18, borderRadius: 18 }, actionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingHorizontal: 18 }, action: { width: '47%', minHeight: 55, borderRadius: 15, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }, actionLabel: { ...theme.typography.caption, color: theme.colors.text, fontWeight: '800' },
-  report: { margin: 18, minHeight: 48, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 7 }, reportText: { ...theme.typography.caption, color: theme.colors.danger, fontWeight: '700' },
+function Info({ title, body, icon, onPress }: { title: string; body: string; icon: IconName; onPress?: () => void }) {
+  const [expanded, setExpanded] = useState(false);
+  return <Pressable accessibilityRole="button" accessibilityLabel={title} onPress={onPress || (() => setExpanded(!expanded))} style={s.info}><MaterialCommunityIcons name={icon} size={24} color={colors.teal} /><View style={s.flex}><Text style={s.infoTitle}>{title}</Text><Text numberOfLines={expanded ? undefined : 2} style={s.body}>{body}</Text></View><MaterialCommunityIcons name={expanded ? 'chevron-down' : 'chevron-right'} size={21} color={colors.muted} /></Pressable>;
+}
+const s = StyleSheet.create({
+  top: { height: 49, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6 }, icon: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' }, topTitle: { flex: 1, fontSize: 18, fontWeight: '800', color: colors.ink }, center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }, retry: { color: colors.teal, padding: 16, fontWeight: '700' },
+  content: { paddingHorizontal: 10 }, badge: { alignSelf: 'flex-start', backgroundColor: colors.teal, borderRadius: 9, paddingHorizontal: 12, paddingVertical: 6, marginTop: 10 }, badgeText: { color: '#FFF', fontSize: 12, fontWeight: '800' }, title: { color: colors.ink, fontSize: 27, fontWeight: '900', marginTop: 5 },
+  business: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, borderRadius: 14, borderWidth: 1, borderColor: '#DCE6EC', backgroundColor: '#FFFFFFC0', marginVertical: 10 }, logo: { width: 46, height: 46, borderRadius: 12 }, flex: { flex: 1, minWidth: 0 }, nameRow: { flexDirection: 'row', alignItems: 'center', gap: 5 }, businessName: { fontSize: 16, fontWeight: '800', color: colors.ink, flexShrink: 1 }, body: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 2 },
+  priceRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 12, padding: 14, borderRadius: 15, backgroundColor: '#DFF3F2' }, original: { fontSize: 17, textDecorationLine: 'line-through', color: '#929C9F' }, price: { fontSize: 30, fontWeight: '900', color: '#111' }, saving: { fontSize: 13, color: '#08A34B', fontWeight: '800' }, info: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 11, paddingHorizontal: 5, borderBottomWidth: 1, borderBottomColor: '#E9F0F4' }, infoTitle: { fontSize: 13, fontWeight: '700', color: colors.ink },
+  dock: { position: 'absolute', left: 6, right: 6, flexDirection: 'row', gap: 5, backgroundColor: '#FFFFFFF5', padding: 7, borderRadius: 18, borderWidth: 1, borderColor: '#EBF2F6', shadowColor: '#8CAFB8', shadowOpacity: 0.16, shadowRadius: 12, shadowOffset: { width: 0, height: 3 }, elevation: 4 }, report: { alignItems: 'center', padding: 15 },
 });

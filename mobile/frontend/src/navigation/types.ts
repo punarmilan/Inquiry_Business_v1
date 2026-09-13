@@ -10,7 +10,6 @@ export type AuthStackParamList = {
   PhoneEntry: undefined;
   OtpVerification: { demoOtp: string };
   ProfileSetup: { prefillName?: string; prefillEmail?: string } | undefined;
-  ProviderRegistration: undefined;
   LegalDocument: { document: 'terms' | 'privacy' };
 };
 
@@ -58,7 +57,8 @@ export type OffersStackParamList = {
 
 export type ServicesStackParamList = {
   ServicesHome: undefined;
-  BookService: { categoryId: string; categoryName: string; basePrice: number; cityId: string; cityName?: string; availableAreas?: string[]; providerId?: string };
+  ServiceCategories: { cityId: string; cityName: string; locality: string };
+  ServiceProviders: { cityId: string; cityName: string; locality: string; categoryId: string; categoryName: string };
   MyBookings: undefined;
   BookingDetails: { bookingId: string };
   Notifications: undefined;
@@ -76,7 +76,6 @@ export type MoreStackParamList = {
   MyOffers: undefined;
   CreateOffer: { businessId: string; offer: Offer; designMode?: 'custom' | 'templates' };
   SavedOffers: undefined;
-  SavedProviders: undefined;
   Payments: undefined;
   LegalDocument: { document: 'terms' | 'privacy' };
   MyBusiness: undefined;
@@ -129,22 +128,7 @@ export type MainTabParamList = {
   ProfileTab: NavigatorScreenParams<ProfileStackParamList>;
 };
 
-export type ProviderTabParamList = {
-  ProviderHome: undefined;
-  ProviderMessages: undefined;
-  ProviderDashboard: undefined;
-  ProviderProfile: undefined;
-};
-
-export type ProviderStackParamList = {
-  ProviderTabs: NavigatorScreenParams<ProviderTabParamList>;
-  ChatThread: ChatThreadParams;
-  LiveLocation: LiveLocationParams;
-  ProviderNotifications: undefined;
-};
-
 export type RootStackParamList = {
   Auth: NavigatorScreenParams<AuthStackParamList>;
   Main: NavigatorScreenParams<MainTabParamList>;
-  Provider: NavigatorScreenParams<ProviderStackParamList>;
 };

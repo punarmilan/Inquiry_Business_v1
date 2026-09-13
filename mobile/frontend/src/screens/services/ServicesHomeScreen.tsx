@@ -1,215 +1,107 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScreenContainer } from '../../components/ScreenContainer';
-import { Avatar } from '../../components/Avatar';
-import { HyperlocalHeader } from '../../components/HyperlocalHeader';
 import { CityPickerModal } from '../../components/CityPickerModal';
 import { useHyperlocalLocation } from '../../hooks/useHyperlocalLocation';
-import { listSavedProviders, listServiceCategories, listServiceProviders, toggleSavedProvider } from '../../services/api';
-import type { ServiceCategory, ServiceProvider } from '../../types/hyperlocal';
+import { listSupportedCities } from '../../services/api';
+import type { City } from '../../types/hyperlocal';
 import type { ServicesStackParamList } from '../../navigation/types';
-import { getProviderAvatar } from '../../config/providerAvatars';
-import { useApp } from '../../context/AppContext';
-import { theme } from '../../theme';
+import { ServiceBackdrop, ServiceHeader, ServiceImage, ServiceSearch, serviceColors as colors, ui } from './ServiceUI';
 
 type Props = NativeStackScreenProps<ServicesStackParamList, 'ServicesHome'>;
-type FilterKey = 'location' | 'experience' | 'service' | 'more';
-
 const normalize = (value: string) => value.trim().toLocaleLowerCase('en-IN');
 
 export const ServicesHomeScreen: React.FC<Props> = ({ navigation }) => {
-  const { accessToken, unreadNotificationCount, t } = useApp();
   const locationState = useHyperlocalLocation({ autoDetect: true });
-  const scrollRef = useRef<ScrollView>(null);
-  const [categories, setCategories] = useState<ServiceCategory[]>([]);
-  const [providers, setProviders] = useState<ServiceProvider[]>([]);
-  const [availableAreas, setAvailableAreas] = useState<string[]>([]);
-  const [selectedLocality, setSelectedLocality] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('');
-  const [experience, setExperience] = useState(0);
-  const [onlineOnly, setOnlineOnly] = useState(true);
   const [search, setSearch] = useState('');
-  const [activeFilter, setActiveFilter] = useState<FilterKey | null>(null);
-  const [showAllProviders, setShowAllProviders] = useState(false);
-  const [showAllCityProviders, setShowAllCityProviders] = useState(false);
-  const [showAllLocations, setShowAllLocations] = useState(false);
-  const [favorites, setFavorites] = useState<string[]>([]);
-  const [comingSoon, setComingSoon] = useState(false);
-  const [loading, setLoading] = useState(false);
-
-  const city = locationState.location?.city;
-  const cityId = city?._id;
-
-  const load = useCallback(async () => {
-    if (!cityId) {
-      setComingSoon(Boolean(locationState.location));
-      setCategories([]);
-      setProviders([]);
-      return;
-    }
-    setLoading(true);
+  const [descending, setDescending] = useState(false);
+  const [showAllRecent, setShowAllRecent] = useState(false);
+  const [liveCities, setLiveCities] = useState<City[] | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState('');
+  const [opening, setOpening] = useState('');
+  const insets = useSafeAreaInsets();
+  const { refreshStoredLocation } = locationState;
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
     try {
-      const [categoryResponse, providerResponse] = await Promise.all([
-        listServiceCategories(cityId),
-        listServiceProviders(cityId),
-      ]);
-      setCategories(categoryResponse.data);
-      setAvailableAreas(categoryResponse.availableAreas || categoryResponse.city?.localities || []);
-      setProviders(providerResponse.data);
-      setComingSoon(categoryResponse.comingSoon);
-    } catch {
-      setProviders([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [cityId, locationState.location]);
+      const response = await listSupportedCities();
+      setLiveCities(response.data);
+      await refreshStoredLocation();
+      setError('');
+    } catch { setError('Could not refresh areas. Pull down to try again.'); }
+    finally { setRefreshing(false); }
+  }, [refreshStoredLocation]);
+  useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
 
-  useEffect(() => { setSelectedLocality(locationState.location?.locality || ''); }, [locationState.location?.locality, cityId]);
-  useEffect(() => { load(); }, [load]);
+  const cities = liveCities || locationState.cities;
+  const storedCity = locationState.location?.city;
+  const city = cities.find((item) => item._id === storedCity?._id) || (liveCities ? null : storedCity);
+  const allAreas = useMemo(() => {
+    const areas = city?.localities?.length ? [...city.localities] : city ? [city.name] : [];
+    const current = locationState.location?.locality;
+    if (current && city && !areas.some((area) => normalize(area) === normalize(current))) areas.push(current);
+    return areas;
+  }, [city, locationState.location?.locality]);
+  const matchesSearch = (area: string) => normalize(area + ' ' + (city?.name || '')).includes(normalize(search));
+  const visibleAreas = allAreas.filter(matchesSearch).sort((a, b) => (descending ? -1 : 1) * a.localeCompare(b, 'en-IN'));
+  const recentAreas = [...new Set([
+    locationState.location?.locality || '',
+    ...locationState.savedLocations.filter((item) => item.city?._id === city?._id).map((item) => item.locality),
+  ].filter((area) => area && allAreas.includes(area)))].filter(matchesSearch);
 
-  useFocusEffect(useCallback(() => {
-    void locationState.refreshStoredLocation();
-    if (!accessToken) {
-      setFavorites([]);
-      return undefined;
-    }
-    listSavedProviders(accessToken).then((response) => setFavorites(response.data.map((provider) => provider._id))).catch(() => undefined);
-    return undefined;
-  }, [accessToken, locationState.refreshStoredLocation]));
-
-  const toggleFavorite = async (providerId: string) => {
-    if (!accessToken) return;
+  const openArea = async (area: string) => {
+    if (!city || opening) return;
+    setOpening(area);
     try {
-      const response = await toggleSavedProvider(accessToken, providerId);
-      setFavorites((current) => response.saved ? (current.includes(providerId) ? current : [...current, providerId]) : current.filter((id) => id !== providerId));
-    } catch (error) {
-      Alert.alert(t('favouriteProvider'), error instanceof Error ? error.message : t('favouritesUpdateFailed'));
-    }
+      await locationState.chooseManual(city, area);
+      navigation.navigate('ServiceCategories', { cityId: city._id, cityName: city.name, locality: area });
+    } catch { Alert.alert('Could not select area', 'Please try again.'); }
+    finally { setOpening(''); }
   };
+  const card = (area: string, recent = false) => <AreaCard key={(recent ? 'recent-' : 'all-') + city?._id + area} area={area} city={city!} recent={recent} loading={opening === area} onPress={() => void openArea(area)} />;
 
-  const locationNames = useMemo(() => {
-    const names = [...availableAreas];
-    providers.forEach((provider) => provider.serviceAreas?.forEach((area) => {
-      if (!names.some((name) => normalize(name) === normalize(area))) names.push(area);
-    }));
-    return names;
-  }, [availableAreas, providers]);
-
-  const visibleProviders = useMemo(() => {
-    const query = normalize(search);
-    return providers.filter((provider) => {
-      const categoryNames = provider.categories?.map((item) => item.name).join(' ') || '';
-      const searchable = `${provider.name} ${categoryNames} ${provider.serviceAreas?.join(' ') || ''}`;
-      return (!query || normalize(searchable).includes(query)) &&
-        (!selectedLocality || provider.serviceAreas?.some((area) => normalize(area) === normalize(selectedLocality))) &&
-        (!selectedCategory || provider.categories?.some((item) => item._id === selectedCategory)) &&
-        (!experience || Number(provider.experienceYears || 0) >= experience) &&
-        provider.availability === 'available';
-    }).sort((a, b) => Number(b.ratingAverage || 0) - Number(a.ratingAverage || 0) || Number(b.completedBookings || 0) - Number(a.completedBookings || 0));
-  }, [experience, onlineOnly, providers, search, selectedCategory, selectedLocality]);
-
-  const allCityProviders = useMemo(() => {
-    const query = normalize(search);
-    return providers.filter((provider) => {
-      const categoryNames = provider.categories?.map((item) => item.name).join(' ') || '';
-      const searchable = `${provider.name} ${categoryNames} ${provider.serviceAreas?.join(' ') || ''}`;
-      return (!query || normalize(searchable).includes(query)) &&
-        (!selectedCategory || provider.categories?.some((item) => item._id === selectedCategory)) &&
-        (!experience || Number(provider.experienceYears || 0) >= experience) &&
-        provider.availability === 'available';
-    }).sort((a, b) => Number(b.ratingAverage || 0) - Number(a.ratingAverage || 0) || Number(b.completedBookings || 0) - Number(a.completedBookings || 0));
-  }, [experience, providers, search, selectedCategory]);
-
-  const locationStats = useMemo(() => locationNames.map((name) => ({
-    name,
-    count: providers.filter((provider) => provider.serviceAreas?.some((area) => normalize(area) === normalize(name))).length,
-  })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'en-IN')), [locationNames, providers]);
-
-  const openBooking = (provider?: ServiceProvider) => {
-    const providerCategory = provider?.categories?.find((item) => categories.some((category) => category._id === item._id));
-    const category = providerCategory ? categories.find((item) => item._id === providerCategory._id) : categories.find((item) => item._id === selectedCategory) || categories[0];
-    if (!category || !cityId) return;
-    navigation.navigate('BookService', { categoryId: category._id, categoryName: category.name, basePrice: category.basePrice, cityId, cityName: locationState.location?.city?.name, availableAreas, providerId: provider?._id });
-  };
-
-  const chooseFilter = (value: string) => {
-    if (activeFilter === 'location') setSelectedLocality(value === 'All locations' ? '' : value);
-    if (activeFilter === 'experience') setExperience(Number(value));
-    if (activeFilter === 'service') setSelectedCategory(value === 'All services' ? '' : value);
-    if (activeFilter === 'more') {
-      if (value === 'Online now') setOnlineOnly(true);
-      if (value === 'Reset filters') {
-        setSelectedLocality(locationState.location?.locality || ''); setSelectedCategory(''); setExperience(0); setOnlineOnly(true); setSearch('');
-      }
-    }
-    setActiveFilter(null);
-  };
-
-  const filterOptions = activeFilter === 'location'
-    ? ['All locations', ...locationNames]
-    : activeFilter === 'experience'
-      ? ['0', '3', '5', '8']
-      : activeFilter === 'service'
-        ? ['All services', ...categories.map((category) => category._id)]
-        : ['Online now', 'Reset filters'];
-  const providerItems = showAllProviders ? visibleProviders : visibleProviders.slice(0, 6);
-  const additionalProviderItems = allCityProviders.filter((provider) => !visibleProviders.some((visible) => visible._id === provider._id));
-  const cityProviderItems = showAllCityProviders ? additionalProviderItems : additionalProviderItems.slice(0, 6);
-  const locationItems = showAllLocations ? locationStats : locationStats.slice(0, 5);
-  const currentLocationLabel = selectedLocality && city ? `${selectedLocality}, ${city.name}` : city?.name || t('chooseLocation');
-
-  return <ScreenContainer>
-    <HyperlocalHeader cityLabel={currentLocationLabel} onLocationPress={() => locationState.setPickerVisible(true)} onNotifications={() => navigation.navigate('Notifications')} onInbox={() => navigation.navigate('ChatList')} unreadCount={unreadNotificationCount} />
-    <ScrollView ref={scrollRef} refreshControl={<RefreshControl refreshing={loading} onRefresh={load} colors={[theme.colors.primary]} />} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      <View style={styles.searchPanel}>
-        <View style={styles.searchRow}><MaterialCommunityIcons name="magnify" size={27} color={theme.colors.textSecondary} /><TextInput value={search} onChangeText={setSearch} placeholder={t('serviceSearchPlaceholder')} placeholderTextColor={theme.colors.textMuted} style={styles.searchInput} returnKeyType="search" /><Pressable onPress={() => setActiveFilter('more')} style={styles.filterButton}><MaterialCommunityIcons name="filter-outline" size={21} color={theme.colors.textInverse} /><Text style={styles.filterButtonText}>{t('filter')}</Text></Pressable></View>
-        <View style={[styles.filterRow, filterStyles.filterRow]}>
-          <FilterButton icon="map-marker-outline" label={selectedLocality || t('locationFilter')} active={Boolean(selectedLocality)} onPress={() => setActiveFilter('location')} />
-          <FilterButton wide icon="briefcase-outline" label={experience ? `${experience}+ ${t('years')}` : t('experience')} active={Boolean(experience)} onPress={() => setActiveFilter('experience')} />
-          <FilterButton icon="view-grid-outline" label={selectedCategory ? categories.find((category) => category._id === selectedCategory)?.name || t('service') : t('service')} active={Boolean(selectedCategory)} onPress={() => setActiveFilter('service')} />
-          <FilterButton icon="sort-variant" label={onlineOnly ? t('onlineNow') : t('more')} active={onlineOnly} onPress={() => setActiveFilter('more')} />
-        </View>
-      </View>
-
-      {comingSoon ? <View style={styles.empty}><MaterialCommunityIcons name="map-marker-alert-outline" size={43} color={theme.colors.primary} /><Text style={styles.emptyTitle}>{t('serviceComingSoon')}</Text><Text style={styles.emptyText}>{t('servicesSelectedCities')}</Text><Pressable onPress={() => locationState.setPickerVisible(true)} style={styles.choose}><Text style={styles.chooseText}>{t('viewAvailableCities')}</Text></Pressable></View> : null}
-
-      <SectionHeading title={t('serviceProviders')} onPress={() => setShowAllProviders((value) => !value)} expanded={showAllProviders} />
-      {loading && !providers.length ? <ActivityIndicator color={theme.colors.primary} style={styles.loader} /> : null}
-      {!loading && !visibleProviders.length ? <View style={[styles.noResults, compactStyles.noResults]}><MaterialCommunityIcons name="account-search-outline" size={28} color={theme.colors.textMuted} /><Text style={styles.noResultsTitle}>{t('noProvidersMatch')}</Text><Text style={styles.noResultsText}>{t('tryProviderFilters')}</Text></View> : null}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.providerRow}>{providerItems.map((provider) => <ProviderCard key={provider._id} provider={provider} favorite={favorites.includes(provider._id)} onFavorite={() => toggleFavorite(provider._id)} onBook={() => openBooking(provider)} />)}</ScrollView>
-
-      {additionalProviderItems.length ? <><SectionHeading title={t('allServiceProviders')} onPress={() => setShowAllCityProviders((value) => !value)} expanded={showAllCityProviders} /><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.providerRow}>{cityProviderItems.map((provider) => <ProviderCard key={provider._id} provider={provider} favorite={favorites.includes(provider._id)} onFavorite={() => toggleFavorite(provider._id)} onBook={() => openBooking(provider)} />)}</ScrollView></> : null}
-
-      <SectionHeading title={t('topLocations')} onPress={() => setShowAllLocations((value) => !value)} expanded={showAllLocations} />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.locationRow}>{locationItems.map((item, index) => <Pressable key={item.name} onPress={() => { setSelectedLocality(item.name); scrollRef.current?.scrollTo({ y: 0, animated: true }); }} style={[styles.locationCard, rectangleStyles.locationCard]}><View style={styles.locationIcon}><MaterialCommunityIcons name={index < 2 ? 'map-marker-outline' : 'home-city-outline'} size={27} color={theme.colors.textSecondary} /></View><View><Text style={styles.locationName}>{item.name}</Text><Text style={styles.locationCount}>{item.count} {item.count === 1 ? t('provider') : t('providers')}</Text></View></Pressable>)}</ScrollView>
-      <View style={styles.trust}><View style={styles.trustIcon}><MaterialCommunityIcons name="shield-check" size={27} color={theme.colors.textInverse} /></View><View style={styles.flex}><Text style={styles.trustTitle}>{t('verifiedTrusted')}</Text><Text style={styles.trustText}>{t('verifiedTrustedBody')}</Text></View></View>
-    </ScrollView>
-    <CityPickerModal visible={locationState.pickerVisible} cities={locationState.cities.filter((item) => item.servicesEnabled || item.offersEnabled)} onSelect={locationState.chooseManual} onUseCurrentLocation={locationState.detect} currentLocationLoading={locationState.loadingLocation} currentLocationError={locationState.locationError} onClose={() => locationState.setPickerVisible(false)} />
-    <Modal visible={Boolean(activeFilter)} transparent animationType="slide" onRequestClose={() => setActiveFilter(null)}><Pressable style={styles.modalBackdrop} onPress={() => setActiveFilter(null)}><Pressable style={styles.modalCard} onPress={(event) => event.stopPropagation()}><View style={styles.modalHandle} /><Text style={styles.modalTitle}>{activeFilter === 'location' ? 'Choose location' : activeFilter === 'experience' ? 'Experience' : activeFilter === 'service' ? 'Choose service' : 'More filters'}</Text>{filterOptions.map((value) => { const label = activeFilter === 'service' ? categories.find((category) => category._id === value)?.name || value : activeFilter === 'experience' ? (value === '0' ? 'Any experience' : `${value}+ years`) : value; return <Pressable key={value} onPress={() => chooseFilter(value)} style={styles.modalOption}><Text style={styles.modalOptionText}>{label}</Text><MaterialCommunityIcons name="chevron-right" size={21} color={theme.colors.textMuted} /></Pressable>; })}</Pressable></Pressable></Modal>
+  return <ScreenContainer backgroundColor={colors.background}>
+    <ServiceBackdrop />
+    <ServiceHeader title="Select Area" subtitle="Choose your location to find local services" icon="crosshairs-gps" onAction={() => locationState.setPickerVisible(true)} />
+    <ServiceSearch value={search} onChangeText={setSearch} placeholder="Search by area, locality or city" />
+    {locationState.loadingLocation && !city ? <ActivityIndicator color={colors.teal} style={{ marginTop: 35 }} /> : <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 90 + insets.bottom }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.teal} colors={[colors.teal]} />}>
+      {error ? <Text style={ui.emptyText}>{error}</Text> : null}
+      {city && recentAreas.length > 0 ? <>
+        <View style={styles.sectionRow}><Text style={ui.sectionTitle}>Recent</Text><Pressable accessibilityRole="button" onPress={() => setShowAllRecent(!showAllRecent)} style={ui.pill}><Text style={ui.pillText}>{showAllRecent ? 'Show less' : 'See all'}</Text><MaterialCommunityIcons name={showAllRecent ? 'chevron-up' : 'chevron-right'} size={20} color={colors.darkTeal} /></Pressable></View>
+        {(showAllRecent ? recentAreas : recentAreas.slice(0, 1)).map((area) => card(area, true))}
+      </> : null}
+      <View style={[styles.sectionRow, recentAreas.length > 0 && { marginTop: 10 }]}><Text style={ui.sectionTitle}>All</Text><Pressable accessibilityRole="button" accessibilityLabel={descending ? 'Sort areas A to Z' : 'Sort areas Z to A'} style={ui.pill} onPress={() => setDescending(!descending)}><MaterialCommunityIcons name="sort-alphabetical-ascending" size={19} color={colors.darkTeal} /><Text style={ui.pillText}>{descending ? 'Sort Z–A' : 'Sort A–Z'}</Text></Pressable></View>
+      {city ? visibleAreas.map((area) => card(area)) : null}
+      {!visibleAreas.length ? <View style={ui.empty}><MaterialCommunityIcons name="map-marker-off-outline" size={42} color={colors.teal} /><Text style={ui.emptyText}>{city ? 'No areas match your search.' : 'Choose a city to view service areas.'}</Text>{!city ? <Pressable style={ui.pill} onPress={() => locationState.setPickerVisible(true)}><Text style={ui.pillText}>Choose city</Text></Pressable> : null}</View> : null}
+    </ScrollView>}
+    <CityPickerModal visible={locationState.pickerVisible} cities={cities.filter((item) => item.servicesEnabled)} onSelect={async (nextCity, locality) => { await locationState.chooseManual(nextCity, locality); setSearch(''); setShowAllRecent(false); }} onUseCurrentLocation={() => locationState.detect({ force: true })} currentLocationLoading={locationState.loadingLocation} currentLocationError={locationState.locationError} onClose={() => locationState.setPickerVisible(false)} />
   </ScreenContainer>;
 };
 
-const SectionHeading: React.FC<{ title: string; onPress: () => void; expanded: boolean }> = ({ title, onPress, expanded }) => {
-  const { t } = useApp();
-  return <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>{title}</Text><Pressable onPress={onPress}><Text style={styles.viewAll}>{expanded ? t('showLess') : t('viewAll')}</Text></Pressable></View>;
+const AreaCard = ({ area, city, recent, loading, onPress }: { area: string; city: City; recent: boolean; loading: boolean; onPress: () => void }) => {
+  const uri = city.localityImages?.find((item) => normalize(item.name) === normalize(area))?.imageUrl;
+  return <Pressable accessibilityRole="button" accessibilityLabel={'View services in ' + area + ', ' + city.name} onPress={onPress} disabled={loading} style={({ pressed }) => [styles.card, ui.shadow, pressed && ui.pressed]}>
+    <View style={styles.cardClip}>
+      <ServiceImage uri={uri} style={StyleSheet.absoluteFill} fallback={<LinearGradient colors={['#C3EDF1', '#73BFC8', '#347681']} style={[StyleSheet.absoluteFill, styles.placeholder]}><MaterialCommunityIcons name="city-variant-outline" size={112} color="#E3F6F4" /></LinearGradient>} />
+      <LinearGradient colors={['transparent', 'rgba(5,40,48,0.12)', 'rgba(4,39,45,0.9)']} locations={[0, 0.4, 1]} style={StyleSheet.absoluteFill} />
+      <View style={styles.badge}><MaterialCommunityIcons name={recent ? 'clock-time-four' : 'office-building'} size={17} color={colors.darkTeal} /><Text style={styles.badgeText}>{recent ? 'Recently searched' : 'Local Area'}</Text></View>
+      <View style={styles.cardFooter}><MaterialCommunityIcons name="map-marker" size={30} color="#FFFFFF" /><View style={{ flex: 1 }}><Text style={styles.areaName} numberOfLines={2}>{area}{area !== city.name ? ', ' + city.name : ''}</Text><Text style={styles.areaDetail}>{city.name}, {city.state}</Text></View><View style={styles.arrow}>{loading ? <ActivityIndicator color={colors.darkTeal} /> : <MaterialCommunityIcons name="chevron-right" size={27} color={colors.darkTeal} />}</View></View>
+    </View>
+  </Pressable>;
 };
-const FilterButton: React.FC<{ icon: keyof typeof MaterialCommunityIcons.glyphMap; label: string; active: boolean; wide?: boolean; onPress: () => void }> = ({ icon, label, active, wide, onPress }) => <Pressable onPress={onPress} style={[styles.filterChip, filterStyles.filterChip, wide && filterStyles.filterChipWide, active && styles.filterChipActive]}><MaterialCommunityIcons name={icon} size={17} color={active ? theme.colors.primary : theme.colors.text} /><Text style={[styles.filterChipText, active && styles.filterChipTextActive]} numberOfLines={1}>{label}</Text><MaterialCommunityIcons name="chevron-down" size={16} color={active ? theme.colors.primary : theme.colors.text} /></Pressable>;
-
-const ProviderCard: React.FC<{ provider: ServiceProvider; favorite: boolean; onFavorite: () => void; onBook: () => void }> = ({ provider, favorite, onFavorite, onBook }) => {
-  const { t } = useApp();
-  const category = provider.categories?.[0];
-  const localAvatar = getProviderAvatar(provider.name);
-  const availabilityLabel = provider.availability === 'available' ? t('online') : provider.availability === 'busy' ? t('busy') : t('offline');
-  return <View style={[styles.providerCard, rectangleStyles.providerCard]}><View style={[styles.providerImage, rectangleStyles.providerImage]}>{localAvatar ? <Image source={localAvatar} style={styles.providerPhoto} /> : provider.photoUrl ? <Image source={{ uri: provider.photoUrl }} style={styles.providerPhoto} /> : <View style={styles.providerFallback}><Avatar name={provider.name} size={68} /></View>}<View style={styles.rating}><MaterialCommunityIcons name="star" size={13} color={theme.colors.textInverse} /><Text style={styles.ratingText}>{provider.ratingAverage || 'New'}</Text></View><Pressable onPress={onFavorite} style={styles.favorite}><MaterialCommunityIcons name={favorite ? 'heart' : 'heart-outline'} size={23} color={favorite ? theme.colors.danger : theme.colors.textSecondary} /></Pressable></View><View style={styles.providerDetails}><View style={styles.providerNameRow}><Text style={styles.providerName} numberOfLines={1}>{provider.name}</Text>{provider.verificationStatus === 'verified' ? <MaterialCommunityIcons accessibilityLabel="Verified provider" name="check-decagram" size={19} color={theme.colors.verified} /> : null}</View><Text style={styles.providerService} numberOfLines={1}>{category?.name || 'Service provider'}</Text><Text style={styles.providerLocation} numberOfLines={1}><MaterialCommunityIcons name="map-marker-outline" size={14} color={theme.colors.textMuted} /> {provider.serviceAreas?.[0] || 'Local'} · {availabilityLabel}</Text><Text style={styles.providerMeta}>{provider.experienceYears || 0}+ Years Exp. · {provider.completedBookings || 0}+ Jobs</Text><Pressable disabled={provider.availability === 'busy'} onPress={onBook} style={[styles.bookButton, rectangleStyles.bookButton, provider.availability === 'busy' && styles.bookButtonDisabled]}><Text style={[styles.bookButtonText, provider.availability === 'busy' && styles.bookButtonTextDisabled]}>{provider.availability === 'available' ? 'Book Now' : provider.availability === 'busy' ? 'Busy' : 'Book'}</Text></Pressable></View></View>;
-};
-
-const rectangleStyles = StyleSheet.create({ providerCard: { borderRadius: 10, width: 248 }, providerImage: { height: 158 }, bookButton: { borderRadius: 7 }, locationCard: { borderRadius: 10, minWidth: 178 } });
-const filterStyles = StyleSheet.create({ filterRow: { flexDirection: 'row', gap: 7 }, filterChip: { flex: 1, minWidth: 0, paddingHorizontal: 6, gap: 3 }, filterChipWide: { flex: 1.25 } });
-const compactStyles = StyleSheet.create({ noResults: { paddingVertical: 14, paddingHorizontal: 12 } });
 
 const styles = StyleSheet.create({
-  content: { padding: 16, paddingBottom: 125 }, flex: { flex: 1 }, searchPanel: { backgroundColor: theme.colors.surface, borderRadius: 20, padding: 11, borderWidth: 1, borderColor: theme.colors.border, shadowColor: theme.colors.shadow, shadowOpacity: 1, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 3 }, searchRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: theme.colors.border, borderRadius: 15, paddingLeft: 12, minHeight: 56 }, searchInput: { flex: 1, height: 54, paddingHorizontal: 10, color: theme.colors.text, fontSize: 15 }, filterButton: { minHeight: 54, borderRadius: 14, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: theme.colors.primary }, filterButtonText: { color: theme.colors.textInverse, fontSize: 16, fontWeight: '900' }, filterRow: { gap: 10, paddingTop: 11 }, filterChip: { minWidth: 116, height: 46, paddingHorizontal: 12, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 14, flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: theme.colors.surface }, filterChipActive: { backgroundColor: theme.colors.primaryLight, borderColor: theme.colors.primary }, filterChipText: { flex: 1, color: theme.colors.text, fontSize: 13, fontWeight: '700' }, filterChipTextActive: { color: theme.colors.primaryDark }, hero: { minHeight: 192, borderRadius: 22, padding: 18, marginTop: 18, flexDirection: 'row', alignItems: 'center', gap: 12, overflow: 'hidden' }, heroPeople: { width: 82, alignItems: 'center', justifyContent: 'center' }, shield: { width: 66, height: 66, borderRadius: 24, backgroundColor: 'rgba(255,255,255,.18)', alignItems: 'center', justifyContent: 'center' }, avatarStack: { width: 82, height: 38, marginTop: 8, marginLeft: -16 }, stackAvatar: { position: 'absolute', borderWidth: 2, borderColor: theme.colors.textInverse, borderRadius: 22 }, heroCopy: { flex: 1 }, heroTitle: { color: theme.colors.textInverse, fontSize: 21, lineHeight: 26, fontWeight: '900' }, heroText: { color: '#DDF8F5', fontSize: 14, lineHeight: 20, marginTop: 7 }, heroButton: { position: 'absolute', right: 15, bottom: 16, backgroundColor: 'rgba(0,0,0,.18)', borderRadius: 13, paddingHorizontal: 13, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 5 }, heroButtonText: { color: theme.colors.textInverse, fontSize: 13, fontWeight: '900' }, bookingShortcut: { flexDirection: 'row', alignItems: 'center', gap: 11, backgroundColor: theme.colors.surface, borderRadius: 19, padding: 14, marginTop: 16, borderWidth: 1, borderColor: theme.colors.border, shadowColor: theme.colors.shadow, shadowOpacity: 1, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 3 }, bookingIcon: { width: 47, height: 47, borderRadius: 15, backgroundColor: theme.colors.primaryLight, alignItems: 'center', justifyContent: 'center' }, shortcutTitle: { color: theme.colors.text, fontSize: 17, fontWeight: '900' }, shortcutText: { color: theme.colors.textSecondary, fontSize: 13, marginTop: 3 }, sectionHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 25, marginBottom: 12 }, sectionTitle: { color: theme.colors.text, fontSize: 21, fontWeight: '900' }, viewAll: { color: theme.colors.primary, fontSize: 15, fontWeight: '900' }, loader: { marginVertical: 30 }, providerRow: { gap: 12, paddingBottom: 3 }, providerCard: { width: 236, backgroundColor: theme.colors.surface, borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: theme.colors.border, shadowColor: theme.colors.shadow, shadowOpacity: 1, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 3 }, providerImage: { height: 146, backgroundColor: theme.colors.surfaceAlt, position: 'relative' }, providerPhoto: { width: '100%', height: '100%', resizeMode: 'cover' }, providerFallback: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.primaryLight }, rating: { position: 'absolute', left: 10, top: 10, borderRadius: 7, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: theme.colors.primary, flexDirection: 'row', alignItems: 'center', gap: 3 }, ratingText: { color: theme.colors.textInverse, fontSize: 12, fontWeight: '900' }, favorite: { position: 'absolute', right: 9, top: 8, width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,.9)', alignItems: 'center', justifyContent: 'center' }, providerDetails: { padding: 12 }, providerNameRow: { flexDirection: 'row', alignItems: 'center', gap: 5 }, providerName: { flexShrink: 1, color: theme.colors.text, fontSize: 17, fontWeight: '900' }, providerService: { color: theme.colors.textSecondary, fontSize: 14, marginTop: 3 }, providerLocation: { color: theme.colors.textSecondary, fontSize: 12, marginTop: 7 }, providerMeta: { color: theme.colors.textSecondary, fontSize: 12, marginTop: 6 }, providerPrice: { color: theme.colors.text, fontSize: 14, fontWeight: '900', marginTop: 8 }, bookButton: { height: 38, borderRadius: 10, borderWidth: 1, borderColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center', marginTop: 11 }, bookButtonDisabled: { borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceAlt }, bookButtonText: { color: theme.colors.primary, fontSize: 14, fontWeight: '900' }, bookButtonTextDisabled: { color: theme.colors.textMuted }, locationRow: { gap: 11, paddingBottom: 3 }, locationCard: { minWidth: 165, backgroundColor: theme.colors.surface, borderRadius: 15, padding: 13, flexDirection: 'row', alignItems: 'center', gap: 9, borderWidth: 1, borderColor: theme.colors.border, shadowColor: theme.colors.shadow, shadowOpacity: 1, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 2 }, locationIcon: { width: 40, height: 40, borderRadius: 13, backgroundColor: theme.colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }, locationName: { color: theme.colors.text, fontSize: 15, fontWeight: '900' }, locationCount: { color: theme.colors.textSecondary, fontSize: 12, marginTop: 3 }, trust: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.colors.secondaryLight, borderRadius: 19, padding: 15, marginTop: 23 }, trustIcon: { width: 45, height: 45, borderRadius: 15, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' }, trustTitle: { color: theme.colors.primaryDark, fontSize: 17, fontWeight: '900' }, trustText: { color: theme.colors.textSecondary, fontSize: 13, lineHeight: 18, marginTop: 3 }, empty: { backgroundColor: theme.colors.surface, padding: 26, borderRadius: 20, alignItems: 'center', marginTop: 16 }, emptyTitle: { color: theme.colors.text, fontSize: 18, fontWeight: '900', textAlign: 'center', marginTop: 10 }, emptyText: { color: theme.colors.textSecondary, fontSize: 14, lineHeight: 20, textAlign: 'center', marginTop: 6 }, choose: { backgroundColor: theme.colors.primaryLight, borderRadius: 99, paddingHorizontal: 16, paddingVertical: 10, marginTop: 14 }, chooseText: { color: theme.colors.primaryDark, fontSize: 13, fontWeight: '900' }, noResults: { backgroundColor: theme.colors.surface, borderRadius: 18, padding: 22, alignItems: 'center', borderWidth: 1, borderColor: theme.colors.border }, noResultsTitle: { color: theme.colors.text, fontSize: 16, fontWeight: '900', marginTop: 8 }, noResultsText: { color: theme.colors.textSecondary, fontSize: 13, marginTop: 4, textAlign: 'center' }, modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,.35)' }, modalCard: { backgroundColor: theme.colors.surface, borderTopLeftRadius: 25, borderTopRightRadius: 25, padding: 20, paddingBottom: 32 }, modalHandle: { width: 42, height: 5, borderRadius: 3, backgroundColor: theme.colors.border, alignSelf: 'center', marginBottom: 17 }, modalTitle: { color: theme.colors.text, fontSize: 20, fontWeight: '900', marginBottom: 8 }, modalOption: { minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: theme.colors.divider }, modalOptionText: { color: theme.colors.text, fontSize: 15, fontWeight: '700' },
+  content: { paddingHorizontal: 20 }, sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, gap: 10 },
+  card: { width: '100%', borderRadius: 20, marginBottom: 18, backgroundColor: '#E2F7F8' }, cardClip: { width: '100%', overflow: 'hidden', borderRadius: 20, aspectRatio: 2.03 },
+  placeholder: { alignItems: 'center', justifyContent: 'center' },
+  badge: { position: 'absolute', top: 12, left: 12, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 22, backgroundColor: '#E5FCFA', paddingVertical: 7, paddingHorizontal: 11 }, badgeText: { color: '#007681', fontSize: 11, fontWeight: '700' },
+  cardFooter: { position: 'absolute', bottom: 12, left: 12, right: 12, flexDirection: 'row', alignItems: 'center', gap: 7 },
+  areaName: { fontSize: 20, fontWeight: '800', color: '#FFFFFF', lineHeight: 26 }, areaDetail: { fontSize: 12, color: '#E7F6F5', marginTop: 2 },
+  arrow: { width: 34, height: 34, borderRadius: 20, backgroundColor: '#E8F6EF', alignItems: 'center', justifyContent: 'center' },
 });

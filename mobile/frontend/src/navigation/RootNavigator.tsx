@@ -5,7 +5,6 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { RootStackParamList } from './types';
 import { AuthNavigator } from './AuthNavigator';
 import { MainTabNavigator } from './MainTabNavigator';
-import { ProviderNavigator } from './ProviderNavigator';
 import { useApp } from '../context/AppContext';
 import { theme } from '../theme';
 import { GlobalLoadingHost } from '../components/GlobalLoadingHost';
@@ -66,7 +65,7 @@ export const RootNavigator: React.FC = () => {
       <NavigationContainer onStateChange={handleNavigationChange}>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           {isAuthenticated ? (
-            currentUser?.role === 'worker' ? <Stack.Screen name="Provider" component={ProviderNavigator} /> : <Stack.Screen name="Main" component={MainTabNavigator} />
+            <Stack.Screen name="Main" component={MainTabNavigator} />
           ) : (
             <Stack.Screen name="Auth" component={AuthNavigator} />
           )}

@@ -72,6 +72,14 @@ export const useCreateWorker = () => {
   const qc = useQueryClient();
   return useMutation({ mutationFn: api.createWorker, onSuccess: () => qc.invalidateQueries({ queryKey: ['workers'] }) });
 };
+export const useCreateDemoWorkers = () => {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: ({ cityId, categoryIds }: { cityId: string; categoryIds: string[] }) => api.createDemoWorkers(cityId, categoryIds), onSuccess: () => qc.invalidateQueries({ queryKey: ['workers'] }) });
+};
+export const useSetDummyProviderNumbers = () => {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: api.setDummyProviderNumbers, onSuccess: () => qc.invalidateQueries({ queryKey: ['workers'] }) });
+};
 export const useUpdateWorker = () => {
   const qc = useQueryClient();
   return useMutation({

@@ -38,9 +38,7 @@ export const MoreScreen: React.FC<Props> = ({ navigation }) => {
       );
     }
     const commonItems: MoreItem[] = [
-      { key: 'bookings', label: t('myBookings'), subtitle: t('myBookingsSubtitle'), icon: 'clipboard-text-clock-outline', route: 'MyBookings' },
       { key: 'savedOffers', label: t('savedOffersTitle'), subtitle: t('savedOffersSubtitle'), icon: 'bookmark-outline', route: 'SavedOffers' },
-      { key: 'favProviders', label: t('favouriteProviders'), subtitle: t('favouriteProvidersSubtitle'), icon: 'heart-multiple-outline', route: 'SavedProviders' },
       { key: 'payments', label: t('payments'), subtitle: t('paymentsSubtitle'), icon: 'credit-card-outline', route: 'Payments' },
       { key: 'notifications', label: t('notificationsLabel'), subtitle: t('notificationsSubtitle'), icon: 'bell-outline', route: 'Notifications' },
       { key: 'messages', label: t('messages'), subtitle: t('messagesSubtitle'), icon: 'message-text-outline', route: 'ChatList' },

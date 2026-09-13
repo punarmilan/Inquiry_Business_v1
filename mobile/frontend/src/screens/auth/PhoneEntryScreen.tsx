@@ -614,23 +614,6 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
                 </Pressable>
               </View>
 
-              {/* Provider registration */}
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => navigation.navigate('ProviderRegistration')}
-                style={({ pressed }) => [
-                  styles.providerButton,
-                  pressed && baseStyles.pressed,
-                ]}
-              >
-                <MaterialCommunityIcons
-                  name="account-plus-outline"
-                  size={styles.metrics.providerIcon}
-                  color="#078D89"
-                />
-                <Text style={styles.providerText}>Register as a service provider</Text>
-              </Pressable>
-
               {/* Divider */}
               <View style={styles.dividerRow}>
                 <View style={styles.dividerLine} />
@@ -746,7 +729,6 @@ const createStyles = (width: number, height: number, topInset: number, bottomIns
   const inputHeight = Math.round(clamp(56 * scale, 44, 58));
   const segmentHeight = Math.round(clamp(50 * scale, 40, 52));
   const primaryHeight = Math.round(clamp(56 * scale, 46, 58));
-  const providerHeight = Math.round(clamp(46 * scale, 38, 48));
   const socialSize = Math.round(clamp(54 * scale, 42, 56));
 
 
@@ -764,7 +746,6 @@ const createStyles = (width: number, height: number, topInset: number, bottomIns
     eyeIcon: Math.round(clamp(27 * scale, 21, 28)),
     checkIcon: Math.round(clamp(15 * scale, 11, 16)),
     primaryArrow: Math.round(clamp(28 * scale, 22, 29)),
-    providerIcon: Math.round(clamp(23 * scale, 18, 24)),
     segmentIcon: Math.round(clamp(21 * scale, 17, 22)),
     socialSize,
   };
@@ -1122,23 +1103,6 @@ const createStyles = (width: number, height: number, topInset: number, bottomIns
     registerLink: {
       color: '#078D89',
       fontSize: Math.round(clamp(13 * scale, 11, 14)),
-      fontWeight: '900',
-    },
-    providerButton: {
-      width: '100%',
-      height: providerHeight,
-      borderRadius: providerHeight / 2,
-      borderWidth: 1.2,
-      borderColor: 'rgba(8,159,155,0.68)',
-      backgroundColor: 'rgba(236,255,255,0.46)',
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: Math.round(clamp(8 * scale, 5, 8)),
-    },
-    providerText: {
-      color: '#078D89',
-      fontSize: Math.round(clamp(13.5 * scale, 11, 14)),
       fontWeight: '900',
     },
     dividerRow: {

@@ -33,7 +33,7 @@ export const translations = {
     onboardingServicesEyebrow: 'LOCAL OPPORTUNITIES',
     onboardingServicesTitle: 'Your next',
     onboardingServicesAccent: 'opportunity\nstarts here.',
-    onboardingServicesSubtitle: 'Book a service, find a deal or\ngrow your local business.',
+    onboardingServicesSubtitle: 'Find local services, contact a provider or\ngrow your local business.',
     onboardingTrustNote: 'Local experts\nyou can trust',
     onboardingCommunityNote: 'Stronger\nlocal communities\ntogether',
     onboardingPostOffer: 'Post your offer',
@@ -49,8 +49,8 @@ export const translations = {
     onboardingDiscoverServices: 'Discover services',
     onboardingTrusted: 'Trusted',
     onboardingApprovedOffers: 'Approved offers',
-    onboardingBookService: 'Book a service',
-    onboardingBookNow: 'Book now',
+    onboardingBookService: 'Contact a provider',
+    onboardingBookNow: 'Contact now',
     onboardingVerifiedProfessionals: 'Verified professionals',
 
     // Auth

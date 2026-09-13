@@ -88,24 +88,44 @@ const normalizeLocalities = (localities = []) => {
   });
   return [...unique.values()].sort((a, b) => a.localeCompare(b, 'en-IN'));
 };
+const normalizeLocalityImages = (images = [], localities = []) => {
+  const allowed = new Set(localities.map((value) => value.toLocaleLowerCase('en-IN')));
+  const unique = new Map();
+  (Array.isArray(images) ? images : []).forEach((item) => {
+    const name = String(item?.name || '').trim().replace(/\s+/g, ' ');
+    const imageUrl = String(item?.imageUrl || '').trim();
+    const key = name.toLocaleLowerCase('en-IN');
+    if (name && imageUrl && allowed.has(key)) unique.set(key, { name, imageUrl });
+  });
+  return [...unique.values()].sort((a, b) => a.name.localeCompare(b.name, 'en-IN'));
+};
 const normalizeProviderPhone = (phone) => {
   const value = String(phone || '').replace(/[\s-]/g, '');
+  if (/^0\d{9}$/.test(value)) return value;
   return /^\d{10}$/.test(value) ? `+91${value}` : value;
 };
 const normalizeArea = (value) => String(value || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-IN');
 
 const listCities = asyncHandler(async (_req, res) => res.json({ success: true, data: await City.find().sort({ name: 1 }) }));
 const createCity = asyncHandler(async (req, res) => {
+  const localities = normalizeLocalities(req.body.localities);
   const city = await City.create({
     ...req.body,
-    localities: normalizeLocalities(req.body.localities),
+    localities,
+    localityImages: normalizeLocalityImages(req.body.localityImages, localities),
     center: { type: 'Point', coordinates: [req.body.longitude, req.body.latitude] },
   });
   res.status(201).json({ success: true, city });
 });
 const updateCity = asyncHandler(async (req, res) => {
   const payload = { ...req.body };
-  if (payload.localities) payload.localities = normalizeLocalities(payload.localities);
+  if (payload.localities) {
+    payload.localities = normalizeLocalities(payload.localities);
+    payload.localityImages = normalizeLocalityImages(payload.localityImages, payload.localities);
+  } else if (payload.localityImages) {
+    const current = await City.findById(req.params.id).select('localities');
+    payload.localityImages = normalizeLocalityImages(payload.localityImages, current?.localities || []);
+  }
   if (payload.longitude !== undefined) payload.center = { type: 'Point', coordinates: [payload.longitude, payload.latitude] };
   delete payload.longitude; delete payload.latitude;
   const city = await City.findByIdAndUpdate(req.params.id, { $set: payload }, { new: true, runValidators: true });
@@ -193,28 +213,96 @@ const rejectProviderApplication = asyncHandler(async (req, res) => {
 });
 const createWorker = asyncHandler(async (req, res) => {
   const providerPhone = normalizeProviderPhone(req.body.phone);
-  const [city, categoryCount, existingUser] = await Promise.all([
+  const providerWhatsapp = normalizeProviderPhone(req.body.whatsapp || '');
+  const [city, categoryCount, existingWorker] = await Promise.all([
     City.findById(req.body.cityId),
     ServiceCategory.countDocuments({ _id: { $in: req.body.categoryIds }, isActive: true }),
-    User.findOne({ phone: { $in: [providerPhone, providerPhone.replace(/^\+91/, '')] } }),
+    Worker.findOne({ phone: providerPhone }),
   ]);
   if (!city?.isActive || !city.servicesEnabled) throw new ApiError(422, 'Worker city must have services enabled', 'WORKER_CITY_UNAVAILABLE');
   if (categoryCount !== req.body.categoryIds.length) throw new ApiError(422, 'One or more service categories are invalid', 'WORKER_CATEGORY_INVALID');
-  if (existingUser) throw new ApiError(409, 'Phone already belongs to an account', 'WORKER_PHONE_IN_USE');
-  if (!isStrongPassword(req.body.password)) throw new ApiError(422, PASSWORD_POLICY_MESSAGE, 'WORKER_PASSWORD_INVALID');
-  const user = await User.create({ name: req.body.name, phone: providerPhone, passwordHash: await bcrypt.hash(req.body.password, 12), role: 'worker', accountType: 'worker', isActive: true });
-  try {
-    const worker = await Worker.create({
-      user: user._id, name: req.body.name, photoUrl: req.body.photoUrl, phone: providerPhone,
-      city: req.body.cityId, categories: req.body.categoryIds, experienceYears: req.body.experienceYears,
-      serviceAreas: req.body.serviceAreas, availability: req.body.availability || 'offline', isActive: req.body.isActive ?? true,
-      verificationStatus: req.body.verificationStatus || 'pending', internalNotes: req.body.internalNotes,
-    });
-    return res.status(201).json({ success: true, worker: await worker.populate(['city', 'categories', 'user']) });
-  } catch (error) {
-    await User.deleteOne({ _id: user._id, role: 'worker' });
-    throw error;
-  }
+  if (existingWorker) throw new ApiError(409, 'A provider with this phone already exists', 'WORKER_PHONE_IN_USE');
+  const worker = await Worker.create({
+    name: req.body.name, photoUrl: req.body.photoUrl, phone: providerPhone, whatsapp: providerWhatsapp,
+    city: req.body.cityId, categories: req.body.categoryIds, experienceYears: req.body.experienceYears,
+    serviceAreas: req.body.serviceAreas || [], availability: 'available', isActive: req.body.isActive ?? true,
+    verificationStatus: 'verified', internalNotes: req.body.internalNotes,
+  });
+  return res.status(201).json({ success: true, worker: await worker.populate(['city', 'categories']) });
+});
+const createDemoWorkers = asyncHandler(async (req, res) => {
+  const city = await City.findById(req.body.cityId).select('_id name isActive servicesEnabled');
+  if (!city?.isActive || !city.servicesEnabled) throw new ApiError(422, 'Worker city must have services enabled', 'WORKER_CITY_UNAVAILABLE');
+
+  const categoryFilter = req.body.categoryIds?.length
+    ? { _id: { $in: req.body.categoryIds }, isActive: true }
+    : { isActive: true };
+  const categories = await ServiceCategory.find(categoryFilter).sort({ sortOrder: 1, name: 1 }).select('_id name slug');
+  if (!categories.length) throw new ApiError(422, 'Add active service categories before creating demo providers', 'DEMO_CATEGORY_REQUIRED');
+
+  const demoKeyPrefix = `demo-directory:${city._id}:`;
+  const existing = await Worker.find({ city: city._id, internalNotes: { $regex: `^${demoKeyPrefix}` } })
+    .select('+internalNotes phone')
+    .lean();
+  const existingKeys = new Set(existing.map((worker) => worker.internalNotes));
+  const existingPhones = new Set(existing.map((worker) => worker.phone));
+  const citySeed = Number.parseInt(String(city._id).slice(-6), 16) % 10000;
+  const operations = [];
+  let requested = 0;
+
+  categories.forEach((category, categoryIndex) => {
+    for (let slot = 1; slot <= 8; slot += 1) {
+      requested += 1;
+      const key = `${demoKeyPrefix}${category._id}:${slot}`;
+      if (existingKeys.has(key)) continue;
+      const sequence = categoryIndex * 8 + slot;
+      let localPhone = `98${String(citySeed).padStart(4, '0')}${String(sequence).padStart(4, '0')}`;
+      if (existingPhones.has(`+91${localPhone}`)) {
+        localPhone = `98${String(citySeed).padStart(4, '0')}${String(sequence + 5000).padStart(4, '0')}`;
+      }
+      const phone = `+91${localPhone}`;
+      existingPhones.add(phone);
+      operations.push({
+        updateOne: {
+          filter: { internalNotes: key },
+          update: {
+            $setOnInsert: {
+              name: `${category.name} Demo ${slot}`,
+              phone,
+              whatsapp: phone,
+              categories: [category._id],
+              city: city._id,
+              serviceAreas: [],
+              experienceYears: 3 + (slot % 5),
+              ratingAverage: 4.2 + (slot % 5) / 10,
+              ratingCount: 12 + slot,
+              completedBookings: 20 + slot,
+              availability: 'available',
+              isActive: true,
+              verificationStatus: 'verified',
+              internalNotes: key,
+            },
+          },
+          upsert: true,
+        },
+      });
+    }
+  });
+
+  const result = operations.length ? await Worker.bulkWrite(operations, { ordered: false }) : { upsertedCount: 0 };
+  res.status(201).json({ success: true, requested, created: result.upsertedCount || 0, skipped: requested - (result.upsertedCount || 0) });
+});
+const setDummyProviderNumbers = asyncHandler(async (_req, res) => {
+  const workers = await Worker.find().select('_id').sort({ createdAt: 1, _id: 1 }).lean();
+  if (!workers.length) return res.json({ success: true, updated: 0 });
+
+  await Worker.bulkWrite(workers.map((worker, index) => ({
+    updateOne: { filter: { _id: worker._id }, update: { $set: { phone: `__dummy_provider_${index}__` } } },
+  })));
+  await Worker.bulkWrite(workers.map((worker, index) => ({
+    updateOne: { filter: { _id: worker._id }, update: { $set: { phone: String(index).padStart(10, '0') } } },
+  })));
+  res.json({ success: true, updated: workers.length });
 });
 const updateWorker = asyncHandler(async (req, res) => {
   const worker = await Worker.findById(req.params.id).select('+internalNotes');
@@ -225,6 +313,8 @@ const updateWorker = asyncHandler(async (req, res) => {
     worker.city = req.body.cityId;
   }
   if (req.body.categoryIds) worker.categories = req.body.categoryIds;
+  if (req.body.phone !== undefined) worker.phone = normalizeProviderPhone(req.body.phone);
+  if (req.body.whatsapp !== undefined) worker.whatsapp = normalizeProviderPhone(req.body.whatsapp);
   if (req.body.availability !== undefined) {
     const result = await setManualAvailability(worker._id, req.body.availability);
     if (!result.provider) {
@@ -235,9 +325,7 @@ const updateWorker = asyncHandler(async (req, res) => {
     (key) => req.body[key] !== undefined && (worker[key] = req.body[key])
   );
   await worker.save();
-  const userUpdate = { name: worker.name, isActive: worker.isActive };
-  if (req.body.password) userUpdate.passwordHash = await bcrypt.hash(req.body.password, 12);
-  await User.updateOne({ _id: worker.user }, { $set: userUpdate });
+  if (worker.user) await User.updateOne({ _id: worker.user }, { $set: { name: worker.name, isActive: worker.isActive } });
   res.json({ success: true, worker: await Worker.findById(worker._id).select('+internalNotes') });
 });
 const deleteWorker = asyncHandler(async (req, res) => {
@@ -247,7 +335,7 @@ const deleteWorker = asyncHandler(async (req, res) => {
     { new: true }
   );
   if (!worker) throw new ApiError(404, 'Worker not found', 'WORKER_NOT_FOUND');
-  await User.updateOne({ _id: worker.user }, { $set: { isActive: false } });
+  if (worker.user) await User.updateOne({ _id: worker.user }, { $set: { isActive: false } });
   res.json({ success: true, worker });
 });
 
@@ -629,7 +717,7 @@ const refundPayment = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
-  listCities, createCity, updateCity, deleteCity, listWorkers, listProviderApplications, approveProviderApplication, rejectProviderApplication, createWorker, updateWorker, deleteWorker,
+  listCities, createCity, updateCity, deleteCity, listWorkers, listProviderApplications, approveProviderApplication, rejectProviderApplication, createWorker, createDemoWorkers, setDummyProviderNumbers, updateWorker, deleteWorker,
   listServiceCategories, createServiceCategory, updateServiceCategory, deleteServiceCategory, listBusinesses, moderateBusiness,
   listOffers, moderateOffer, listOfferTemplates, createOfferTemplate, updateOfferTemplate, deleteOfferTemplate, listTemplateStickers, createTemplateSticker, updateTemplateSticker, deleteTemplateSticker, uploadTemplateAsset, getTemplateAsset, deleteTemplateAsset, decodeTemplateAsset, listPlans, createPlan, updatePlan, deletePlan, listBookings, assignWorker, forwardBooking, updateBookingStatus,
   listPayments, verifyPayment, refundPayment,

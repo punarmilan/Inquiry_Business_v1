@@ -19,7 +19,7 @@ const supportedServiceCities = () =>
   City.find({ isActive: true, servicesEnabled: true }).select('name state slug').sort({ name: 1 });
 
 const listCategories = asyncHandler(async (req, res) => {
-  const city = await City.findById(req.query.cityId).select('name state slug localities isActive servicesEnabled');
+  const city = await City.findById(req.query.cityId).select('name state slug localities localityImages isActive servicesEnabled');
   if (!city || !city.isActive || !city.servicesEnabled) {
     return res.json({
       success: true,
@@ -38,7 +38,7 @@ const listCategories = asyncHandler(async (req, res) => {
 
 const listProviders = asyncHandler(async (req, res) => {
   const [city, category] = await Promise.all([
-    City.findOne({ _id: req.query.cityId, isActive: true, servicesEnabled: true }).select('name state slug localities'),
+    City.findOne({ _id: req.query.cityId, isActive: true, servicesEnabled: true }).select('name state slug localities localityImages'),
     req.query.categoryId ? ServiceCategory.findOne({ _id: req.query.categoryId, isActive: true }).select('name') : null,
   ]);
   if (!city) throw new ApiError(422, 'Services are not available in this city yet', 'SERVICES_CITY_UNAVAILABLE');
@@ -49,15 +49,14 @@ const listProviders = asyncHandler(async (req, res) => {
     city: city._id,
     isActive: true,
     verificationStatus: 'verified',
-    availability: 'available',
   };
   if (category) workerFilter.categories = category._id;
   const workers = await Worker.find(workerFilter)
-    .select('_id name photoUrl categories city serviceAreas ratingAverage ratingCount completedBookings availability experienceYears verificationStatus')
+    .select('_id name photoUrl phone whatsapp categories city serviceAreas ratingAverage ratingCount completedBookings availability experienceYears verificationStatus')
     .populate('categories', 'name icon basePrice priceUnit')
     .sort({ availability: 1, ratingAverage: -1, completedBookings: -1, name: 1 });
 
-  const matchesLocality = (worker) => !locality || (worker.serviceAreas || []).some((area) => area.trim().toLocaleLowerCase('en-IN') === locality.toLocaleLowerCase('en-IN'));
+  const matchesLocality = (worker) => !locality || !(worker.serviceAreas || []).length || (worker.serviceAreas || []).some((area) => area.trim().toLocaleLowerCase('en-IN') === locality.toLocaleLowerCase('en-IN'));
   res.json({
     success: true,
     data: workers.filter(matchesLocality),
@@ -75,7 +74,7 @@ const listSavedProviders = asyncHandler(async (req, res) => {
     isActive: true,
     verificationStatus: 'verified',
   })
-    .select('_id name photoUrl categories city serviceAreas ratingAverage ratingCount completedBookings availability experienceYears verificationStatus')
+    .select('_id name photoUrl phone whatsapp categories city serviceAreas ratingAverage ratingCount completedBookings availability experienceYears verificationStatus')
     .populate('categories', 'name icon basePrice priceUnit')
     .populate('city', 'name state slug localities');
   const providerById = new Map(providers.map((provider) => [String(provider._id), provider]));

@@ -15,12 +15,12 @@ const FALLBACK_FAQS = [
     answer: 'Open the Offers tab and choose your city, area, or current location. The app will show eligible offers near that location.',
   },
   {
-    question: 'How do I book a service?',
-    answer: 'Open Services, choose a category and provider, enter the booking details, and review the booking before confirming it.',
+    question: 'How do I contact a service provider?',
+    answer: 'Open Services, select your area and service category, then use Call or WhatsApp on the provider card.',
   },
   {
-    question: 'Where can I manage my bookings?',
-    answer: 'Open More and select My Bookings to review the latest status and details of your service bookings.',
+    question: 'How do I find providers in my area?',
+    answer: 'Open Services, choose an area and category, then browse the providers listed for that location.',
   },
   {
     question: 'How do I publish an offer?',

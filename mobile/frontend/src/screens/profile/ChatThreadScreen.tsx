@@ -18,10 +18,10 @@ import { Avatar } from '../../components/Avatar';
 import { getThreadMessages, markThreadRead, BackendMessage } from '../../services/api';
 import { getSocket } from '../../services/socket';
 import { useApp } from '../../context/AppContext';
-import { OffersStackParamList, ServicesStackParamList, MoreStackParamList, ProfileStackParamList, ProviderStackParamList } from '../../navigation/types';
+import { OffersStackParamList, ServicesStackParamList, MoreStackParamList, ProfileStackParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<
-  OffersStackParamList | ServicesStackParamList | MoreStackParamList | ProfileStackParamList | ProviderStackParamList,
+  OffersStackParamList | ServicesStackParamList | MoreStackParamList | ProfileStackParamList,
   'ChatThread'
 >;
 

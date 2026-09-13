@@ -3,7 +3,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const { distanceKm } = require('../domain/rules');
 
-const publicFields = 'name state slug center serviceRadiusKm localities isActive offersEnabled servicesEnabled';
+const publicFields = 'name state slug center serviceRadiusKm localities localityImages isActive offersEnabled servicesEnabled';
 
 const listCities = asyncHandler(async (req, res) => {
   const filter = { isActive: true };

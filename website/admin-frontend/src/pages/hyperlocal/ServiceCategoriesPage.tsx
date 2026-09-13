@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import type { CategoryRecord } from '@/api/hyperlocal';
+import { APP_SERVICE_CATEGORY_PRESETS } from '@/data/serviceCategories';
 import { useCategoriesList, useCreateCategory, useDeleteCategory, useUpdateCategory } from '@/hooks/useHyperlocal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,11 +31,37 @@ const errorMessage = (error: any) => {
 export const ServiceCategoriesPage = () => {
   const [form, setForm] = useState(initial);
   const [editing, setEditing] = useState('');
+  const [bulkAdding, setBulkAdding] = useState(false);
 
   const { data: categories, isLoading } = useCategoriesList();
   const createCategory = useCreateCategory();
   const updateCategory = useUpdateCategory();
   const deleteCategory = useDeleteCategory();
+
+  const addAllAppCategories = async () => {
+    if (bulkAdding || isLoading) return;
+    const existingSlugs = new Set((categories || []).map((category) => category.slug));
+    const missing = APP_SERVICE_CATEGORY_PRESETS.filter((category) => !existingSlugs.has(category.slug));
+    if (!missing.length) {
+      toast.success('All app categories are already added.');
+      return;
+    }
+
+    setBulkAdding(true);
+    let added = 0;
+    let failed = 0;
+    for (const category of missing) {
+      try {
+        await createCategory.mutateAsync({ ...category, cityAvailability: [] });
+        added += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    setBulkAdding(false);
+    if (failed) toast.warning(`${added} categories added, ${failed} could not be added.`);
+    else toast.success(`${added} app categories added.`);
+  };
 
   const save = () => {
     const payload = { ...form, basePrice: Number(form.basePrice), sortOrder: Number(form.sortOrder), cityAvailability: [] };
@@ -68,7 +96,16 @@ export const ServiceCategoriesPage = () => {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Service Categories" description="Dynamic service catalog, pricing and availability." />
+      <PageHeader
+        title="Service Categories"
+        description="Dynamic service catalog, pricing and availability."
+        actions={(
+          <Button variant="outline" onClick={addAllAppCategories} disabled={bulkAdding || isLoading}>
+            <Sparkles className="h-4 w-4" />
+            {bulkAdding ? 'Adding categories…' : `Add app categories (${APP_SERVICE_CATEGORY_PRESETS.length})`}
+          </Button>
+        )}
+      />
 
       <Card>
         <CardHeader>

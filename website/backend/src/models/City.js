@@ -11,6 +11,13 @@ const schema = new mongoose.Schema(
     },
     serviceRadiusKm: { type: Number, default: 10, min: 1, max: 100 },
     localities: { type: [String], default: [] },
+    localityImages: {
+      type: [{
+        name: { type: String, trim: true, maxlength: 120 },
+        imageUrl: { type: String, trim: true, maxlength: 12_000_000 },
+      }],
+      default: [],
+    },
     isActive: { type: Boolean, default: true },
     offersEnabled: { type: Boolean, default: false },
     servicesEnabled: { type: Boolean, default: false },

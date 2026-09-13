@@ -25,6 +25,13 @@ const citySchema = new mongoose.Schema(
     center: { type: geoPointSchema, required: true },
     serviceRadiusKm: { type: Number, default: 10, min: 1, max: 100 },
     localities: { type: [String], default: [] },
+    localityImages: {
+      type: [{
+        name: { type: String, trim: true, maxlength: 120 },
+        imageUrl: { type: String, trim: true, maxlength: 2000 },
+      }],
+      default: [],
+    },
     isActive: { type: Boolean, default: true, index: true },
     offersEnabled: { type: Boolean, default: false, index: true },
     servicesEnabled: { type: Boolean, default: false, index: true },

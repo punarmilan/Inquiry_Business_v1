@@ -12,9 +12,9 @@ import { useApp } from '../../context/AppContext';
 import { connectSocket, getSocket } from '../../services/socket';
 import { getJobLocations, getServiceBookingLocations } from '../../services/api';
 import { haversineKm, formatDistance } from '../../utils/geo';
-import type { ProfileStackParamList, ProviderStackParamList, ServicesStackParamList } from '../../navigation/types';
+import type { ProfileStackParamList, ServicesStackParamList } from '../../navigation/types';
 
-type Props = NativeStackScreenProps<ProfileStackParamList | ServicesStackParamList | ProviderStackParamList, 'LiveLocation'>;
+type Props = NativeStackScreenProps<ProfileStackParamList | ServicesStackParamList, 'LiveLocation'>;
 
 const DEFAULT_CENTER = { latitude: 18.6298, longitude: 73.7997 };
 

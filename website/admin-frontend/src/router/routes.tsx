@@ -38,13 +38,6 @@ export const router = createBrowserRouter([
             },
           },
           {
-            path: '/provider-applications',
-            lazy: async () => {
-              const { ProviderApplicationsPage } = await import('@/pages/hyperlocal/ProviderApplicationsPage');
-              return { Component: ProviderApplicationsPage };
-            },
-          },
-          {
             path: '/service-categories',
             lazy: async () => {
               const { ServiceCategoriesPage } = await import('@/pages/hyperlocal/ServiceCategoriesPage');
@@ -77,13 +70,6 @@ export const router = createBrowserRouter([
             lazy: async () => {
               const { OfferTemplatesPage } = await import('@/pages/hyperlocal/OfferTemplatesPage');
               return { Component: OfferTemplatesPage };
-            },
-          },
-          {
-            path: '/bookings',
-            lazy: async () => {
-              const { BookingsPage } = await import('@/pages/hyperlocal/BookingsPage');
-              return { Component: BookingsPage };
             },
           },
           {

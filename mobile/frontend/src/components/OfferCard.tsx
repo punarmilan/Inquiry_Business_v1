@@ -91,7 +91,7 @@ const rotationTransform = (rotation?: number) => (
     : []
 );
 
-const PosterLayers: React.FC<{ offer: Offer; canvas: OfferTemplateCanvas; previewUrl?: string }> = ({ offer, canvas, previewUrl }) => {
+export const PosterLayers: React.FC<{ offer: Offer; canvas: OfferTemplateCanvas; previewUrl?: string }> = ({ offer, canvas, previewUrl }) => {
   const [surfaceWidth, setSurfaceWidth] = React.useState(0);
   const scale = surfaceWidth ? surfaceWidth / canvas.width : 0.28;
   const customAvatar = offer.cardDesign?.templateId === 'custom' && offer.cardDesign.avatarId ? findOfferAvatar(offer.cardDesign.avatarId) : null;

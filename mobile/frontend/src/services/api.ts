@@ -1090,35 +1090,10 @@ export interface BackendPayment {
 export const listMyPayments = (accessToken: string) =>
   request<{ success: true; data: BackendPayment[] }>('/payments/mine', { accessToken });
 
-export type ProviderApplicationPayload = {
-  name: string;
-  phone: string;
-  email: string;
-  cityId: string;
-  categoryIds: string[];
-  experienceYears?: number;
-  serviceAreas: string[];
-  message: string;
-  termsAccepted: true;
-  oauthProvider?: 'google';
-  oauthToken?: string;
-};
-
-export const createProviderApplication = (payload: ProviderApplicationPayload) =>
-  request<{ success: true; application: { _id: string; status: 'pending'; createdAt: string } }>(
-    '/provider-applications', { method: 'POST', body: payload }
-  );
-
 export const listServiceProviders = (cityId: string, categoryId?: string, locality = '') =>
   request<{ success: true; data: ServiceProvider[] }>('/services/providers', {
     query: { cityId, categoryId: categoryId || undefined, locality: locality || undefined },
   });
-
-export const listSavedProviders = (accessToken: string) =>
-  request<{ success: true; data: ServiceProvider[] }>('/services/providers/saved', { accessToken });
-
-export const toggleSavedProvider = (accessToken: string, providerId: string) =>
-  request<{ success: true; saved: boolean }>(`/services/providers/${providerId}/save`, { method: 'POST', accessToken });
 
 export const createServiceBooking = (accessToken: string, payload: {
   cityId: string; categoryId: string; workerId?: string; address: string; locality?: string; addressDetails?: { houseNo?: string; streetAddress?: string; area?: string; city?: string }; latitude: number; longitude: number;
@@ -1139,25 +1114,3 @@ export const rateServiceBooking = (accessToken: string, bookingId: string, stars
 
 export const openBookingChat = (accessToken: string, bookingId: string) =>
   request<{ success: true; chat: BackendChat }>(`/services/bookings/${bookingId}/chat`, { method: 'POST', accessToken });
-
-export interface ProviderBooking extends ServiceBooking {
-  customer?: { _id: string; name?: string; phone: string; photoUrl?: string };
-  dispatchedProviders?: { provider: string; status: 'invited' | 'accepted' | 'rejected' | 'already_accepted' | 'expired'; note?: string; expiresAt?: string }[];
-}
-
-export const listProviderBookings = (accessToken: string, page = 1) =>
-  request<{ success: true; data: ProviderBooking[]; pagination: PaginatedResponse<ProviderBooking>['pagination']; provider: { _id: string; name: string; phone: string; availability: string; serviceAreas: string[]; city: { name: string; localities: string[] }; categories: { name: string }[] } }>(
-    '/services/provider/bookings', { accessToken, query: { page, limit: 50 } }
-  );
-
-export const respondToProviderBooking = (accessToken: string, bookingId: string, response: 'accepted' | 'rejected', note = '') =>
-  request<{ success: true; booking: ProviderBooking }>(`/services/provider/bookings/${bookingId}/respond`, { method: 'POST', accessToken, body: { response, note } });
-
-export const updateProviderBookingStatus = (accessToken: string, bookingId: string, status: 'in_progress' | 'completed' | 'cancelled', finalPrice?: number) =>
-  request<{ success: true; booking: ProviderBooking }>(`/services/provider/bookings/${bookingId}/status`, { method: 'POST', accessToken, body: { status, finalPrice } });
-
-export const updateProviderAvailability = (accessToken: string, availability: 'available' | 'offline') =>
-  request<{ success: true; provider: { availability: string } }>('/services/provider/availability', { method: 'PATCH', accessToken, body: { availability } });
-
-export const openProviderBookingChat = (accessToken: string, bookingId: string) =>
-  request<{ success: true; chat: BackendChat; customer?: { _id: string; name?: string; phone: string; photoUrl?: string } }>(`/services/provider/bookings/${bookingId}/chat`, { method: 'POST', accessToken });

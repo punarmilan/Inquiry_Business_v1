@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 import { StatusBar } from 'expo-status-bar';
+import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { HyperlocalHeader } from '../../components/HyperlocalHeader';
@@ -20,11 +21,10 @@ type Props = NativeStackScreenProps<OffersStackParamList, 'OffersHome'>;
 type CategoryIcon = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 type RadiusKm = number;
 const categories: Array<{ label: string; translationKey: TranslationKey; icon?: CategoryIcon; color: string }> = [
-  { label: 'All', translationKey: 'allCategories', color: '#118F91' },
+  { label: 'All', translationKey: 'allCategories', icon: 'view-grid', color: '#118F91' },
   { label: 'Food', translationKey: 'offerFood', icon: 'silverware-fork-knife', color: '#12AA78' },
-  { label: 'Hotels', translationKey: 'offerHotels', icon: 'office-building-outline', color: '#286BE2' },
+  { label: 'Hotels', translationKey: 'offerHotels', icon: 'bed', color: '#286BE2' },
   { label: 'Shopping', translationKey: 'offerShopping', icon: 'shopping-outline', color: '#7A56D5' },
-  { label: 'Salon', translationKey: 'offerSalon', icon: 'content-cut', color: '#EB4B8B' },
   { label: 'Fashion', translationKey: 'offerFashion', icon: 'hanger', color: '#D866A5' },
   { label: 'Gym', translationKey: 'offerGym', icon: 'dumbbell', color: '#E18A24' },
   { label: 'Electronics', translationKey: 'offerElectronics', icon: 'cellphone', color: '#4E77C8' },
@@ -50,10 +50,14 @@ export const OffersHomeScreen: React.FC<Props> = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [comingSoon, setComingSoon] = useState(false);
+  const [error, setError] = useState('');
+  const requestId = useRef(0);
 
   const load = useCallback(async () => {
-    if (!locationState.location) return;
+    if (!locationState.location) { setRefreshing(false); return; }
+    const currentRequest = ++requestId.current;
     setLoading(true);
+    setError('');
     try {
       const response = await listNearbyOffers({
         latitude: locationState.location.latitude,
@@ -64,15 +68,17 @@ export const OffersHomeScreen: React.FC<Props> = ({ navigation }) => {
         search: search || undefined,
         limit: 40,
       });
+      if (currentRequest !== requestId.current) return;
       setOffers(response.data);
       setComingSoon(response.comingSoon);
+    } catch (e: any) {
+      if (currentRequest === requestId.current) { setOffers([]); setError(e.message || 'Could not load offers. Please try again.'); }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (currentRequest === requestId.current) { setLoading(false); setRefreshing(false); }
     }
   }, [category, locationState.location, radiusKm, search]);
 
-  useEffect(() => { const timer = setTimeout(load, 300); return () => clearTimeout(timer); }, [load]);
+  useFocusEffect(useCallback(() => { const timer = setTimeout(load, 300); return () => { clearTimeout(timer); requestId.current += 1; }; }, [load]));
 
   const save = async (offerId: string) => {
     if (!accessToken) return;
@@ -118,9 +124,10 @@ export const OffersHomeScreen: React.FC<Props> = ({ navigation }) => {
   const shownCategories = [...primaryCategories, moreCategory];
 
   return (
-    <ScreenContainer edges={['top', 'left', 'right']} backgroundColor="#F8FAFB">
+    <ScreenContainer edges={['top', 'left', 'right']} backgroundColor="#F2FAFC">
       <StatusBar style="dark" />
       <HyperlocalHeader
+        offersStyle
         cityLabel={locationState.location ? `${locationState.location.locality}${locationState.location.city ? `, ${locationState.location.city.name}` : ''}` : t('chooseLocation')}
         onLocationPress={() => locationState.setPickerVisible(true)}
         onNotifications={() => navigation.navigate('Notifications')}
@@ -138,11 +145,11 @@ export const OffersHomeScreen: React.FC<Props> = ({ navigation }) => {
             <MaterialCommunityIcons name="magnify" size={22} color={theme.colors.textMuted} />
             <TextInput value={search} onChangeText={setSearch} placeholder={t('searchOffers')} placeholderTextColor={theme.colors.textMuted} style={styles.searchInput} multiline={false} returnKeyType="search" />
             {search ? <Pressable onPress={() => setSearch('')}><MaterialCommunityIcons name="close-circle" size={20} color={theme.colors.textMuted} /></Pressable> : null}
-          </View>
           <Pressable onPress={openFilter} accessibilityLabel={t('openFilters')} style={({ pressed }) => [styles.filterButton, pressed && styles.filterPressed]}>
             <MaterialCommunityIcons name="tune-variant" size={22} color={theme.colors.primary} />
             {filterCount > 0 && <View style={styles.filterBadge}><Text style={styles.filterBadgeText}>{filterCount}</Text></View>}
           </Pressable>
+          </View>
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
           {shownCategories.map((item) => {
@@ -153,12 +160,13 @@ export const OffersHomeScreen: React.FC<Props> = ({ navigation }) => {
             return <Pressable key={item.label} onPress={() => isMore ? setCategoryExpanded(true) : setCategory(item.label)} style={[styles.category, isSelected && styles.categoryActive]}>
               <View pointerEvents="none" style={styles.categorySheen} />
               {item.icon ? <MaterialCommunityIcons name={item.icon} size={17} color={isSelected ? '#FFFFFF' : item.color} /> : null}
-              <Text style={[styles.categoryText, isSelected && styles.categoryTextActive]}>{t(item.translationKey)}</Text>
+              <Text style={[styles.categoryText, isSelected && styles.categoryTextActive]}>{item.label === 'All' ? 'All' : t(item.translationKey)}</Text>
             </Pressable>;
           })}
         </ScrollView>
         {loading && !offers.length ? <ActivityIndicator color={theme.colors.primary} style={styles.loader} /> : null}
-        {(comingSoon || (!loading && !offers.length)) && (
+        {error ? <Pressable onPress={load} style={styles.emptyCard}><Text style={styles.emptyText}>{error}</Text><Text style={styles.chooseText}>Tap to retry</Text></Pressable> : null}
+        {!error && (comingSoon || (!loading && !offers.length)) && (
           <View style={styles.emptyCard}>
             <MaterialCommunityIcons name="map-marker-alert-outline" size={42} color={theme.colors.primary} />
             <Text style={styles.emptyTitle}>{comingSoon ? t('offerComingSoon') : t('noNearbyOffers')}</Text>
@@ -249,22 +257,22 @@ export const OffersHomeScreen: React.FC<Props> = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   content: { paddingBottom: 120 },
-  searchFilterRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 18, marginTop: 8, marginBottom: 3 },
-  searchBox: { flex: 1, height: 58, backgroundColor: '#FFFFFF', borderRadius: 17, borderWidth: 1, borderColor: '#E2E7EB', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, gap: 11, shadowColor: theme.colors.shadowStrong, shadowOpacity: 1, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 3, overflow: 'hidden' },
+  searchFilterRow: { flexDirection: 'row', alignItems: 'center', gap: 0, marginHorizontal: 14, marginTop: 8, marginBottom: 3 },
+  searchBox: { flex: 1, height: 56, backgroundColor: '#FFFFFF', borderRadius: 23, borderWidth: 1, borderColor: '#F0F7FA', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, gap: 11, shadowColor: '#9BD7DF', shadowOpacity: 0.22, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 3, overflow: 'hidden' },
   searchSheen: { position: 'absolute', top: 0, left: 28, right: 28, height: 14, borderRadius: 99, backgroundColor: 'rgba(255,255,255,0.72)' },
-  searchInput: { flex: 1, fontSize: 18, lineHeight: 22, color: '#1C2225', paddingVertical: 0, textAlignVertical: 'center' },
-  filterButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  searchInput: { flex: 1, fontSize: 16, lineHeight: 22, color: '#1C2225', paddingVertical: 0, textAlignVertical: 'center' },
+  filterButton: { width: 43, height: 30, borderLeftWidth: 1, borderLeftColor: '#E4EBEF', alignItems: 'center', justifyContent: 'center' },
   filterPressed: { transform: [{ scale: 0.9 }], opacity: 0.7 },
   filterBadge: { position: 'absolute', top: -3, right: -3, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.accent, borderWidth: 2, borderColor: theme.colors.surface },
   filterBadgeText: { fontSize: 11, lineHeight: 14, fontWeight: '900', color: '#FFFFFF' },
-  categoryRow: { paddingHorizontal: 18, paddingVertical: 9, gap: 6 },
-  category: { minHeight: 42, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, borderRadius: 24, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#DDE3E7', shadowColor: theme.colors.shadow, shadowOpacity: 1, shadowRadius: 7, shadowOffset: { width: 0, height: 3 }, elevation: 2, overflow: 'hidden' },
+  categoryRow: { paddingHorizontal: 14, paddingVertical: 12, gap: 8 },
+  category: { minHeight: 42, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, borderRadius: 24, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#DDE3E7', shadowColor: theme.colors.shadow, shadowOpacity: 1, shadowRadius: 7, shadowOffset: { width: 0, height: 3 }, elevation: 2, overflow: 'hidden' },
   categoryActive: { backgroundColor: '#118F91', borderColor: '#118F91', shadowColor: theme.colors.primary, shadowOpacity: 0.38, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 4 },
   categorySheen: { position: 'absolute', top: 0, left: '13%', right: '13%', height: 13, borderRadius: 99, backgroundColor: 'rgba(255,255,255,0.25)' },
   categoryText: { fontSize: 12, lineHeight: 16, color: '#252B2E', fontWeight: '700' },
   categoryTextActive: { color: '#FFFFFF', fontWeight: '800' },
   loader: { marginTop: 50 },
-  offerFeed: { gap: 18, paddingHorizontal: 16, paddingTop: 18, paddingBottom: 10 },
+  offerFeed: { gap: 16, paddingHorizontal: 14, paddingTop: 3, paddingBottom: 10 },
   emptyCard: { margin: 18, padding: 28, backgroundColor: '#FFFFFF', borderRadius: 22, alignItems: 'center', borderWidth: 1, borderColor: '#DDE3E7' },
   emptyTitle: { ...theme.typography.h3, color: '#11181A', marginTop: 12, textAlign: 'center' }, emptyText: { ...theme.typography.body, color: '#5E686D', textAlign: 'center', marginTop: 6 },
   chooseButton: { marginTop: 16, paddingHorizontal: 18, paddingVertical: 11, borderRadius: 99, backgroundColor: '#E2F6F5' }, chooseText: { ...theme.typography.caption, color: '#0A6F71', fontWeight: '800' },

@@ -1,18 +1,16 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, MapPinned, HardHat, Wrench, Building2, Tags, ClipboardList, CreditCard, Flag, LineChart, Settings, Users, PanelsTopLeft, UserRoundPlus } from 'lucide-react';
+import { LayoutDashboard, MapPinned, HardHat, Wrench, Building2, Tags, CreditCard, Flag, LineChart, Settings, Users, PanelsTopLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const items = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/cities', label: 'Cities', icon: MapPinned },
-  { to: '/workers', label: 'Workers', icon: HardHat },
-  { to: '/provider-applications', label: 'Provider Applications', icon: UserRoundPlus },
+  { to: '/workers', label: 'Providers', icon: HardHat },
   { to: '/service-categories', label: 'Service Categories', icon: Wrench },
   { to: '/businesses', label: 'Businesses', icon: Building2 },
   { to: '/offers', label: 'Offers', icon: Tags },
   { to: '/plans', label: 'Subscription Plans', icon: CreditCard },
   { to: '/offer-templates', label: 'Offer Templates', icon: PanelsTopLeft },
-  { to: '/bookings', label: 'Bookings', icon: ClipboardList },
   { to: '/payments', label: 'Payments', icon: CreditCard },
   { to: '/reports', label: 'Reports', icon: Flag },
   { to: '/analytics', label: 'Analytics', icon: LineChart },

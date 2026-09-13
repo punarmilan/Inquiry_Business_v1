@@ -1,7 +1,10 @@
 const { Joi, objectId, pagination } = require('./common');
-const { passwordPolicy } = require('./password.validator');
 
 const idParams = Joi.object({ id: objectId.required() });
+const imageSource = Joi.string().trim().max(12_000_000).custom((value, helpers) => {
+  const isImageSource = value === '' || /^https?:\/\//i.test(value) || /^data:image\/[a-zA-Z0-9.+-]+;base64,/i.test(value);
+  return isImageSource ? value : helpers.error('string.uri');
+}).allow('');
 const deleteById = Joi.object({ body: Joi.object({}), query: Joi.object({}), params: idParams });
 const list = Joi.object({
   query: Joi.object({ ...pagination, status: Joi.string().trim().max(40), cityId: objectId, search: Joi.string().trim().max(120) }),
@@ -11,6 +14,7 @@ const city = Joi.object({
   slug: Joi.string().trim().lowercase().pattern(/^[a-z0-9-]+$/).required(),
   latitude: Joi.number().min(-90).max(90).required(), longitude: Joi.number().min(-180).max(180).required(),
   serviceRadiusKm: Joi.number().min(1).max(100).required(), localities: Joi.array().items(Joi.string().trim().max(120)).max(500),
+  localityImages: Joi.array().items(Joi.object({ name: Joi.string().trim().max(120).required(), imageUrl: imageSource.required() })).max(500),
   isActive: Joi.boolean().required(), offersEnabled: Joi.boolean().required(), servicesEnabled: Joi.boolean().required(),
 });
 const cityCreate = Joi.object({ body: city });
@@ -18,13 +22,23 @@ const cityUpdate = Joi.object({ params: idParams, body: city.fork(Object.keys(ci
 
 const worker = Joi.object({
   name: Joi.string().trim().min(2).max(120).required(), photoUrl: Joi.string().trim().allow('').max(2048),
-  phone: Joi.string().trim().pattern(/^\+?[1-9]\d{7,14}$/).required(), cityId: objectId.required(),
+  phone: Joi.string().trim().pattern(/^(?:\+?[1-9]\d{7,14}|0\d{9})$/).required(), cityId: objectId.required(),
+  whatsapp: Joi.string().trim().pattern(/^(?:\+?[1-9]\d{7,14}|0\d{9})$/).allow(''),
   categoryIds: Joi.array().items(objectId.required()).min(1).max(20).required(), experienceYears: Joi.number().min(0).max(60),
   serviceAreas: Joi.array().items(Joi.string().trim().max(120)).max(100), availability: Joi.string().valid('available', 'busy', 'offline'),
-  password: passwordPolicy, isActive: Joi.boolean(), verificationStatus: Joi.string().valid('pending', 'verified', 'rejected'), internalNotes: Joi.string().trim().allow('').max(2000),
+  isActive: Joi.boolean(), verificationStatus: Joi.string().valid('pending', 'verified', 'rejected'), internalNotes: Joi.string().trim().allow('').max(2000),
 });
 const workerCreate = Joi.object({ body: worker });
 const workerUpdate = Joi.object({ params: idParams, body: worker.fork(Object.keys(worker.describe().keys), (s) => s.optional()).min(1) });
+const demoWorkersCreate = Joi.object({
+  body: Joi.object({
+    cityId: objectId.required(),
+    categoryIds: Joi.array().items(objectId).max(100),
+  }).required(),
+  query: Joi.object({}),
+  params: Joi.object({}),
+});
+const dummyProviderNumbers = Joi.object({ body: Joi.object({}), query: Joi.object({}), params: Joi.object({}) });
 
 const serviceCategory = Joi.object({
   name: Joi.string().trim().min(2).max(100).required(), slug: Joi.string().trim().lowercase().pattern(/^[a-z0-9-]+$/).required(),
@@ -193,17 +207,8 @@ const verifyPayment = Joi.object({
   body: Joi.object({ providerPaymentId: Joi.string().trim().min(3).max(200).required(), providerOrderId: Joi.string().trim().allow('').max(200), note: Joi.string().trim().allow('').max(500) }),
 });
 const refundPayment = Joi.object({ params: idParams, body: Joi.object({ reason: Joi.string().trim().min(3).max(500).required() }) });
-const providerApplicationApprove = Joi.object({
-  params: idParams,
-  body: Joi.object({ password: passwordPolicy.required() }),
-});
-const providerApplicationReject = Joi.object({
-  params: idParams,
-  body: Joi.object({ reason: Joi.string().trim().allow('').max(500) }),
-});
-
 module.exports = {
-  idParams, list, cityCreate, cityUpdate, workerCreate, workerUpdate, categoryCreate, categoryUpdate,
-  businessModerate, offerModerate, templateCreate, templateUpdate, templateAssetDelete, stickerCreate, stickerUpdate, planCreate, planUpdate, assignWorker, forwardBooking, bookingStatus, verifyPayment, refundPayment, providerApplicationApprove, providerApplicationReject,
+  idParams, list, cityCreate, cityUpdate, workerCreate, workerUpdate, demoWorkersCreate, dummyProviderNumbers, categoryCreate, categoryUpdate,
+  businessModerate, offerModerate, templateCreate, templateUpdate, templateAssetDelete, stickerCreate, stickerUpdate, planCreate, planUpdate, assignWorker, forwardBooking, bookingStatus, verifyPayment, refundPayment,
 };
 module.exports.deleteById = deleteById;

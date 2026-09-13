@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import type { FormEvent, KeyboardEvent } from 'react';
+import type { ChangeEvent, FormEvent } from 'react';
 import { MapPinned, Plus, Search, Sparkles, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { uploadTemplateAsset } from '@/api/hyperlocal';
 import type { CityRecord } from '@/api/hyperlocal';
 import { useCitiesList, useCreateCity, useDeleteCity, useUpdateCity } from '@/hooks/useHyperlocal';
 import { Button } from '@/components/ui/button';
@@ -18,6 +19,7 @@ type CityForm = {
   longitude: string;
   serviceRadiusKm: string;
   localities: string[];
+  localityImages: Record<string, string>;
   isActive: boolean;
   offersEnabled: boolean;
   servicesEnabled: boolean;
@@ -31,6 +33,7 @@ const emptyForm = (): CityForm => ({
   longitude: '',
   serviceRadiusKm: '10',
   localities: [],
+  localityImages: {},
   isActive: true,
   offersEnabled: true,
   servicesEnabled: true,
@@ -42,12 +45,6 @@ const slugify = (value: string) =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
-
-const parseLocalities = (value: string) =>
-  value
-    .split(/[,;\n]+/)
-    .map((locality) => locality.trim().replace(/\s+/g, ' '))
-    .filter(Boolean);
 
 const normalizeLocalities = (values: string[]) => {
   const unique = new Map<string, string>();
@@ -65,7 +62,8 @@ const MAX_LOCALITIES = 500;
 export const CitiesPage = () => {
   const [form, setForm] = useState<CityForm>(emptyForm);
   const [editing, setEditing] = useState('');
-  const [localityDraft, setLocalityDraft] = useState('');
+  const [areaDraft, setAreaDraft] = useState('');
+  const [areaDraftImage, setAreaDraftImage] = useState('');
   const [localitySearch, setLocalitySearch] = useState('');
 
   const { data: cities, isLoading } = useCitiesList();
@@ -81,7 +79,8 @@ export const CitiesPage = () => {
   const reset = () => {
     setEditing('');
     setForm(emptyForm());
-    setLocalityDraft('');
+    setAreaDraft('');
+    setAreaDraftImage('');
     setLocalitySearch('');
   };
 
@@ -93,27 +92,35 @@ export const CitiesPage = () => {
     }));
   };
 
-  const addLocalities = (rawValue = localityDraft) => {
-    const additions = parseLocalities(rawValue);
-    if (!additions.length) return;
-    const next = normalizeLocalities([...form.localities, ...additions]);
+  const addArea = () => {
+    const cleanArea = areaDraft.trim().replace(/\s+/g, ' ');
+    if (!cleanArea) return;
+    if (form.localities.some((locality) => locality.toLocaleLowerCase('en-IN') === cleanArea.toLocaleLowerCase('en-IN'))) {
+      toast.error('This area already exists.');
+      return;
+    }
+    const next = normalizeLocalities([...form.localities, cleanArea]);
     if (next.length > MAX_LOCALITIES) {
       toast.error(`A city can contain at most ${MAX_LOCALITIES} areas.`);
       return;
     }
-    setForm((current) => ({ ...current, localities: next }));
-    setLocalityDraft('');
-  };
-
-  const handleLocalityKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
-      event.preventDefault();
-      addLocalities();
-    }
+    setForm((current) => ({
+      ...current,
+      localities: next,
+      localityImages: areaDraftImage.trim()
+        ? { ...current.localityImages, [cleanArea]: areaDraftImage.trim() }
+        : current.localityImages,
+    }));
+    setAreaDraft('');
+    setAreaDraftImage('');
   };
 
   const removeLocality = (locality: string) => {
-    setForm((current) => ({ ...current, localities: current.localities.filter((item) => item !== locality) }));
+    setForm((current) => {
+      const localityImages = { ...current.localityImages };
+      delete localityImages[locality];
+      return { ...current, localities: current.localities.filter((item) => item !== locality), localityImages };
+    });
   };
 
   const applyPunePreset = () => {
@@ -122,14 +129,15 @@ export const CitiesPage = () => {
       ...PUNE_CITY_PRESET,
       localities: normalizeLocalities([...PUNE_CITY_PRESET.localities]),
     }));
-    setLocalityDraft('');
+    setAreaDraft('');
+    setAreaDraftImage('');
     setLocalitySearch('');
     toast.success(`${PUNE_CITY_PRESET.localities.length} Pune and PCMC areas loaded.`);
   };
 
   const save = (event: FormEvent) => {
     event.preventDefault();
-    const localities = normalizeLocalities([...form.localities, ...parseLocalities(localityDraft)]);
+    const localities = normalizeLocalities(form.localities);
     const latitude = Number(form.latitude);
     const longitude = Number(form.longitude);
     const serviceRadiusKm = Number(form.serviceRadiusKm);
@@ -160,6 +168,7 @@ export const CitiesPage = () => {
       longitude,
       serviceRadiusKm,
       localities,
+      localityImages: localities.map((name) => ({ name, imageUrl: (form.localityImages[name] || '').trim() })).filter((item) => item.imageUrl),
     };
     const callbacks = {
       onSuccess: () => {
@@ -172,6 +181,58 @@ export const CitiesPage = () => {
     else createCity.mutate(payload, callbacks);
   };
 
+  const uploadLocalityImage = async (locality: string, event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Choose an image file.');
+      return;
+    }
+    if (file.size > 8_000_000) {
+      toast.error('Area image must be smaller than 8 MB.');
+      return;
+    }
+    let dataUrl = '';
+    try {
+      dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('Could not read image.'));
+        reader.onerror = () => reject(new Error('Could not read image.'));
+        reader.readAsDataURL(file);
+      });
+      const asset = await uploadTemplateAsset(dataUrl, `area-${locality}-${file.name}`);
+      setForm((current) => ({ ...current, localityImages: { ...current.localityImages, [locality]: asset.url } }));
+      toast.success(`${locality} image uploaded.`);
+    } catch (error: any) {
+      setForm((current) => ({ ...current, localityImages: { ...current.localityImages, [locality]: dataUrl } }));
+      toast.warning('Cloudinary unavailable. Image attached locally—save city coverage to keep it.');
+    }
+  };
+
+  const uploadDraftAreaImage = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) return toast.error('Choose an image file.');
+    if (file.size > 8_000_000) return toast.error('Area image must be smaller than 8 MB.');
+    let dataUrl = '';
+    try {
+      dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('Could not read image.'));
+        reader.onerror = () => reject(new Error('Could not read image.'));
+        reader.readAsDataURL(file);
+      });
+      const asset = await uploadTemplateAsset(dataUrl, `area-${areaDraft || 'new'}-${file.name}`);
+      setAreaDraftImage(asset.url);
+      toast.success('Area image uploaded.');
+    } catch (error: any) {
+      setAreaDraftImage(dataUrl);
+      toast.warning('Cloudinary unavailable. Image will be saved with the city.');
+    }
+  };
+
   const edit = (city: CityRecord) => {
     setEditing(city._id);
     setForm({
@@ -182,11 +243,13 @@ export const CitiesPage = () => {
       longitude: String(city.center.coordinates[0]),
       serviceRadiusKm: String(city.serviceRadiusKm),
       localities: normalizeLocalities(city.localities || []),
+      localityImages: Object.fromEntries((city.localityImages || []).map((item) => [item.name, item.imageUrl])),
       isActive: city.isActive,
       offersEnabled: city.offersEnabled,
       servicesEnabled: city.servicesEnabled,
     });
-    setLocalityDraft('');
+    setAreaDraft('');
+    setAreaDraftImage('');
     setLocalitySearch('');
     document.getElementById('city-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
@@ -210,13 +273,13 @@ export const CitiesPage = () => {
         </CardHeader>
 
         <CardContent className="p-6">
-          <form className="space-y-7" onSubmit={save}>
+          <form className="space-y-5" onSubmit={save}>
             <section className="space-y-4">
               <div>
                 <h3 className="font-semibold">City details</h3>
-                <p className="text-sm text-muted-foreground">The slug is generated automatically and can still be edited.</p>
+                <p className="text-sm text-muted-foreground">Enter the city name and state.</p>
               </div>
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-2">
                 <label className={fieldClass}>
                   <span className={labelClass}>City name</span>
                   <Input placeholder="e.g. Pune" value={form.name} onChange={(event) => updateName(event.target.value)} />
@@ -225,19 +288,18 @@ export const CitiesPage = () => {
                   <span className={labelClass}>State</span>
                   <Input placeholder="e.g. Maharashtra" value={form.state} onChange={(event) => setForm({ ...form, state: event.target.value })} />
                 </label>
+              </div>
+            </section>
+
+            <details className="rounded-xl border bg-muted/20 p-4 md:p-5">
+              <summary className="cursor-pointer font-semibold">Advanced city settings</summary>
+              <div className="mt-4 space-y-4">
+                <p className="text-sm text-muted-foreground">Optional technical settings for city coverage.</p>
                 <label className={fieldClass}>
                   <span className={labelClass}>URL slug</span>
                   <Input placeholder="e.g. pune" value={form.slug} onChange={(event) => setForm({ ...form, slug: slugify(event.target.value) })} />
                 </label>
-              </div>
-            </section>
-
-            <section className="space-y-4">
-              <div>
-                <h3 className="font-semibold">Coverage centre</h3>
-                <p className="text-sm text-muted-foreground">Coordinates are stored as longitude/latitude; the radius controls nearby availability.</p>
-              </div>
-              <div className="grid gap-4 md:grid-cols-3">
+                <div className="grid gap-4 md:grid-cols-3">
                 <label className={fieldClass}>
                   <span className={labelClass}>Latitude</span>
                   <Input type="number" step="any" placeholder="18.5204" value={form.latitude} onChange={(event) => setForm({ ...form, latitude: event.target.value })} />
@@ -250,28 +312,27 @@ export const CitiesPage = () => {
                   <span className={labelClass}>Service radius (KM)</span>
                   <Input type="number" min="1" max="100" placeholder="35" value={form.serviceRadiusKm} onChange={(event) => setForm({ ...form, serviceRadiusKm: event.target.value })} />
                 </label>
+                </div>
               </div>
-            </section>
+            </details>
 
             <section className="space-y-4 rounded-xl border bg-muted/20 p-4 md:p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h3 className="font-semibold">Areas and localities</h3>
-                  <p className="text-sm text-muted-foreground">Paste comma/new-line separated names in bulk, then click Add area or press Ctrl+Enter.</p>
+                  <p className="text-sm text-muted-foreground">Add area names, then set an optional image URL for each area.</p>
                 </div>
                 <span className="rounded-full border bg-background px-3 py-1 text-sm font-medium">{form.localities.length} / {MAX_LOCALITIES} areas</span>
               </div>
 
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <textarea
-                  className="min-h-24 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  value={localityDraft}
-                  onChange={(event) => setLocalityDraft(event.target.value)}
-                  onKeyDown={handleLocalityKeyDown}
-                  placeholder={'Akurdi\nWakad\nBaner, Aundh'}
-                  aria-label="Add areas"
-                />
-                <Button type="button" variant="outline" onClick={() => addLocalities()} disabled={!localityDraft.trim()}>
+              <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto_auto]">
+                <Input value={areaDraft} onChange={(event) => setAreaDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addArea(); } }} placeholder="Area name e.g. Wakad" aria-label="Area name" />
+                <Input value={areaDraftImage} onChange={(event) => setAreaDraftImage(event.target.value)} placeholder="Image URL (optional)" aria-label="Area image URL" />
+                <label className="inline-flex cursor-pointer items-center justify-center rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted">
+                  Upload image
+                  <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="sr-only" onChange={uploadDraftAreaImage} />
+                </label>
+                <Button type="button" onClick={addArea} disabled={!areaDraft.trim()}>
                   <Plus className="h-4 w-4" /> Add area
                 </Button>
               </div>
@@ -282,15 +343,25 @@ export const CitiesPage = () => {
                     <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <Input className="pl-9" placeholder="Search selected areas" value={localitySearch} onChange={(event) => setLocalitySearch(event.target.value)} />
                   </div>
-                  <div className="max-h-64 overflow-y-auto rounded-lg border bg-background p-3">
-                    <div className="flex flex-wrap gap-2">
+                  <div className="max-h-80 overflow-y-auto rounded-lg border bg-background p-3">
+                    <div className="space-y-2">
                       {visibleLocalities.map((locality) => (
-                        <span key={locality} className="inline-flex items-center gap-1.5 rounded-full border bg-muted/40 px-3 py-1.5 text-sm">
-                          {locality}
-                          <button type="button" className="rounded-full text-muted-foreground hover:text-destructive" onClick={() => removeLocality(locality)} aria-label={`Remove ${locality}`}>
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </span>
+                        <div key={locality} className="flex flex-col gap-2 rounded-lg border bg-muted/20 p-2 sm:flex-row sm:items-center">
+                          <span className="flex min-w-40 items-center gap-1.5 px-1 text-sm font-medium">
+                            {locality}
+                            <button type="button" className="rounded-full text-muted-foreground hover:text-destructive" onClick={() => removeLocality(locality)} aria-label={`Remove ${locality}`}>
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </span>
+                          <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center">
+                            {form.localityImages[locality] && <img src={form.localityImages[locality]} alt={`${locality} preview`} className="h-10 w-16 rounded object-cover" />}
+                            <Input className="flex-1" placeholder="Area image URL (https://...)" value={form.localityImages[locality] || ''} onChange={(event) => setForm((current) => ({ ...current, localityImages: { ...current.localityImages, [locality]: event.target.value } }))} />
+                            <label className="inline-flex shrink-0 cursor-pointer items-center justify-center rounded-md border px-3 py-2 text-xs font-medium hover:bg-muted">
+                              Upload image
+                              <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="sr-only" onChange={(event) => uploadLocalityImage(locality, event)} />
+                            </label>
+                          </div>
+                        </div>
                       ))}
                       {!visibleLocalities.length && <p className="py-2 text-sm text-muted-foreground">No selected area matches your search.</p>}
                     </div>
@@ -302,7 +373,9 @@ export const CitiesPage = () => {
               )}
             </section>
 
-            <section className="grid gap-3 md:grid-cols-3">
+            <details className="rounded-xl border bg-muted/20 p-4 md:p-5">
+              <summary className="cursor-pointer font-semibold">Feature settings</summary>
+              <section className="mt-4 grid gap-3 md:grid-cols-3">
               {(
                 [
                   ['isActive', 'City active', 'Allow users to select this city'],
@@ -318,7 +391,8 @@ export const CitiesPage = () => {
                   </span>
                 </label>
               ))}
-            </section>
+              </section>
+            </details>
 
             <div className="flex flex-wrap gap-2 border-t pt-5">
               <Button type="submit" disabled={saving}>

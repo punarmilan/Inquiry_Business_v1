@@ -6,6 +6,7 @@ export interface City {
   center: { type: 'Point'; coordinates: [number, number] };
   serviceRadiusKm: number;
   localities: string[];
+  localityImages?: { name: string; imageUrl: string }[];
   offersEnabled: boolean;
   servicesEnabled: boolean;
 }
@@ -216,6 +217,7 @@ export interface ServiceProvider {
   name: string;
   photoUrl?: string;
   phone?: string;
+  whatsapp?: string;
   experienceYears?: number;
   serviceAreas: string[];
   ratingAverage: number;
@@ -223,7 +225,7 @@ export interface ServiceProvider {
   completedBookings: number;
   availability: 'available' | 'busy' | 'offline';
   verificationStatus: 'verified';
-  city?: { _id: string; name: string; state?: string; slug?: string; localities?: string[] };
+  city?: { _id: string; name: string; state?: string; slug?: string; localities?: string[]; localityImages?: { name: string; imageUrl: string }[] };
   categories?: { _id: string; name: string; icon?: string; basePrice?: number; priceUnit?: string }[];
 }
 

@@ -60,7 +60,7 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ visible, name, isNew
 
           <Text style={styles.body}>
             {isNewUser
-              ? 'Your account is ready. Discover nearby offers or book a trusted local service in minutes.'
+              ? 'Your account is ready. Discover nearby offers or contact a trusted local service provider.'
               : 'Good to see you again. Fresh offers near you are waiting.'}
           </Text>
 
