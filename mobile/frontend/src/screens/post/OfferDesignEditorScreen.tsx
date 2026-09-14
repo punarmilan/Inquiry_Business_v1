@@ -9,7 +9,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { listMyBusinesses, listOfferTemplates, listTemplateStickers } from '../../services/api';
 import { recordOfferTemplateUsage, saveOfferDesignCreation } from '../../services/offerDesignStorage';
-import { DEFAULT_OFFER_CARD_DESIGN, OFFER_AVATARS, OFFER_CARD_COLORS, OFFER_CARD_TEMPLATES, findOfferAvatar, resolveDynamicValue, resolveOfferFontFamily, resolveOfferLineHeight, resolveTemplateElementValue, toOfferCardTemplate, type OfferCardDesign, type OfferCardTemplate, type OfferTemplateCanvas, type OfferTemplateElement } from '../../config/offerCardDesigner';
+import { DEFAULT_OFFER_CARD_DESIGN, OFFER_AVATARS, OFFER_CARD_COLORS, OFFER_CARD_TEMPLATES, findOfferAvatar, resolveDynamicValue, resolveOfferFontFamily, resolveOfferLineHeight, resolveTemplateElementValue, resolveTemplateImageValue, toOfferCardTemplate, type OfferCardDesign, type OfferCardTemplate, type OfferTemplateCanvas, type OfferTemplateElement } from '../../config/offerCardDesigner';
 import { OfferAvatarSprite } from '../../components/OfferAvatarSprite';
 import type { OfferSticker } from '../../config/offerStickers';
 import type { Business } from '../../types/hyperlocal';
@@ -19,7 +19,7 @@ import { theme } from '../../theme';
 
 type Props = NativeStackScreenProps<PostStackParamList, 'OfferDesignEditor'>;
 type EditorTool = 'templates' | 'text' | 'brand' | 'uploads' | 'stickers' | 'shapes' | 'more';
-type EditorSnapshot = { cardDesign: OfferCardDesign; title: string; description: string; category: string; imageUrls: string[]; posterTextValues: Record<string, string> };
+type EditorSnapshot = { cardDesign: OfferCardDesign; title: string; description: string; category: string; imageUrls: string[]; posterTextValues: Record<string, string>; textOffsets: TextOffsets; avatarOffset: TextOffset; avatarScale: number };
 
 const TOOLS: Array<{ id: EditorTool; label: string; icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'] }> = [
   { id: 'templates', label: 'Templates', icon: 'view-grid-outline' },
@@ -111,6 +111,33 @@ type TextOffsets = Record<EditableTextKey, TextOffset>;
 type LayoutSize = { width: number; height: number };
 type TouchPoint = { pageX: number; pageY: number };
 
+const savedTextValues = (design?: OfferCardDesign): Record<string, string> => {
+  try {
+    const value = JSON.parse(String(design?.customizations?.posterTextValues || '{}'));
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string')) : {};
+  } catch { return {}; }
+};
+
+const savedTextOffsets = (design?: OfferCardDesign): TextOffsets => {
+  const base: TextOffsets = {
+    title: { x: Number(design?.customizations?.titleOffsetX || 0), y: Number(design?.customizations?.titleOffsetY || 0) },
+    description: { x: Number(design?.customizations?.descriptionOffsetX || 0), y: Number(design?.customizations?.descriptionOffsetY || 0) },
+  };
+  try {
+    const value = JSON.parse(String(design?.customizations?.posterTextOffsets || '{}'));
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      for (const [key, offset] of Object.entries(value)) {
+        if (typeof key === 'string' && key.startsWith('poster:') && offset && typeof offset === 'object') {
+          const record = offset as Record<string, unknown>;
+          base[key] = { x: Number(record.x || 0), y: Number(record.y || 0) };
+        }
+      }
+    }
+  } catch { /* keep title/description offsets */ }
+  return base;
+};
+
 const distanceBetweenTouches = (touches: TouchPoint[]) => {
   if (touches.length < 2) return null;
   const [first, second] = touches;
@@ -136,6 +163,8 @@ const MovablePosterElement: React.FC<{
   onSelect?: () => void;
   onTransformCommit?: (scale: number, rotation: number) => void;
 }> = ({ style, baseTransform = [], children, onCommit, onSelect, onTransformCommit }) => {
+  const callbacks = useRef({ onCommit, onSelect, onTransformCommit });
+  callbacks.current = { onCommit, onSelect, onTransformCommit };
   const [drag, setDrag] = useState<TextOffset>({ x: 0, y: 0 });
   const [liveScale, setLiveScale] = useState(1);
   const [liveRotation, setLiveRotation] = useState(0);
@@ -151,7 +180,7 @@ const MovablePosterElement: React.FC<{
       const touches = event.nativeEvent.touches;
       const distance = distanceBetweenTouches(touches);
       const angle = angleBetweenTouches(touches);
-      if (touches.length >= 2 && onTransformCommit) {
+      if (touches.length >= 2 && callbacks.current.onTransformCommit) {
         pinching.current = true;
         if (distance && lastPinchDistance.current) {
           const factor = distance / lastPinchDistance.current;
@@ -175,7 +204,7 @@ const MovablePosterElement: React.FC<{
       if (!pinching.current) setDrag({ x: gesture.dx, y: gesture.dy });
     },
     onPanResponderGrant: (event) => {
-      onSelect?.();
+      callbacks.current.onSelect?.();
       lastPinchDistance.current = distanceBetweenTouches(event.nativeEvent.touches);
       lastTouchAngle.current = angleBetweenTouches(event.nativeEvent.touches);
       liveScaleRef.current = 1;
@@ -185,8 +214,8 @@ const MovablePosterElement: React.FC<{
       pinching.current = false;
     },
     onPanResponderRelease: (_, gesture) => {
-      if (pinching.current) onTransformCommit?.(liveScaleRef.current, liveRotationRef.current);
-      else onCommit({ x: gesture.dx, y: gesture.dy });
+      if (pinching.current) callbacks.current.onTransformCommit?.(liveScaleRef.current, liveRotationRef.current);
+      else if (Math.hypot(gesture.dx, gesture.dy) > 2) callbacks.current.onCommit({ x: gesture.dx, y: gesture.dy });
       lastPinchDistance.current = null;
       lastTouchAngle.current = null;
       liveScaleRef.current = 1;
@@ -206,8 +235,8 @@ const MovablePosterElement: React.FC<{
       pinching.current = false;
       setDrag({ x: 0, y: 0 });
     },
-  }), [onCommit, onSelect, onTransformCommit]);
-  return <View {...responder.panHandlers} style={[style, { transform: [...baseTransform, { rotate: `${liveRotation}deg` }, { scale: liveScale }, { translateX: drag.x }, { translateY: drag.y }] }]}>{children}</View>;
+  }), []);
+  return <View {...responder.panHandlers} style={[style, { transform: [{ translateX: drag.x }, { translateY: drag.y }, ...baseTransform, { rotate: `${liveRotation}deg` }, { scale: liveScale }] }]}>{children}</View>;
 };
 
 const CANVAS_FRAME_PADDING = 14;
@@ -262,7 +291,7 @@ const EditableCanvasText: React.FC<{
   useEffect(() => { offsetRef.current = offset; }, [offset]);
 
   const responder = useMemo(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => movingText === kind,
+    onStartShouldSetPanResponder: () => false,
     onMoveShouldSetPanResponder: (_, gesture) => editingText !== kind && (movingText === kind || gesture.numberActiveTouches > 1 || Math.abs(gesture.dx) > 6 || Math.abs(gesture.dy) > 6),
     onMoveShouldSetPanResponderCapture: (_, gesture) => editingText !== kind && (movingText === kind || gesture.numberActiveTouches > 1 || Math.abs(gesture.dx) > 6 || Math.abs(gesture.dy) > 6),
     onPanResponderGrant: (event) => {
@@ -302,8 +331,8 @@ const EditableCanvasText: React.FC<{
       if (rotating.current) return;
       if (Math.abs(gesture.dx) > 2 || Math.abs(gesture.dy) > 2) dragged.current = true;
       const next = {
-        x: Math.max(-320, Math.min(320, dragStart.current.x + gesture.dx)),
-        y: Math.max(-320, Math.min(320, dragStart.current.y + gesture.dy)),
+        x: dragStart.current.x + gesture.dx,
+        y: dragStart.current.y + gesture.dy,
       };
       setLiveDrag(next);
     },
@@ -320,6 +349,7 @@ const EditableCanvasText: React.FC<{
       rotating.current = false;
     },
     onPanResponderTerminate: () => {
+      setLiveDrag(null);
       lastPinchDistance.current = null;
       lastTouchAngle.current = null;
       liveScaleRef.current = 1;
@@ -333,10 +363,11 @@ const EditableCanvasText: React.FC<{
   const handleTap = () => {
     if (movingText === kind) {
       onToggleMove(kind);
-      onEditText(null);
+      onEditText(kind);
       return;
     }
-    onEditText(kind);
+    onEditText(null);
+    onToggleMove(kind);
   };
 
   const isActive = editingText === kind || movingText === kind;
@@ -392,7 +423,7 @@ const TemplateThumbnail: React.FC<{ template: OfferCardTemplate }> = ({ template
     if (element.avatarId) {
       return <OfferAvatarSprite key={element.id} avatar={findOfferAvatar(element.avatarId)} size={Math.max(1, Math.round(Math.min(element.width, element.height) * scale))} style={frame} />;
     }
-    if (element.type === 'image') return (element.imageUrl || element.src) ? <Image key={element.id} source={{ uri: element.imageUrl || element.src }} style={frame} resizeMode={element.resizeMode === 'stretch' ? 'stretch' : element.resizeMode || 'contain'} /> : null;
+    if (element.type === 'image') return (element.imageUrl || element.src) ? <Image key={element.id} source={{ uri: resolveTemplateImageValue(element.imageUrl || element.src, element.field || element.key, template.dynamicFields || {}) }} style={frame} resizeMode={element.resizeMode === 'stretch' ? 'stretch' : element.resizeMode || 'contain'} /> : null;
     if (element.type === 'shape' || element.type === 'rectangle' || element.type === 'circle' || element.type === 'divider' || element.type === 'line' || element.type === 'group') return <View key={element.id} style={[frame, { backgroundColor: element.backgroundColor || element.color || 'transparent', borderRadius: element.type === 'circle' ? 9999 : frame.borderRadius }]} />;
     const baseFontSize = element.fontSize || 42;
     const fontSize = Math.max(1, baseFontSize * scale);
@@ -444,6 +475,7 @@ const CanvasPreview: React.FC<{
   onMoveElement: (id: string, delta: TextOffset) => void;
   onResizeElement: (id: string, factor: number) => void;
   onRotateElement: (id: string, delta: number) => void;
+  onTransformElement: (id: string, factor: number, rotation: number) => void;
   onDeleteElement: (id: string) => void;
   selectedStickerId: string | null;
   onSelectSticker: (id: string | null) => void;
@@ -459,7 +491,7 @@ const CanvasPreview: React.FC<{
   avatarSelected: boolean;
   onSelectAvatar: () => void;
   onResizeAvatar: (factor: number) => void;
-}> = ({ design, template, business, title, description, category, imageUrl, textValues, editingText, movingText, textOffsets, onEditText, onToggleMove, onChangeText, onOffsetChange, onMoveElement, onResizeElement, onRotateElement, onDeleteElement, selectedStickerId, onSelectSticker, selectedImageId, onSelectImage, selectedShapeId, onSelectShape, onSelectTextElement, onDoubleTapEmpty, avatarOffset, onMoveAvatar, avatarScale, avatarSelected, onSelectAvatar, onResizeAvatar }) => {
+}> = ({ design, template, business, title, description, category, imageUrl, textValues, editingText, movingText, textOffsets, onEditText, onToggleMove, onChangeText, onOffsetChange, onMoveElement, onResizeElement, onRotateElement, onTransformElement, onDeleteElement, selectedStickerId, onSelectSticker, selectedImageId, onSelectImage, selectedShapeId, onSelectShape, onSelectTextElement, onDoubleTapEmpty, avatarOffset, onMoveAvatar, avatarScale, avatarSelected, onSelectAvatar, onResizeAvatar }) => {
   const avatar = design.avatarId ? findOfferAvatar(design.avatarId) : null;
   const source = imageUrl || design.previewUrl;
   const textAlign = design.textAlign || (design.layout === 'center' ? 'center' : 'left');
@@ -470,7 +502,7 @@ const CanvasPreview: React.FC<{
   const selectedImage = poster?.elements.find((element) => element.id === selectedImageId && element.type === 'image');
   const selectedShape = poster?.elements.find((element) => element.id === selectedShapeId && isShapeElement(element));
   const selectedEditableElement = selectedImage || selectedShape || selectedSticker;
-  const defaultValues = Object.fromEntries((template?.editableFields || []).map((field) => [field.key, field.defaultValue || '']));
+  const defaultValues = Object.fromEntries((template?.editableFields || []).filter((field) => field.defaultValue !== undefined && field.defaultValue !== '').map((field) => [field.key, field.defaultValue]));
   const customValues = Object.fromEntries(Object.entries(design.customizations || {}).map(([key, value]) => [key, value]));
   const values: Record<string, unknown> = {
     ...(template?.dynamicFields || {}),
@@ -481,7 +513,8 @@ const CanvasPreview: React.FC<{
     ...(description ? { description } : {}),
     ...(category ? { category } : {}),
     business,
-    businessName: business?.name || customValues.businessName || '',
+    ...((business?.name || customValues.businessName) ? { businessName: business?.name || customValues.businessName } : {}),
+    ...(business?.logoUrl ? { businessLogo: business.logoUrl } : {}),
     ...(imageUrl ? { imageUrls: imageUrl } : {}),
   };
   const [canvasWidth, setCanvasWidth] = useState(0);
@@ -497,7 +530,7 @@ const CanvasPreview: React.FC<{
     );
     const availableFrameHeight = Math.max(
       0,
-      stageSize.height - CANVAS_STAGE_VERTICAL_PADDING * 2 - (movingText ? MOVE_HINT_RESERVED_HEIGHT : 0),
+      stageSize.height - CANVAS_STAGE_VERTICAL_PADDING * 2 - MOVE_HINT_RESERVED_HEIGHT,
     );
     const maxCanvasWidth = availableFrameWidth - CANVAS_FRAME_PADDING * 2;
     const maxCanvasHeight = availableFrameHeight - CANVAS_FRAME_PADDING * 2;
@@ -515,7 +548,7 @@ const CanvasPreview: React.FC<{
       width: Math.floor(width + CANVAS_FRAME_PADDING * 2),
       height: Math.floor(height + CANVAS_FRAME_PADDING * 2),
     };
-  }, [canvasAspectRatio, movingText, stageSize.height, stageSize.width]);
+  }, [canvasAspectRatio, stageSize.height, stageSize.width]);
   const handleStageLayout = useCallback((event: { nativeEvent: { layout: LayoutSize } }) => {
     const nextSize = {
       width: Math.round(event.nativeEvent.layout.width),
@@ -534,7 +567,6 @@ const CanvasPreview: React.FC<{
     position: 'absolute' as const,
     zIndex: element.zIndex ?? 2,
     opacity: element.opacity ?? 1,
-      transform: rotationTransform(element.rotation),
   } as any);
   const textFor = (element: OfferTemplateElement) => {
     const field = element.field || element.key;
@@ -562,9 +594,9 @@ const CanvasPreview: React.FC<{
     const boundImage = Array.isArray(boundValue)
       ? boundValue.find((value): value is string => typeof value === 'string' && value.length > 0)
       : typeof boundValue === 'string' && boundValue.length > 0 ? boundValue : undefined;
-    const elementImage = resolveDynamicValue(element.imageUrl || element.src || '', values);
-    if (field === 'imageUrls' || /image|photo|product/i.test(field)) return imageUrl || boundImage || elementImage || undefined;
-    return boundImage || elementImage || imageUrl;
+    const elementImage = resolveTemplateImageValue(element.imageUrl || element.src || '', field, values);
+    if (field === 'imageUrls') return imageUrl || boundImage || elementImage || undefined;
+    return boundImage || elementImage || undefined;
   };
   const renderPosterElement = (element: OfferTemplateElement) => {
     if (!poster) return null;
@@ -578,24 +610,29 @@ const CanvasPreview: React.FC<{
       borderColor: element.borderColor || styleValue('borderColor', 'transparent'),
       borderStyle: element.borderStyle || styleValue('borderStyle', 'solid'),
     } as const;
+    if (element.locked || element.editable === false) {
+      if (element.avatarId) return <View key={element.id} style={[layer, { transform: rotationTransform(element.rotation) }]}><OfferAvatarSprite avatar={findOfferAvatar(element.avatarId)} size={Math.max(1, Math.min(element.width, element.height) * posterScale)} /></View>;
+      if (element.type === 'image') return <Image key={element.id} source={{ uri: imageFor(element) }} style={[layer, borderStyle, { transform: rotationTransform(element.rotation) }]} resizeMode={element.resizeMode || 'contain'} />;
+      if (isShapeElement(element)) return <View key={element.id} style={[layer, borderStyle, { backgroundColor: element.backgroundColor || element.color, borderRadius: element.type === 'circle' ? 9999 : borderStyle.borderRadius, transform: rotationTransform(element.rotation) }]} />;
+    }
     if (element.avatarId) {
       const avatarElement = findOfferAvatar(element.avatarId);
       const avatarNode = <OfferAvatarSprite avatar={avatarElement} size={Math.max(1, Math.round(Math.min(element.width, element.height) * posterScale))} style={StyleSheet.absoluteFill} />;
-      return <MovablePosterElement key={element.id} style={layer} baseTransform={rotationTransform(element.rotation)} onSelect={() => onSelectImage(element.id)} onTransformCommit={(scale, rotation) => { onResizeElement(element.id, scale); if (Math.abs(rotation) > 0.1) onRotateElement(element.id, rotation); }} onCommit={(delta) => onMoveElement(element.id, { x: delta.x / Math.max(posterScale, 0.01), y: delta.y / Math.max(posterScale, 0.01) })}>{avatarNode}</MovablePosterElement>;
+      return <MovablePosterElement key={element.id} style={layer} baseTransform={rotationTransform(element.rotation)} onSelect={() => onSelectImage(element.id)} onTransformCommit={(scale, rotation) => onTransformElement(element.id, scale, Math.abs(rotation) > 0.1 ? rotation : 0)} onCommit={(delta) => onMoveElement(element.id, { x: delta.x / Math.max(posterScale, 0.01), y: delta.y / Math.max(posterScale, 0.01) })}>{avatarNode}</MovablePosterElement>;
     }
     if (element.type === 'image') {
       const elementImage = imageFor(element);
       const imageNode = elementImage ? <Image source={{ uri: elementImage }} style={[StyleSheet.absoluteFill, borderStyle]} resizeMode={element.resizeMode || 'contain'} /> : <View style={[StyleSheet.absoluteFill, borderStyle, { backgroundColor: element.backgroundColor || 'transparent' }]} />;
       const isSticker = element.id.startsWith('sticker-');
-      return <MovablePosterElement key={element.id} style={layer} baseTransform={rotationTransform(element.rotation)} onSelect={() => isSticker ? onSelectSticker(element.id) : onSelectImage(element.id)} onTransformCommit={(scale, rotation) => { onResizeElement(element.id, scale); if (Math.abs(rotation) > 0.1) onRotateElement(element.id, rotation); }} onCommit={(delta) => onMoveElement(element.id, { x: delta.x / Math.max(posterScale, 0.01), y: delta.y / Math.max(posterScale, 0.01) })}>{imageNode}</MovablePosterElement>;
+      return <MovablePosterElement key={element.id} style={layer} baseTransform={rotationTransform(element.rotation)} onSelect={() => isSticker ? onSelectSticker(element.id) : onSelectImage(element.id)} onTransformCommit={(scale, rotation) => onTransformElement(element.id, scale, Math.abs(rotation) > 0.1 ? rotation : 0)} onCommit={(delta) => onMoveElement(element.id, { x: delta.x / Math.max(posterScale, 0.01), y: delta.y / Math.max(posterScale, 0.01) })}>{imageNode}</MovablePosterElement>;
     }
     if (element.type === 'shape' || element.type === 'rectangle' || element.type === 'circle' || element.type === 'divider' || element.type === 'line' || element.type === 'group') {
       const shapeStyle = { ...borderStyle, backgroundColor: element.backgroundColor || styleValue('backgroundColor', element.color || 'transparent'), borderRadius: element.type === 'circle' ? 9999 : borderStyle.borderRadius };
       const shapeNode = <View style={[StyleSheet.absoluteFill, shapeStyle]} />;
-      return <MovablePosterElement key={element.id} style={layer} baseTransform={rotationTransform(element.rotation)} onSelect={() => onSelectShape(element.id)} onTransformCommit={(scale, rotation) => { onResizeElement(element.id, scale); if (Math.abs(rotation) > 0.1) onRotateElement(element.id, rotation); }} onCommit={(delta) => onMoveElement(element.id, { x: delta.x / Math.max(posterScale, 0.01), y: delta.y / Math.max(posterScale, 0.01) })}>{shapeNode}</MovablePosterElement>;
+      return <MovablePosterElement key={element.id} style={layer} baseTransform={rotationTransform(element.rotation)} onSelect={() => onSelectShape(element.id)} onTransformCommit={(scale, rotation) => onTransformElement(element.id, scale, Math.abs(rotation) > 0.1 ? rotation : 0)} onCommit={(delta) => onMoveElement(element.id, { x: delta.x / Math.max(posterScale, 0.01), y: delta.y / Math.max(posterScale, 0.01) })}>{shapeNode}</MovablePosterElement>;
     }
     const boundField = element.field || element.key;
-    const editableKind = element.editable === false ? null : (boundField === 'title' || boundField === 'description' || boundField === 'category' ? boundField : `poster:${element.id}`);
+    const editableKind = element.editable === false || element.locked || template?.editableFields?.some((field) => field.key === boundField && !field.editable) ? null : `poster:${element.id}`;
     const baseFontSize = element.fontSize || 42;
     const scaledFontSize = Math.max(1, baseFontSize * posterScale);
     const rawLineHeight = element.lineHeight || styleValue('lineHeight', undefined);
@@ -614,10 +651,11 @@ const CanvasPreview: React.FC<{
       textDecorationLine: element.textDecorationLine || styleValue('textDecorationLine', 'none'),
       textTransform: element.textTransform || styleValue('textTransform', 'none'),
     } as const;
+    if (!editableKind) return <Text key={element.id} style={[layer, styles.posterText, textStyle, { transform: rotationTransform(element.rotation) }]} numberOfLines={displayLineCount(element)} adjustsFontSizeToFit minimumFontScale={0.55} allowFontScaling={false}>{textFor(element)}</Text>;
     if (element.id.startsWith('sticker-')) {
       return <MovablePosterElement key={element.id} style={layer} baseTransform={rotationTransform(element.rotation)} onSelect={() => onSelectSticker(element.id)} onCommit={(delta) => onMoveElement(element.id, { x: delta.x / Math.max(posterScale, 0.01), y: delta.y / Math.max(posterScale, 0.01) })}><Text style={[StyleSheet.absoluteFill, styles.posterText, textStyle]} numberOfLines={displayLineCount(element)} adjustsFontSizeToFit minimumFontScale={0.55} allowFontScaling={false}>{textFor(element)}</Text></MovablePosterElement>;
     }
-    if (editableKind) return <EditableCanvasText key={element.id} kind={editableKind} text={textFor(element)} placeholder={element.text || ''} showPlaceholder={false} rotation={element.rotation} style={[styles.posterText, textStyle]} layerStyle={layer} numberOfLines={displayLineCount(element)} editingText={editingText} movingText={movingText} offset={{ x: 0, y: 0 }} onEditText={(kind) => { if (kind) onSelectTextElement(element.id); onEditText(kind); }} onToggleMove={onToggleMove} onChangeText={onChangeText} onOffsetChange={(_, delta) => onMoveElement(element.id, { x: delta.x / Math.max(posterScale, 0.01), y: delta.y / Math.max(posterScale, 0.01) })} onTransformCommit={(scale, rotation) => { if (Math.abs(scale - 1) > 0.01) onResizeElement(element.id, scale); if (Math.abs(rotation) > 0.1) onRotateElement(element.id, rotation); }} />;
+    if (editableKind) return <EditableCanvasText key={element.id} kind={editableKind} text={textFor(element)} placeholder={element.text || ''} showPlaceholder={false} rotation={element.rotation} style={[styles.posterText, textStyle]} layerStyle={layer} numberOfLines={displayLineCount(element)} editingText={editingText} movingText={movingText} offset={{ x: 0, y: 0 }} onEditText={(kind) => { if (kind) onSelectTextElement(element.id); onEditText(kind); }} onToggleMove={(kind) => { onSelectTextElement(element.id); onToggleMove(kind); }} onChangeText={onChangeText} onOffsetChange={(_, delta) => onMoveElement(element.id, { x: delta.x / Math.max(posterScale, 0.01), y: delta.y / Math.max(posterScale, 0.01) })} onTransformCommit={(scale, rotation) => onTransformElement(element.id, Math.abs(scale - 1) > 0.01 ? scale : 1, Math.abs(rotation) > 0.1 ? rotation : 0)} />;
     return <MovablePosterElement key={element.id} style={layer} baseTransform={rotationTransform(element.rotation)} onTransformCommit={(scale, rotation) => { onResizeElement(element.id, scale); if (Math.abs(rotation) > 0.1) onRotateElement(element.id, rotation); }} onCommit={(delta) => onMoveElement(element.id, { x: delta.x / Math.max(posterScale, 0.01), y: delta.y / Math.max(posterScale, 0.01) })}><Text style={[StyleSheet.absoluteFill, styles.posterText, textStyle]} numberOfLines={displayLineCount(element)} adjustsFontSizeToFit minimumFontScale={0.55} allowFontScaling={false}>{textFor(element)}</Text></MovablePosterElement>;
   };
 
@@ -644,6 +682,8 @@ const CanvasPreview: React.FC<{
               accessibilityLabel="Canvas"
               style={StyleSheet.absoluteFill}
               onPress={(event) => {
+                onEditText(null); onSelectImage(null); onSelectShape(null); onSelectSticker(null); if (movingText) onToggleMove(movingText);
+                Keyboard.dismiss();
                 const now = Date.now();
                 const { locationX: x, locationY: y } = event.nativeEvent;
                 const last = lastCanvasTapRef.current;
@@ -653,10 +693,11 @@ const CanvasPreview: React.FC<{
                 } else lastCanvasTapRef.current = { time: now, x, y };
               }}
             />
-            {poster.background?.type === 'gradient' || poster.background?.type === 'linear-gradient' ? <LinearGradient pointerEvents="none" colors={gradientStops(poster.background.colors, poster.background.from || design.primaryColor, poster.background.to || design.secondaryColor)} style={styles.canvasImage} /> : null}
+            {poster.background?.type === 'gradient' || poster.background?.type === 'linear-gradient' ? <LinearGradient pointerEvents="none" colors={gradientStops(poster.background.colors, poster.background.from || design.primaryColor, poster.background.to || design.secondaryColor)} style={StyleSheet.absoluteFill} /> : null}
             {(poster.backgroundImageUrl || poster.background?.imageUrl) ? <View pointerEvents="none" style={StyleSheet.absoluteFill}><Image source={{ uri: poster.backgroundImageUrl || poster.background?.imageUrl }} style={[styles.canvasImage, { opacity: poster.background?.opacity ?? 1 }]} resizeMode="cover" /></View> : null}
+            {poster.overlay?.color ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: poster.overlay.color, opacity: poster.overlay.opacity ?? 0.25 }]} /> : null}
             {poster.elements.slice().sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)).map(renderPosterElement)}
-            {selectedEditableElement ? <View pointerEvents="none" style={[positionFor(selectedEditableElement, poster), styles.selectedElementFrame]} /> : null}
+            {selectedEditableElement ? <View pointerEvents="none" style={[positionFor(selectedEditableElement, poster), styles.selectedElementFrame, { transform: rotationTransform(selectedEditableElement.rotation) }]} /> : null}
             {design.templateId === 'custom' && avatar ? <MovablePosterElement style={styles.blankAvatarOverlay} baseTransform={[{ translateX: avatarOffset.x * posterScale }, { translateY: avatarOffset.y * posterScale }]} onSelect={onSelectAvatar} onTransformCommit={(scale) => onResizeAvatar(scale)} onCommit={(delta) => onMoveAvatar({ x: delta.x / Math.max(posterScale, 0.01), y: delta.y / Math.max(posterScale, 0.01) })}><OfferAvatarSprite avatar={avatar} size={Math.max(72, Math.round((canvasWidth || 320) * 0.23 * avatarScale))} /></MovablePosterElement> : null}
           </View>
         ) : renderDefaultCanvas()}
@@ -685,8 +726,8 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [editingText, setEditingText] = useState<EditableTextKey | null>(null);
   const [movingText, setMovingText] = useState<EditableTextKey | null>(null);
-  const [textOffsets, setTextOffsets] = useState<TextOffsets>({ title: { x: 0, y: 0 }, description: { x: 0, y: 0 } });
-  const [posterTextValues, setPosterTextValues] = useState<Record<string, string>>({});
+  const [textOffsets, setTextOffsets] = useState<TextOffsets>(() => savedTextOffsets(initialDesign));
+  const [posterTextValues, setPosterTextValues] = useState<Record<string, string>>(() => savedTextValues(initialDesign));
   const [stickers, setStickers] = useState<OfferSticker[]>([]);
   const [selectedStickerId, setSelectedStickerId] = useState<string | null>(null);
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
@@ -735,21 +776,73 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
     };
   }, []);
 
-  const currentSnapshot = useMemo<EditorSnapshot>(() => ({ cardDesign, title, description, category, imageUrls, posterTextValues }), [cardDesign, title, description, category, imageUrls, posterTextValues]);
+  const currentSnapshot = useMemo<EditorSnapshot>(() => ({ cardDesign, title, description, category, imageUrls, posterTextValues, textOffsets, avatarOffset, avatarScale }), [cardDesign, title, description, category, imageUrls, posterTextValues, textOffsets, avatarOffset, avatarScale]);
+  const pendingHistoryRef = useRef<{ snapshot: EditorSnapshot; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const textTypingRef = useRef(false);
+  const templateSwitchRef = useRef(false);
+  const resetHistoryForTemplateSwitch = () => {
+    if (pendingHistoryRef.current) { clearTimeout(pendingHistoryRef.current.timer); pendingHistoryRef.current = null; }
+    undoStackRef.current = [];
+    redoStackRef.current = [];
+    templateSwitchRef.current = true;
+  };
+  useEffect(() => () => {
+    if (pendingHistoryRef.current) clearTimeout(pendingHistoryRef.current.timer);
+  }, []);
   useEffect(() => {
     const previous = snapshotRef.current;
     snapshotRef.current = currentSnapshot;
+    // A template switch establishes a fresh history baseline instead of
+    // pushing the previous template as an undo step.
+    if (templateSwitchRef.current) {
+      templateSwitchRef.current = false;
+      textTypingRef.current = false;
+      undoStackRef.current = [];
+      redoStackRef.current = [];
+      setHistoryVersion((value) => value + 1);
+      return;
+    }
+    // Canvas text typing rewrites element text/content, which looks structural
+    // but must coalesce like other text edits. Consume the marker every run so
+    // a later structural change is never misclassified.
+    const textEdit = textTypingRef.current;
+    textTypingRef.current = false;
     if (!previous || restoringHistoryRef.current) {
       restoringHistoryRef.current = false;
       return;
     }
     if (JSON.stringify(previous) === JSON.stringify(currentSnapshot)) return;
-    undoStackRef.current = [...undoStackRef.current.slice(-29), previous];
-    redoStackRef.current = [];
-    setHistoryVersion((value) => value + 1);
+    // Coalesce rapid typing/slider bursts into one undo step: only structural
+    // canvas changes commit immediately, text/meta edits wait 800ms of quiet.
+    const structural = (JSON.stringify(previous.cardDesign) !== JSON.stringify(currentSnapshot.cardDesign)
+      || JSON.stringify(previous.imageUrls) !== JSON.stringify(currentSnapshot.imageUrls)) && !textEdit;
+    if (pendingHistoryRef.current) clearTimeout(pendingHistoryRef.current.timer);
+    if (structural) {
+      pendingHistoryRef.current = null;
+      undoStackRef.current = [...undoStackRef.current.slice(-29), previous];
+      redoStackRef.current = [];
+      setHistoryVersion((value) => value + 1);
+      return;
+    }
+    const base = pendingHistoryRef.current?.snapshot || previous;
+    pendingHistoryRef.current = {
+      snapshot: base,
+      timer: setTimeout(() => {
+        if (!pendingHistoryRef.current) return;
+        const entry = pendingHistoryRef.current.snapshot;
+        pendingHistoryRef.current = null;
+        undoStackRef.current = [...undoStackRef.current.slice(-29), entry];
+        redoStackRef.current = [];
+        setHistoryVersion((value) => value + 1);
+      }, 800),
+    };
   }, [currentSnapshot]);
 
   const restoreSnapshot = useCallback((snapshot: EditorSnapshot) => {
+    if (pendingHistoryRef.current) {
+      clearTimeout(pendingHistoryRef.current.timer);
+      pendingHistoryRef.current = null;
+    }
     restoringHistoryRef.current = true;
     setCardDesign(snapshot.cardDesign);
     setTitle(snapshot.title);
@@ -757,6 +850,12 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
     setCategory(snapshot.category);
     setImageUrls(snapshot.imageUrls);
     setPosterTextValues(snapshot.posterTextValues);
+    setTextOffsets(snapshot.textOffsets);
+    setAvatarOffset(snapshot.avatarOffset);
+    setAvatarScale(snapshot.avatarScale);
+    snapshotRef.current = snapshot;
+    setEditingText(null);
+    setMovingText(null);
     setHistoryVersion((value) => value + 1);
   }, []);
 
@@ -822,7 +921,7 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
   };
   const activeTemplate = allTemplates.find((template) => template.id === cardDesign.templateId);
   const templateValues = useMemo<Record<string, unknown>>(() => {
-    const defaultValues = Object.fromEntries((activeTemplate?.editableFields || []).map((field) => [field.key, field.defaultValue || '']));
+    const defaultValues = Object.fromEntries((activeTemplate?.editableFields || []).filter((field) => field.defaultValue !== undefined && field.defaultValue !== '').map((field) => [field.key, field.defaultValue]));
     const customValues = Object.fromEntries(Object.entries(cardDesign.customizations || {}).map(([key, value]) => [key, value]));
     return {
       ...(activeTemplate?.dynamicFields || {}),
@@ -833,23 +932,22 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
       ...(description ? { description } : {}),
       ...(category ? { category } : {}),
       business,
-      businessName: business?.name || customValues.businessName || '',
+      ...((business?.name || customValues.businessName) ? { businessName: business?.name || customValues.businessName } : {}),
+    ...(business?.logoUrl ? { businessLogo: business.logoUrl } : {}),
       ...(imageUrls[0] ? { imageUrls: imageUrls[0] } : {}),
     };
   }, [activeTemplate, business, cardDesign.customizations, cardDesign.dynamicFields, category, description, imageUrls, title]);
   const textEditorLayers = useMemo(() => {
-    const canvasLayers = cardDesign.canvas?.elements.filter((element) => element.editable !== false && isTextElement(element)).map((element) => ({
+    const canvasLayers = cardDesign.canvas?.elements.filter((element) => element.editable !== false && !element.locked && isTextElement(element) && !activeTemplate?.editableFields?.some((field) => field.key === (element.field || element.key) && !field.editable)).map((element) => ({
       id: element.id,
       label: (element.field || element.key || element.content || element.text || 'Text').replace(/([a-z])([A-Z])/g, '$1 $2'),
     })) || [];
-    return canvasLayers.length ? canvasLayers : [{ id: '$title', label: 'Title' }, { id: '$description', label: 'Description' }];
-  }, [cardDesign.canvas]);
+    return cardDesign.canvas ? canvasLayers : [{ id: '$title', label: 'Title' }, { id: '$description', label: 'Description' }];
+  }, [cardDesign.canvas, activeTemplate]);
   const selectedTextElement = cardDesign.canvas?.elements.find((element) => element.id === selectedTextElementId);
   const selectedShapeElement = cardDesign.canvas?.elements.find((element) => element.id === selectedShapeId && isShapeElement(element));
   const selectedTextKind: EditableTextKey = selectedTextElement
-    ? ['title', 'description', 'category'].includes(selectedTextElement.field || selectedTextElement.key || '')
-      ? (selectedTextElement.field || selectedTextElement.key || '')
-      : `poster:${selectedTextElement.id}`
+    ? `poster:${selectedTextElement.id}`
     : selectedTextElementId === '$description' ? 'description' : 'title';
   const selectedCanvasText = selectedTextElement
     ? posterTextValues[selectedTextElement.id] !== undefined
@@ -886,10 +984,17 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
     else if (kind === 'category') setCategory(value);
     else if (kind.startsWith('poster:')) {
       const elementId = kind.slice('poster:'.length);
+      const layer = cardDesign.canvas?.elements.find((element) => element.id === elementId);
+      if (!layer || layer.locked || layer.editable === false || activeTemplate?.editableFields?.some((field) => field.key === (layer.field || layer.key) && !field.editable)) return;
+      const field = layer.field || layer.key;
+      if (field === 'title') setTitle(value);
+      if (field === 'description') setDescription(value);
+      if (field === 'category') setCategory(value);
+      textTypingRef.current = true;
       setPosterTextValues((current) => ({ ...current, [elementId]: value }));
       setCardDesign((current) => current.canvas ? ({ ...current, canvas: { ...current.canvas, elements: current.canvas.elements.map((element) => element.id === elementId ? { ...element, text: value, content: value } : element) } }) : current);
     }
-  }, []);
+  }, [cardDesign.canvas, activeTemplate]);
   const changeTextOffset = useCallback((kind: EditableTextKey, offset: TextOffset) => {
     setTextOffsets((current) => ({ ...current, [kind]: offset }));
   }, []);
@@ -898,7 +1003,7 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
       ...current,
       canvas: {
         ...current.canvas,
-        elements: current.canvas.elements.map((element) => element.id === id ? {
+        elements: current.canvas.elements.map((element) => element.id === id && !element.locked && element.editable !== false ? {
           ...element,
           x: Math.max(0, Math.min(current.canvas!.width - element.width, (element.position?.x ?? element.x) + delta.x)),
           y: Math.max(0, Math.min(current.canvas!.height - element.height, (element.position?.y ?? element.y) + delta.y)),
@@ -916,9 +1021,10 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
       canvas: {
         ...current.canvas,
         elements: current.canvas.elements.map((element) => {
-          if (element.id !== id) return element;
-          const nextWidth = Math.max(80, Math.min(current.canvas!.width, Math.round(element.width * factor)));
-          const nextHeight = Math.max(80, Math.min(current.canvas!.height, Math.round(element.height * factor)));
+          if (element.id !== id || element.locked || element.editable === false || !Number.isFinite(factor) || Math.abs(factor - 1) < 0.001) return element;
+          const boundedFactor = Math.min(current.canvas!.width / element.width, current.canvas!.height / element.height, Math.max(Math.min(16 / Math.min(element.width, element.height), 1), factor));
+          const nextWidth = element.width * boundedFactor;
+          const nextHeight = element.height * boundedFactor;
           const nextX = Math.max(0, Math.min(current.canvas!.width - nextWidth, element.x - (nextWidth - element.width) / 2));
           const nextY = Math.max(0, Math.min(current.canvas!.height - nextHeight, element.y - (nextHeight - element.height) / 2));
           return {
@@ -929,7 +1035,7 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
             height: nextHeight,
             position: { x: nextX, y: nextY },
             size: { width: nextWidth, height: nextHeight },
-            ...(element.fontSize ? { fontSize: Math.max(8, Math.min(400, Math.round(element.fontSize * factor))) } : {}),
+            ...(element.fontSize ? { fontSize: Math.max(1, Math.min(400, element.fontSize * boundedFactor)) } : {}),
           };
         }),
       },
@@ -938,11 +1044,53 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
   const rotateCanvasElement = useCallback((id: string, delta: number) => {
     setCardDesign((current) => current.canvas ? ({
       ...current,
-      canvas: { ...current.canvas, elements: current.canvas.elements.map((element) => element.id === id ? { ...element, rotation: ((Number(element.rotation) || 0) + delta + 360) % 360 } : element) },
+      canvas: { ...current.canvas, elements: current.canvas.elements.map((element) => {
+        if (element.id !== id || element.locked || element.editable === false) return element;
+        const angle = (((element.rotation || 0) + delta) % 360 + 360) % 360;
+        const snap = Math.round(angle / 45) * 45;
+        return { ...element, rotation: Math.abs(angle - snap) <= 3 ? snap % 360 : angle };
+      }) },
+    }) : current);
+  }, []);
+  const transformCanvasElement = useCallback((id: string, factor: number, rotation: number) => {
+    // One pinch gesture commits resize + rotation atomically so a single undo
+    // step restores both previous size and previous rotation.
+    setCardDesign((current) => current.canvas ? ({
+      ...current,
+      canvas: {
+        ...current.canvas,
+        elements: current.canvas.elements.map((element) => {
+          if (element.id !== id || element.locked || element.editable === false) return element;
+          let next = element;
+          if (Number.isFinite(factor) && Math.abs(factor - 1) >= 0.001) {
+            const boundedFactor = Math.min(current.canvas!.width / element.width, current.canvas!.height / element.height, Math.max(Math.min(16 / Math.min(element.width, element.height), 1), factor));
+            const nextWidth = element.width * boundedFactor;
+            const nextHeight = element.height * boundedFactor;
+            const nextX = Math.max(0, Math.min(current.canvas!.width - nextWidth, element.x - (nextWidth - element.width) / 2));
+            const nextY = Math.max(0, Math.min(current.canvas!.height - nextHeight, element.y - (nextHeight - element.height) / 2));
+            next = {
+              ...next,
+              x: nextX,
+              y: nextY,
+              width: nextWidth,
+              height: nextHeight,
+              position: { x: nextX, y: nextY },
+              size: { width: nextWidth, height: nextHeight },
+              ...(element.fontSize ? { fontSize: Math.max(1, Math.min(400, element.fontSize * boundedFactor)) } : {}),
+            };
+          }
+          if (Number.isFinite(rotation) && Math.abs(rotation) > 0) {
+            const angle = (((next.rotation || 0) + rotation) % 360 + 360) % 360;
+            const snap = Math.round(angle / 45) * 45;
+            next = { ...next, rotation: Math.abs(angle - snap) <= 3 ? snap % 360 : angle };
+          }
+          return next;
+        }),
+      },
     }) : current);
   }, []);
   const deleteCanvasElement = useCallback((id: string) => {
-    setCardDesign((current) => current.canvas ? ({ ...current, canvas: { ...current.canvas, elements: current.canvas.elements.filter((element) => element.id !== id) } }) : current);
+    setCardDesign((current) => current.canvas ? ({ ...current, canvas: { ...current.canvas, elements: current.canvas.elements.filter((element) => element.id !== id || element.locked || element.editable === false) } }) : current);
     setSelectedStickerId((current) => current === id ? null : current);
     setSelectedImageId((current) => current === id ? null : current);
     setSelectedShapeId((current) => current === id ? null : current);
@@ -950,7 +1098,7 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
   const updateSelectedTextStyle = useCallback((patch: Partial<Pick<OfferTemplateElement, 'fontSize' | 'fontWeight' | 'fontStyle' | 'fontFamily' | 'textAlign' | 'color' | 'letterSpacing' | 'textDecorationLine' | 'textTransform'>>) => {
     setCardDesign((current) => {
       if (current.canvas && !selectedTextElementId.startsWith('$')) {
-        return { ...current, canvas: { ...current.canvas, elements: current.canvas.elements.map((element) => element.id === selectedTextElementId ? { ...element, ...patch } : element) } };
+        return { ...current, canvas: { ...current.canvas, elements: current.canvas.elements.map((element) => element.id === selectedTextElementId && !element.locked && element.editable !== false ? { ...element, ...patch, ...(activeTemplate?.allowColorChange === false ? { color: element.color } : {}) } : element) } };
       }
       const prefix = selectedTextElementId === '$description' ? 'description' : 'title';
       const nextCustomizations = { ...(current.customizations || {}) };
@@ -971,7 +1119,7 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
         ...(prefix === 'title' && patch.textAlign !== undefined ? { textAlign: patch.textAlign } : {}),
       };
     });
-  }, [selectedTextElementId]);
+  }, [selectedTextElementId, activeTemplate?.allowColorChange]);
   const addTextLayerAt = useCallback((position?: { x: number; y: number }) => {
     const id = `custom-text-${Date.now()}`;
     setCardDesign((current) => {
@@ -1023,9 +1171,9 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
     if (!selectedShapeId) return;
     setCardDesign((current) => current.canvas ? ({
       ...current,
-      canvas: { ...current.canvas, elements: current.canvas.elements.map((element) => element.id === selectedShapeId ? { ...element, ...patch } : element) },
+      canvas: { ...current.canvas, elements: current.canvas.elements.map((element) => element.id === selectedShapeId && !element.locked && element.editable !== false ? { ...element, ...patch, ...(activeTemplate?.allowColorChange === false ? { backgroundColor: element.backgroundColor, borderColor: element.borderColor } : {}) } : element) },
     }) : current);
-  }, [selectedShapeId]);
+  }, [selectedShapeId, activeTemplate?.allowColorChange]);
   const moveAvatar = useCallback((delta: TextOffset) => {
     setAvatarOffset((current) => {
       const next = { x: current.x + delta.x, y: current.y + delta.y };
@@ -1054,13 +1202,19 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
   }, [cardDesign.canvas]);
 
   const pickImage = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) return Alert.alert('Permission needed', 'Allow photo access to add an offer image.');
+    const targetId = selectedImageId;
+    const target = cardDesign.canvas?.elements.find((element) => element.id === targetId);
+    if (target && (target.locked || target.editable === false)) return Alert.alert('Image locked', 'This template does not allow replacing this image.');
+    try {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: false, quality: 0.8, base64: true });
     if (result.canceled || !result.assets?.[0]) return;
     const asset = result.assets[0];
     const image = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
     if (!image) return;
+    if (target) {
+      setCardDesign((current) => current.canvas ? ({ ...current, canvas: { ...current.canvas, elements: current.canvas.elements.map((element) => element.id === targetId && !element.locked && element.editable !== false ? { ...element, imageUrl: image, src: image, field: undefined, key: undefined } : element) } }) : current);
+      return;
+    }
     setImageUrls([image]);
     if (cardDesign.templateId === 'custom') {
       setCardDesign((current) => {
@@ -1073,8 +1227,11 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
         const elements = existing
           ? canvas.elements.map((element) => element.id === existing.id ? { ...element, imageUrl: image } : element)
           : [...canvas.elements, imageElement];
-        return { ...current, canvas: { ...canvas, backgroundColor: '#FFFFFF', background: { type: 'solid', color: '#FFFFFF' }, elements } };
+        return { ...current, canvas: { ...canvas, elements } };
       });
+    }
+    } catch {
+      Alert.alert('Image unavailable', 'The image could not be opened. Your design is unchanged. Please try again.');
     }
   };
 
@@ -1174,6 +1331,7 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
 
   const selectTemplate = (template: OfferCardTemplate) => {
     Keyboard.dismiss();
+    resetHistoryForTemplateSwitch();
     setPosterTextValues({});
     setTextOffsets({ title: { x: 0, y: 0 }, description: { x: 0, y: 0 } });
     setEditingText(null);
@@ -1189,6 +1347,7 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
 
   const selectBlankTemplate = () => {
     Keyboard.dismiss();
+    resetHistoryForTemplateSwitch();
     setPosterTextValues({});
     setTextOffsets({ title: { x: 0, y: 0 }, description: { x: 0, y: 0 } });
     setEditingText(null);
@@ -1218,7 +1377,17 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
       category: category || activeTemplate?.category,
       templateId: cardDesign.templateId,
       previewUrl: cardDesign.previewUrl || imageUrls[0],
-      design: cardDesign,
+      design: {
+        ...cardDesign,
+        customizations: {
+          ...(cardDesign.customizations || {}),
+          titleOffsetX: textOffsets.title.x, titleOffsetY: textOffsets.title.y,
+          descriptionOffsetX: textOffsets.description.x, descriptionOffsetY: textOffsets.description.y,
+          posterTextValues: JSON.stringify(posterTextValues),
+          posterTextOffsets: JSON.stringify(Object.fromEntries(Object.entries(textOffsets).filter(([key]) => key.startsWith('poster:')))),
+          avatarOffsetX: avatarOffset.x, avatarOffsetY: avatarOffset.y, avatarScale,
+        },
+      },
       title,
       description,
       imageUrls,
@@ -1247,6 +1416,7 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
   </ScrollView>;
 
   const renderTextPanel = () => {
+    if (!textEditorLayers.length) return <View><Text style={styles.panelTitle}>Text locked</Text><Text style={styles.panelHint}>This template has no editable text layers.</Text><Pressable onPress={addTextLayer} style={styles.choice}><Text>Add text</Text></Pressable></View>;
     const minimumFontSize = selectedTextElement ? 8 : selectedTextPrefix === 'description' ? 11 : 16;
     const maximumFontSize = selectedTextElement ? 320 : selectedTextPrefix === 'description' ? 48 : 96;
     return <View>
@@ -1349,11 +1519,11 @@ export const OfferDesignEditorScreen: React.FC<Props> = ({ route, navigation }) 
         <Pressable onPress={undo} disabled={!undoStackRef.current.length} style={styles.topAction}><MaterialCommunityIcons name="undo" size={19} color={undoStackRef.current.length ? '#FFFFFF' : 'rgba(255,255,255,0.42)'} /></Pressable>
         <Pressable onPress={redo} disabled={!redoStackRef.current.length} style={styles.topAction}><MaterialCommunityIcons name="redo" size={19} color={redoStackRef.current.length ? '#FFFFFF' : 'rgba(255,255,255,0.42)'} /></Pressable>
         <Pressable accessibilityLabel="Rotate editor" onPress={() => setEditorLandscape((value) => !value)} style={styles.topAction}><MaterialCommunityIcons name="phone-rotate-landscape" size={22} color="#FFFFFF" /></Pressable>
-        <Pressable accessibilityLabel="Save design and continue" disabled={loading} onPress={saveCreation} style={styles.topSave}><Text style={styles.topSaveText}>Save</Text></Pressable>
+        <Pressable accessibilityLabel="Save design and continue" disabled={loading} onPress={saveCreation} style={styles.topSave}><Text style={styles.topSaveText}>{loading ? 'Saving…' : 'Save'}</Text></Pressable>
 
       </LinearGradient>
       <KeyboardAvoidingView style={[styles.workspace, editorLandscape && styles.landscapeWorkspace]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={styles.editorBody}><View style={styles.projectHeader}><View><Text style={styles.projectTitle}>Design offer</Text><Text style={styles.projectSubtitle}>{business?.name || 'Your business'}</Text></View><View style={styles.saved}><MaterialCommunityIcons name="cloud-check-outline" size={16} color="#68D391" /><Text style={styles.savedText}>Ready to save</Text></View></View><CanvasPreview business={business} template={activeTemplate} design={cardDesign} title={title} description={description} category={category} imageUrl={imageUrls[0]} textValues={posterTextValues} editingText={editingText} movingText={movingText} textOffsets={textOffsets} onEditText={setEditingText} onToggleMove={toggleMoveText} onChangeText={changeCanvasText} onOffsetChange={changeTextOffset} onMoveElement={moveCanvasElement} onResizeElement={resizeCanvasElement} onRotateElement={rotateCanvasElement} onDeleteElement={deleteCanvasElement} selectedStickerId={selectedStickerId} onSelectSticker={(id) => { setSelectedStickerId(id); setPanelExpanded(true); if (id) { setSelectedImageId(null); setSelectedShapeId(null); } }} selectedImageId={selectedImageId} onSelectImage={(id) => { setSelectedImageId(id); setPanelExpanded(true); if (id) { setSelectedStickerId(null); setSelectedShapeId(null); } }} selectedShapeId={selectedShapeId} onSelectShape={(id) => { setSelectedShapeId(id); setPanelExpanded(true); if (id) { setSelectedStickerId(null); setSelectedImageId(null); } }} onSelectTextElement={(id) => { setSelectedTextElementId(id); setActiveTool('text'); setPanelExpanded(true); }} onDoubleTapEmpty={(position) => { addTextLayerAt(position); setActiveTool('text'); setPanelExpanded(true); }} avatarOffset={avatarOffset} onMoveAvatar={moveAvatar} avatarScale={avatarScale} avatarSelected={avatarSelected} onSelectAvatar={() => { setAvatarSelected(true); setPanelExpanded(true); setSelectedImageId(null); setSelectedShapeId(null); setSelectedStickerId(null); }} onResizeAvatar={resizeAvatar} /><View style={styles.pageDots}><View style={styles.pageDotActive} /><View style={styles.pageDot} /></View></View>
+      <View style={styles.editorBody}><View style={styles.projectHeader}><View><Text style={styles.projectTitle}>Design offer</Text><Text style={styles.projectSubtitle}>{business?.name || 'Your business'}</Text></View><View style={styles.saved}><MaterialCommunityIcons name="cloud-check-outline" size={16} color="#68D391" /><Text style={styles.savedText}>Ready to save</Text></View></View><CanvasPreview business={business} template={activeTemplate} design={cardDesign} title={title} description={description} category={category} imageUrl={imageUrls[0]} textValues={posterTextValues} editingText={editingText} movingText={movingText} textOffsets={textOffsets} onEditText={setEditingText} onToggleMove={toggleMoveText} onChangeText={changeCanvasText} onOffsetChange={changeTextOffset} onMoveElement={moveCanvasElement} onResizeElement={resizeCanvasElement} onRotateElement={rotateCanvasElement} onTransformElement={transformCanvasElement} onDeleteElement={deleteCanvasElement} selectedStickerId={selectedStickerId} onSelectSticker={(id) => { setSelectedStickerId(id); if (id) { setEditingText(null); setMovingText(null); setActiveTool('stickers'); } if (id) { setSelectedImageId(null); setSelectedShapeId(null); } }} selectedImageId={selectedImageId} onSelectImage={(id) => { setSelectedImageId(id); if (id) { setEditingText(null); setMovingText(null); setActiveTool('uploads'); } if (id) { setSelectedStickerId(null); setSelectedShapeId(null); } }} selectedShapeId={selectedShapeId} onSelectShape={(id) => { setSelectedShapeId(id); if (id) { setEditingText(null); setMovingText(null); setActiveTool('shapes'); } if (id) { setSelectedStickerId(null); setSelectedImageId(null); } }} onSelectTextElement={(id) => { setSelectedTextElementId(id); setSelectedImageId(null); setSelectedShapeId(null); setSelectedStickerId(null); setActiveTool('text'); }} onDoubleTapEmpty={(position) => { addTextLayerAt(position); setActiveTool('text'); setPanelExpanded(true); }} avatarOffset={avatarOffset} onMoveAvatar={moveAvatar} avatarScale={avatarScale} avatarSelected={avatarSelected} onSelectAvatar={() => { setAvatarSelected(true); setPanelExpanded(true); setSelectedImageId(null); setSelectedShapeId(null); setSelectedStickerId(null); }} onResizeAvatar={resizeAvatar} /><View style={styles.pageDots}><View style={styles.pageDotActive} /><View style={styles.pageDot} /></View></View>
       {panelExpanded ? <Animated.View style={[styles.toolsDock, editorLandscape ? { width: Math.min(300, windowWidth * 0.38), height: '100%' } : { height: keyboardVisible ? 130 : Math.min(340, windowHeight * 0.4) }, { transform: editorLandscape ? [{ translateX: panelMotion.interpolate({ inputRange: [0, 1], outputRange: [0, 320] }) }] : [{ translateY: panelMotion.interpolate({ inputRange: [0, 1], outputRange: [0, 400] }) }] }]}>
         <View {...panelGesture.panHandlers}>
           <Pressable accessibilityLabel="Collapse tools" onPress={collapseTools} style={styles.dockHeader}>

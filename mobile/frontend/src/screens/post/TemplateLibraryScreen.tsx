@@ -7,10 +7,11 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { listMyOffers, listOfferTemplates } from '../../services/api';
 import { readOfferDesignLibrary, recordOfferTemplateUsage, type OfferDesignCreation, type OfferDesignHistoryItem } from '../../services/offerDesignStorage';
-import { OFFER_CARD_TEMPLATES, resolveOfferFontFamily, resolveOfferLineHeight, resolveTemplateElementValue, toOfferCardTemplate, type OfferCardDesign, type OfferCardTemplate, type OfferTemplateCanvas, type OfferTemplateElement } from '../../config/offerCardDesigner';
+import { OFFER_CARD_TEMPLATES, resolveOfferFontFamily, resolveOfferLineHeight, resolveTemplateElementValue, resolveTemplateImageValue, findOfferAvatar, toOfferCardTemplate, type OfferCardDesign, type OfferCardTemplate, type OfferTemplateCanvas, type OfferTemplateElement } from '../../config/offerCardDesigner';
 import type { OfferTemplate } from '../../types/hyperlocal';
 import type { PostStackParamList } from '../../navigation/types';
 import { useApp } from '../../context/AppContext';
+import { OfferAvatarSprite } from '../../components/OfferAvatarSprite';
 import { theme } from '../../theme';
 
 type Props = NativeStackScreenProps<PostStackParamList, 'TemplateLibrary'>;
@@ -78,10 +79,11 @@ const LibraryCanvasThumb: React.FC<{ template?: OfferCardTemplate; design?: Offe
       borderStyle: element.borderStyle || 'solid',
     } as const;
     if (element.visible === false) return null;
+    if (element.avatarId) return <View key={element.id} style={frame}><OfferAvatarSprite avatar={findOfferAvatar(element.avatarId)} size={Math.max(1, Math.min(element.width, element.height) * scale)} /></View>;
     if (element.type === 'image') {
-      const uri = element.imageUrl || element.src;
+      const uri = resolveTemplateImageValue(element.imageUrl || element.src, element.field || element.key, values);
       if (!uri) return null;
-      return <Image key={element.id} source={{ uri }} style={frame} resizeMode={element.resizeMode === 'stretch' ? 'stretch' : element.resizeMode || 'cover'} />;
+      return <Image key={element.id} source={{ uri }} style={frame} resizeMode={element.resizeMode === 'stretch' ? 'stretch' : element.resizeMode || 'contain'} />;
     }
     if (element.type === 'shape' || element.type === 'rectangle' || element.type === 'circle' || element.type === 'divider' || element.type === 'line' || element.type === 'group') {
       return <View key={element.id} style={[frame, { backgroundColor: element.backgroundColor || element.color || 'transparent', borderRadius: element.type === 'circle' ? 9999 : frame.borderRadius }]} />;
@@ -100,6 +102,9 @@ const LibraryCanvasThumb: React.FC<{ template?: OfferCardTemplate; design?: Offe
       fontWeight: (element.fontWeight || '700') as '400' | '500' | '600' | '700' | '800' | '900',
       fontFamily: resolveOfferFontFamily(element.fontFamily),
       fontStyle: element.fontStyle || 'normal',
+      letterSpacing: (element.letterSpacing || 0) * scale,
+      textDecorationLine: element.textDecorationLine,
+      textTransform: element.textTransform,
       textAlign: element.textAlign || 'center',
       textAlignVertical: element.textAlignVertical || 'center',
     }]}>{text}</Text>;

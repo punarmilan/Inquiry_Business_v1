@@ -2,7 +2,7 @@ import React from 'react';
 import { Image, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { findOfferAvatar, resolveDynamicValue, resolveOfferFontFamily, resolveOfferLineHeight, resolveTemplateElementValue } from '../config/offerCardDesigner';
+import { findOfferAvatar, resolveDynamicValue, resolveOfferFontFamily, resolveOfferLineHeight, resolveTemplateElementValue, resolveTemplateImageValue } from '../config/offerCardDesigner';
 import { OfferAvatarSprite } from './OfferAvatarSprite';
 import { theme } from '../theme';
 import type { Offer, Business, OfferTemplateCanvas, OfferTemplateElement } from '../types/hyperlocal';
@@ -47,7 +47,7 @@ const posterText = (offer: Offer, element: OfferTemplateElement) => {
     discount: offer.discountPercentage,
     discountPercentage: offer.discountPercentage,
     business,
-    businessName: business?.name || '',
+    ...(business?.name ? { businessName: business.name } : {}),
     startsAt: new Date(offer.startsAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
     expiresAt: new Date(offer.expiresAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
     ...(offer.imageUrls?.[0] ? { imageUrls: offer.imageUrls[0] } : {}),
@@ -72,16 +72,16 @@ const posterImage = (offer: Offer, element: OfferTemplateElement) => {
     ...(offer.cardDesign?.dynamicFields || {}),
     ...(offer.cardDesign?.customizations || {}),
     business,
-    businessLogo: business?.logoUrl || '',
+    ...(business?.logoUrl ? { businessLogo: business.logoUrl } : {}),
     ...(offer.imageUrls?.[0] ? { imageUrls: offer.imageUrls[0] } : {}),
   };
   const dynamicValue = field ? values[field] : undefined;
   const dynamicImage = Array.isArray(dynamicValue)
     ? dynamicValue.find((value): value is string => typeof value === 'string' && value.length > 0)
     : typeof dynamicValue === 'string' && dynamicValue.length > 0 ? dynamicValue : undefined;
-  const elementImage = resolveDynamicValue(element.imageUrl || element.src || '', values);
+  const elementImage = resolveTemplateImageValue(element.imageUrl || element.src || '', field, values);
   if (field === 'businessLogo') return business?.logoUrl || dynamicImage || elementImage;
-  if (field === 'imageUrls' || /image|photo|product/i.test(field)) return offer.imageUrls?.[0] || dynamicImage || elementImage;
+  if (field === 'imageUrls') return offer.imageUrls?.[0] || dynamicImage || elementImage;
   return dynamicImage || elementImage;
 };
 
@@ -101,8 +101,8 @@ export const PosterLayers: React.FC<{ offer: Offer; canvas: OfferTemplateCanvas;
   const backgroundImageUrl = canvas.backgroundImageUrl || background?.imageUrl || (!canvas.elements.length ? previewUrl : undefined);
   return (
     <View onLayout={(event) => setSurfaceWidth(event.nativeEvent.layout.width)} style={[styles.posterSurface, { backgroundColor: canvas.backgroundColor || '#F4F4F4' }]}>
-      {background?.type === 'gradient' ? <LinearGradient colors={[background.from || '#111827', background.to || '#374151']} style={styles.posterBackground} /> : null}
-      {backgroundImageUrl ? <Image source={{ uri: backgroundImageUrl }} style={styles.posterBackground} resizeMode="cover" /> : null}
+      {background?.type === 'gradient' || background?.type === 'linear-gradient' ? <LinearGradient colors={background.colors && background.colors.length >= 2 ? background.colors as [string, string, ...string[]] : [background.from || '#111827', background.to || '#374151']} style={styles.posterBackground} /> : null}
+      {backgroundImageUrl ? <Image source={{ uri: backgroundImageUrl }} style={[styles.posterBackground, { opacity: background?.opacity ?? 1 }]} resizeMode="cover" /> : null}
       {canvas.overlay?.color ? <View pointerEvents="none" style={[styles.posterBackground, { backgroundColor: canvas.overlay.color, opacity: canvas.overlay.opacity ?? 0.25 }]} /> : null}
       {canvas.elements.slice().sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)).map((element) => {
         if (element.visible === false) return null;
@@ -134,7 +134,7 @@ export const PosterLayers: React.FC<{ offer: Offer; canvas: OfferTemplateCanvas;
           const uri = posterImage(offer, element);
           return uri ? <Image key={element.id} source={{ uri }} style={layer} resizeMode={element.resizeMode === 'stretch' ? 'stretch' : element.resizeMode || value('objectFit', 'contain')} /> : null;
         }
-        if (element.type === 'shape' || element.type === 'divider' || element.type === 'group') return <View key={element.id} style={[layer, { backgroundColor: element.backgroundColor || value('backgroundColor', element.color || 'transparent') }]} />;
+        if (element.type === 'shape' || element.type === 'rectangle' || element.type === 'circle' || element.type === 'line' || element.type === 'divider' || element.type === 'group') return <View key={element.id} style={[layer, { backgroundColor: element.backgroundColor || value('backgroundColor', element.color || 'transparent') }]} />;
         const baseFontSize = element.fontSize || value('fontSize', 36);
         const fontSize = Math.max(1, baseFontSize * scale);
         const rawLineHeight = element.lineHeight || value('lineHeight', undefined);

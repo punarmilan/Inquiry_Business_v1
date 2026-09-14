@@ -52,13 +52,14 @@ export const getDynamicFieldName = (value: unknown): string | undefined => {
 const hasOwn = (source: DynamicFields, key: string) => Object.prototype.hasOwnProperty.call(source, key);
 
 /** Resolves exact and embedded {{tokens}} without mutating the template definition. */
-export const resolveDynamicValue = (value: unknown, dynamicFields: DynamicFields): string => {
+export const resolveDynamicValue = (value: unknown, dynamicFields: DynamicFields, depth = 0): string => {
+  if (depth > 20) return typeof value === 'string' ? value : '';
   if (value === null || value === undefined) return '';
-  if (Array.isArray(value)) return value.map((item) => resolveDynamicValue(item, dynamicFields)).filter(Boolean).join(', ');
+  if (Array.isArray(value)) return value.map((item) => resolveDynamicValue(item, dynamicFields, depth + 1)).filter(Boolean).join(', ');
   if (typeof value !== 'string') return String(value);
   return value.replace(dynamicToken, (token, path: string) => {
     const result = path.split('.').reduce<unknown>((current, key) => isRecord(current) ? current[key] : undefined, dynamicFields);
-    return result === undefined || result === null ? token : resolveDynamicValue(result, dynamicFields);
+    return result === undefined || result === null ? token : resolveDynamicValue(result, dynamicFields, depth + 1);
   });
 };
 
@@ -71,6 +72,15 @@ export const resolveTemplateElementValue = (value: unknown, field: string | unde
   }
   return resolveDynamicValue(value, dynamicFields);
 };
+/** Image bindings resolve to one URL; missing data keeps the layer fallback. */
+export const resolveTemplateImageValue = (value: unknown, field: string | undefined, dynamicFields: DynamicFields): string => {
+  const bound = field ? dynamicFields[field] : undefined;
+  const candidate = Array.isArray(bound) ? bound.find((item) => typeof item === 'string' && item.trim()) : bound;
+  const values = field && candidate !== undefined && candidate !== null && candidate !== '' ? { ...dynamicFields, [field]: candidate } : dynamicFields;
+  const resolved = resolveTemplateElementValue(value, field, values);
+  return /\{\{\s*[\w.-]+\s*\}\}/.test(resolved) ? '' : resolved;
+};
+
 
 export const cloneDynamicFields = (value: unknown): DynamicFields => {
   if (!isRecord(value)) return {};
@@ -140,6 +150,9 @@ export const normalizeTemplateElement = (
     lineHeight: finiteOr(source, ['lineHeight'], finiteOr(style, ['lineHeight'], 0)),
     numberOfLines: Math.max(1, Math.round(finiteOr(source, ['numberOfLines', 'lines'], finiteOr(style, ['numberOfLines', 'lines'], 1)))),
     textAlign: (['left', 'center', 'right'].includes(textAlign) ? textAlign : 'center') as 'left' | 'center' | 'right',
+    textAlignVertical: stringOr(source, ['textAlignVertical'], stringOr(style, ['textAlignVertical'], 'center')) as TemplateElementRecord['textAlignVertical'],
+    textDecorationLine: stringOr(source, ['textDecorationLine'], stringOr(style, ['textDecorationLine'], 'none')) as TemplateElementRecord['textDecorationLine'],
+    borderStyle: stringOr(source, ['borderStyle'], stringOr(style, ['borderStyle'], 'solid')) as TemplateElementRecord['borderStyle'],
     textTransform: (['none', 'uppercase', 'lowercase', 'capitalize'].includes(textTransform) ? textTransform : 'none') as 'none' | 'uppercase' | 'lowercase' | 'capitalize',
     borderRadius: Math.max(0, finiteOr(source, ['borderRadius', 'radius'], finiteOr(style, ['borderRadius', 'radius'], type === 'circle' ? 999 : type === 'badge' ? 999 : type === 'button' ? 18 : 0))),
     borderWidth: Math.max(0, finiteOr(source, ['borderWidth'], finiteOr(style, ['borderWidth'], 0))),

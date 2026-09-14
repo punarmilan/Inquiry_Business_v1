@@ -119,13 +119,14 @@ export const getDynamicFieldName = (value: unknown): string | undefined => {
 const hasOwn = (source: Record<string, unknown>, key: string) => Object.prototype.hasOwnProperty.call(source, key);
 
 /** Resolve exact and embedded {{tokens}} without mutating the template. */
-export const resolveDynamicValue = (value: unknown, dynamicFields: Record<string, unknown>): string => {
+export const resolveDynamicValue = (value: unknown, dynamicFields: Record<string, unknown>, depth = 0): string => {
+  if (depth > 20) return typeof value === 'string' ? value : '';
   if (value === null || value === undefined) return '';
-  if (Array.isArray(value)) return value.map((item) => resolveDynamicValue(item, dynamicFields)).filter(Boolean).join(', ');
+  if (Array.isArray(value)) return value.map((item) => resolveDynamicValue(item, dynamicFields, depth + 1)).filter(Boolean).join(', ');
   if (typeof value !== 'string') return String(value);
   return value.replace(dynamicToken, (token, path: string) => {
     const result = path.split('.').reduce<unknown>((current, key) => isObject(current) ? current[key] : undefined, dynamicFields);
-    return result === undefined || result === null ? token : resolveDynamicValue(result, dynamicFields);
+    return result === undefined || result === null ? token : resolveDynamicValue(result, dynamicFields, depth + 1);
   });
 };
 
@@ -138,6 +139,15 @@ export const resolveTemplateElementValue = (value: unknown, field: string | unde
   }
   return resolveDynamicValue(value, dynamicFields);
 };
+/** Image bindings resolve to one URL; missing data keeps the layer fallback. */
+export const resolveTemplateImageValue = (value: unknown, field: string | undefined, dynamicFields: Record<string, unknown>): string => {
+  const bound = field ? dynamicFields[field] : undefined;
+  const candidate = Array.isArray(bound) ? bound.find((item) => typeof item === 'string' && item.trim()) : bound;
+  const values = field && candidate !== undefined && candidate !== null && candidate !== '' ? { ...dynamicFields, [field]: candidate } : dynamicFields;
+  const resolved = resolveTemplateElementValue(value, field, values);
+  return /\{\{\s*[\w.-]+\s*\}\}/.test(resolved) ? '' : resolved;
+};
+
 
 /** Convert web/editor font names into families that are safe in a native build. */
 export const resolveOfferFontFamily = (value?: string): string | undefined => {
