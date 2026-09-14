@@ -9,7 +9,7 @@ import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { OfferCardDesigner } from '../../components/OfferCardDesigner';
 import { OfferCard } from '../../components/OfferCard';
-import { createOffer, listMyBusinesses, listOfferTemplates, updateOffer, type OfferPayload } from '../../services/api';
+import { createOffer, getCityAvailability, listMyBusinesses, listOfferTemplates, updateOffer, type OfferPayload } from '../../services/api';
 import { DEFAULT_OFFER_CARD_DESIGN, resolveOfferCardLayout, toOfferCardTemplate, type OfferCardDesign, type OfferCardTemplate } from '../../config/offerCardDesigner';
 import type { Business } from '../../types/hyperlocal';
 import type { PostStackParamList } from '../../navigation/types';
@@ -151,17 +151,31 @@ export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
   const useCurrentLocation = async () => {
     setLocationLoading(true);
     try {
+      const servicesEnabled = await Location.hasServicesEnabledAsync();
+      if (!servicesEnabled) {
+        Alert.alert('Location services off', 'Please enable location services (GPS) on your device and try again.');
+        return;
+      }
       const permission = await Location.requestForegroundPermissionsAsync();
       if (!permission.granted) return Alert.alert('Location denied', 'Enter the offer address manually or allow location access in app settings.');
-      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      // A cached fix avoids waiting on GPS; the fresh fix is time-boxed so a
+      // weak signal can never leave the button spinning forever.
+      let position = await Location.getLastKnownPositionAsync();
+      if (!position) {
+        const freshFix = Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Location request timed out. Please try again in an open area with GPS enabled.')), 15000));
+        position = await Promise.race([freshFix, timeout]);
+      }
       const next = { latitude: position.coords.latitude, longitude: position.coords.longitude };
-      const places = await Location.reverseGeocodeAsync(next);
+      const places = await Location.reverseGeocodeAsync(next).catch(() => []);
       const place = places[0];
       setCoordinates(next);
       if (place) {
         if (!houseNo.trim() && place.name) setHouseNo(place.name);
         if (!streetAddress.trim() && place.street) setStreetAddress(place.street);
         if (!locality.trim() && (place.district || place.subregion)) setLocality(place.district || place.subregion || '');
+      } else {
+        Alert.alert('Location detected', 'GPS coordinates were saved, but the street address could not be resolved. Please enter the address manually.');
       }
     } catch (error: any) {
       Alert.alert('Location not added', error?.message || 'Could not read your current location.');
@@ -173,6 +187,22 @@ export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
   const submit = async () => {
     if (!accessToken || !business || !title || !description || !originalPrice || !offerPrice || !streetAddress.trim()) {
       return Alert.alert('Complete required fields', 'Title, description and prices are required.');
+    }
+    // The server validates the business's linked city (by id), not the typed
+    // address — pre-check it so a paused city fails fast with a clear message
+    // instead of a confusing post-submit error. A failed lookup fails open;
+    // the server remains the source of truth.
+    const businessCityId = typeof business.city === 'string' ? business.city : business.city?._id;
+    const businessCityName = typeof business.city === 'string' ? business.city : business.city?.name || 'your city';
+    if (businessCityId) {
+      try {
+        const availability = await getCityAvailability({ cityId: String(businessCityId) });
+        if (availability && !availability.offersAvailable) {
+          return Alert.alert('Offers paused in this city', `Offers are currently paused in ${businessCityName}. Your business city can be updated from your business profile once offers resume.`);
+        }
+      } catch {
+        // Lookup failed (offline etc.) — proceed; the server will validate.
+      }
     }
 
     setLoading(true);

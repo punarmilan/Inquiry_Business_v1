@@ -423,7 +423,11 @@ const TemplateThumbnail: React.FC<{ template: OfferCardTemplate }> = ({ template
     if (element.avatarId) {
       return <OfferAvatarSprite key={element.id} avatar={findOfferAvatar(element.avatarId)} size={Math.max(1, Math.round(Math.min(element.width, element.height) * scale))} style={frame} />;
     }
-    if (element.type === 'image') return (element.imageUrl || element.src) ? <Image key={element.id} source={{ uri: resolveTemplateImageValue(element.imageUrl || element.src, element.field || element.key, template.dynamicFields || {}) }} style={frame} resizeMode={element.resizeMode === 'stretch' ? 'stretch' : element.resizeMode || 'contain'} /> : null;
+    if (element.type === 'image') {
+      const uri = resolveTemplateImageValue(element.imageUrl || element.src, element.field || element.key, template.dynamicFields || {});
+      if (!uri) return null;
+      return <Image key={element.id} source={{ uri }} style={frame} resizeMode={element.resizeMode === 'stretch' ? 'stretch' : element.resizeMode || 'contain'} />;
+    }
     if (element.type === 'shape' || element.type === 'rectangle' || element.type === 'circle' || element.type === 'divider' || element.type === 'line' || element.type === 'group') return <View key={element.id} style={[frame, { backgroundColor: element.backgroundColor || element.color || 'transparent', borderRadius: element.type === 'circle' ? 9999 : frame.borderRadius }]} />;
     const baseFontSize = element.fontSize || 42;
     const fontSize = Math.max(1, baseFontSize * scale);
