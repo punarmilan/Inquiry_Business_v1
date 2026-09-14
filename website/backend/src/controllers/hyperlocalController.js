@@ -106,7 +106,18 @@ const normalizeProviderPhone = (phone) => {
 };
 const normalizeArea = (value) => String(value || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-IN');
 
-const listCities = asyncHandler(async (_req, res) => res.json({ success: true, data: await City.find().sort({ name: 1 }) }));
+const listCities = asyncHandler(async (_req, res) => {
+  const cities = await City.find().sort({ name: 1 });
+  const data = await Promise.all(cities.map(async (city) => {
+    const dependentCount = await Promise.all([
+      Business.countDocuments({ city: city._id }), Offer.countDocuments({ city: city._id }),
+      Worker.countDocuments({ city: city._id }), ServiceBooking.countDocuments({ city: city._id }),
+      ServiceCategory.countDocuments({ cityAvailability: city._id }),
+    ]).then((counts) => counts.reduce((sum, count) => sum + count, 0));
+    return { ...city.toObject(), dependentCount };
+  }));
+  res.json({ success: true, data });
+});
 const createCity = asyncHandler(async (req, res) => {
   const localities = normalizeLocalities(req.body.localities);
   const city = await City.create({
@@ -138,9 +149,31 @@ const deleteCity = asyncHandler(async (req, res) => {
   const dependentCount = await Promise.all([
     Business.countDocuments({ city: city._id }), Offer.countDocuments({ city: city._id }),
     Worker.countDocuments({ city: city._id }), ServiceBooking.countDocuments({ city: city._id }),
+    ProviderApplication.countDocuments({ city: city._id }),
     ServiceCategory.countDocuments({ cityAvailability: city._id }),
   ]).then((counts) => counts.reduce((sum, count) => sum + count, 0));
-  if (dependentCount) throw new ApiError(409, 'City has related records. Deactivate it instead of permanently deleting it.', 'CITY_HAS_DEPENDENCIES');
+  const forceDelete = String(req.query.force || '').toLowerCase() === 'true';
+  if (dependentCount && !forceDelete) {
+    throw new ApiError(409, 'City has related records. Confirm cascade deletion to permanently remove them.', 'CITY_HAS_DEPENDENCIES');
+  }
+  if (forceDelete) {
+    const [businesses, bookings] = await Promise.all([
+      Business.find({ city: city._id }).select('_id'),
+      ServiceBooking.find({ city: city._id }).select('_id'),
+    ]);
+    const businessIds = businesses.map((item) => item._id);
+    const bookingIds = bookings.map((item) => item._id);
+    await Promise.all([
+      Offer.deleteMany({ city: city._id }),
+      Subscription.deleteMany({ business: { $in: businessIds } }),
+      Payment.deleteMany({ $or: [{ business: { $in: businessIds } }, { booking: { $in: bookingIds } }] }),
+      Business.deleteMany({ city: city._id }),
+      Worker.deleteMany({ city: city._id }),
+      ProviderApplication.deleteMany({ city: city._id }),
+      ServiceBooking.deleteMany({ city: city._id }),
+      ServiceCategory.updateMany({ cityAvailability: city._id }, { $pull: { cityAvailability: city._id } }),
+    ]);
+  }
   await city.deleteOne();
   res.json({ success: true, city });
 });

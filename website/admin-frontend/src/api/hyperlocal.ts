@@ -1,7 +1,7 @@
 import client from './client';
 import type { Paginated } from '@/types';
 
-export interface CityRecord { _id: string; name: string; state: string; slug: string; center: { coordinates: [number, number] }; serviceRadiusKm: number; localities: string[]; localityImages?: { name: string; imageUrl: string }[]; isActive: boolean; offersEnabled: boolean; servicesEnabled: boolean; }
+export interface CityRecord { _id: string; name: string; state: string; slug: string; center: { coordinates: [number, number] }; serviceRadiusKm: number; localities: string[]; localityImages?: { name: string; imageUrl: string }[]; isActive: boolean; offersEnabled: boolean; servicesEnabled: boolean; dependentCount?: number; }
 export interface BusinessRecord { _id: string; name: string; category: string; description?: string; logoUrl?: string; coverImageUrl?: string; phone: string; whatsapp?: string; email?: string; website?: string; address: string; locality?: string; addressDetails?: { houseNo?: string; streetAddress?: string; area?: string; city?: string }; verificationStatus: string; verificationSubmittedAt?: string; verifiedAt?: string | null; verificationNote?: string; isActive: boolean; owner?: { name?: string; phone: string }; city?: CityRecord; }
 export interface OfferRecord { _id: string; title: string; status: string; offerPrice: number; originalPrice: number; isFeatured: boolean; expiresAt: string; moderationReason?: string; business?: BusinessRecord; city?: CityRecord; }
 export interface PlanRecord { _id: string; name: string; code: string; description: string; price: number; billingPeriod: string; durationDays: number; offerPostingLimit: number; maximumActiveOffers: number; featuredOfferAllowance: number; imagesPerOffer: number; analyticsAccess: boolean; priorityRanking: number; verificationBenefit: boolean; isActive: boolean; sortOrder: number; }
@@ -33,7 +33,7 @@ const base = '/hyperlocal';
 export const listCities = () => client.get<{ data: CityRecord[] }>(`${base}/cities`).then((r) => r.data.data);
 export const createCity = (payload: unknown) => client.post(`${base}/cities`, payload).then((r) => r.data.city);
 export const updateCity = (id: string, payload: unknown) => client.put(`${base}/cities/${id}`, payload).then((r) => r.data.city);
-export const deleteCity = (id: string) => client.delete(`${base}/cities/${id}`).then((r) => r.data.city);
+export const deleteCity = (id: string, options?: { force?: boolean }) => client.delete(`${base}/cities/${id}`, { params: options?.force ? { force: 'true' } : undefined }).then((r) => r.data.city);
 export const listCategories = () => client.get<{ data: CategoryRecord[] }>(`${base}/service-categories`).then((r) => r.data.data);
 export const createCategory = (payload: unknown) => client.post(`${base}/service-categories`, payload).then((r) => r.data.category);
 export const updateCategory = (id: string, payload: unknown) => client.put(`${base}/service-categories/${id}`, payload).then((r) => r.data.category);

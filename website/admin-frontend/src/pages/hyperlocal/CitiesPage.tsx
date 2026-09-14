@@ -458,29 +458,42 @@ export const CitiesPage = () => {
                       {city.localities.slice(0, 8).join(', ')}{city.localities.length > 8 ? ` +${city.localities.length - 8} more` : ''}
                     </p>
                   )}
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <Button variant="outline" className="flex-1" onClick={() => edit(city)}>
-                      <MapPinned className="h-4 w-4" /> Edit coverage
+                      <MapPinned className="h-4 w-4" /> Edit
                     </Button>
-                    {city.isActive && (
-                      <Button variant="outline" onClick={() => updateCity.mutate({ id: city._id, payload: { isActive: false } }, { onSuccess: () => toast.success('City deactivated.'), onError: (error: any) => toast.error(error.response?.data?.error?.message || 'Failed to deactivate city.') })} disabled={updateCity.isPending}>
-                        Deactivate
-                      </Button>
-                    )}
+                    <Button
+                      variant="outline"
+                      onClick={() => updateCity.mutate(
+                        { id: city._id, payload: { isActive: !city.isActive } },
+                        {
+                          onSuccess: () => toast.success(city.isActive ? 'City deactivated.' : 'City activated.'),
+                          onError: (error: any) => toast.error(error?.response?.data?.error?.message || error?.message || 'Failed to update city status.'),
+                        },
+                      )}
+                      disabled={updateCity.isPending}
+                    >
+                      {city.isActive ? 'Deactivate' : 'Activate'}
+                    </Button>
                     <Button
                       variant="destructive"
                       onClick={() => {
-                        if (!window.confirm(`Permanently delete ${city.name}? This cannot be undone and will be blocked if related records exist.`)) return;
-                        deleteCity.mutate(city._id, {
+                        const hasDependencies = Boolean(city.dependentCount);
+                        const warning = hasDependencies
+                          ? `${city.name} has ${city.dependentCount} related records. Delete city and permanently remove its businesses, offers, providers, bookings and city links? This cannot be undone.`
+                          : `Permanently delete ${city.name}? This cannot be undone.`;
+                        if (!window.confirm(warning)) return;
+                        deleteCity.mutate({ id: city._id, force: hasDependencies }, {
                           onSuccess: () => toast.success('City permanently deleted.'),
-                          onError: (error: any) => toast.error(error.response?.data?.error?.message || 'Failed to delete city.'),
+                          onError: (error: any) => toast.error(error?.response?.data?.error?.message || error?.message || 'Failed to delete city.'),
                         });
                       }}
                       disabled={deleteCity.isPending}
                     >
-                      Hard Delete
+                      Delete
                     </Button>
                   </div>
+                  {city.dependentCount ? <p className="text-xs text-muted-foreground">Delete is blocked while related records exist.</p> : null}
                 </CardContent>
               </Card>
             ))}

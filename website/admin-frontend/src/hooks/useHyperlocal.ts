@@ -16,7 +16,7 @@ export const useUpdateCity = () => {
 };
 export const useDeleteCity = () => {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: api.deleteCity, onSuccess: () => qc.invalidateQueries({ queryKey: ['cities'] }) });
+  return useMutation({ mutationFn: ({ id, force }: { id: string; force?: boolean }) => api.deleteCity(id, { force }), onSuccess: () => qc.invalidateQueries({ queryKey: ['cities'] }) });
 };
 
 // ---- Service categories ----
