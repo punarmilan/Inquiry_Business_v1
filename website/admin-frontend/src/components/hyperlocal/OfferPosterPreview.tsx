@@ -1,11 +1,14 @@
 import type { CSSProperties } from 'react';
 import type { OfferRecord, TemplateElementRecord } from '@/api/hyperlocal';
 import { resolveDynamicValue, resolveTemplateElementValue, resolveTemplateImageValue } from '@/utils/templateSchema';
-import avatarSheet1 from '../../../../../mobile/frontend/assets/offer-avatars/avatars-01-v2.png';
-import avatarSheet2 from '../../../../../mobile/frontend/assets/offer-avatars/avatars-02-v2.png';
-import avatarSheet3 from '../../../../../mobile/frontend/assets/offer-avatars/avatars-03-v2.png';
-import avatarSheet4 from '../../../../../mobile/frontend/assets/offer-avatars/avatars-04-v2.png';
-import avatarSheet5 from '../../../../../mobile/frontend/assets/offer-avatars/avatars-05-v2.png';
+// Downscaled copies of the mobile app's avatar sprite sheets. They must live inside
+// this app: the Docker build context is website/admin-frontend, so a relative import
+// reaching into mobile/frontend resolves locally but not in CI.
+import avatarSheet1 from '@/assets/offer-avatars/avatars-01-v2.png';
+import avatarSheet2 from '@/assets/offer-avatars/avatars-02-v2.png';
+import avatarSheet3 from '@/assets/offer-avatars/avatars-03-v2.png';
+import avatarSheet4 from '@/assets/offer-avatars/avatars-04-v2.png';
+import avatarSheet5 from '@/assets/offer-avatars/avatars-05-v2.png';
 
 const avatarSheets = [avatarSheet1, avatarSheet2, avatarSheet3, avatarSheet4, avatarSheet5];
 const avatarSprite = (id: string, size: number, style?: CSSProperties) => {
