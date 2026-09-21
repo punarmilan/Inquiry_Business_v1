@@ -3,7 +3,7 @@ import { ActivityIndicator, View, Text, FlatList, Pressable, StyleSheet, Refresh
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
-import { theme } from '../../theme';
+import { theme, createThemedStyles } from '../../theme';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { Avatar } from '../../components/Avatar';
 import { listThreads, BackendChat } from '../../services/api';
@@ -196,7 +196,7 @@ const TabButton: React.FC<{ label: string; active: boolean; onPress: () => void 
   </Pressable>
 );
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   container: {
     paddingTop: 0,
   },
@@ -207,7 +207,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...theme.typography.h3,
-    color: theme.colors.text,
+    color: c.text,
     textAlign: 'center',
   },
   tabsRow: {
@@ -221,20 +221,20 @@ const styles = StyleSheet.create({
   },
   tabText: {
     ...theme.typography.bodyBold,
-    color: theme.colors.textMuted,
+    color: c.textMuted,
     paddingVertical: theme.spacing.xs,
   },
   tabTextActive: {
-    color: theme.colors.primary,
+    color: c.primary,
   },
   tabUnderline: {
     height: 2.5,
     alignSelf: 'stretch',
     borderRadius: 2,
-    backgroundColor: theme.colors.divider,
+    backgroundColor: c.divider,
   },
   tabUnderlineActive: {
-    backgroundColor: theme.colors.primary,
+    backgroundColor: c.primary,
   },
   listContent: {
     paddingHorizontal: theme.spacing.lg,
@@ -261,12 +261,12 @@ const styles = StyleSheet.create({
   },
   name: {
     ...theme.typography.bodyBold,
-    color: theme.colors.text,
+    color: c.text,
     flex: 1,
   },
   time: {
     ...theme.typography.tiny,
-    color: theme.colors.textMuted,
+    color: c.textMuted,
   },
   rowBottom: {
     flexDirection: 'row',
@@ -276,29 +276,29 @@ const styles = StyleSheet.create({
   },
   lastMessage: {
     ...theme.typography.caption,
-    color: theme.colors.textSecondary,
+    color: c.textSecondary,
     flex: 1,
   },
   lastMessageUnread: {
-    color: theme.colors.text,
+    color: c.text,
     fontWeight: '700',
   },
   unreadBadge: {
     minWidth: 21,
     height: 21,
     borderRadius: 11,
-    backgroundColor: theme.colors.primary,
+    backgroundColor: c.primary,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 5,
   },
   unreadText: {
     ...theme.typography.tiny,
-    color: theme.colors.textInverse,
+    color: c.textInverse,
   },
   separator: {
     height: 1,
-    backgroundColor: theme.colors.divider,
+    backgroundColor: c.divider,
   },
   empty: {
     alignItems: 'center',
@@ -308,17 +308,17 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     ...theme.typography.bodyLg,
-    color: theme.colors.textMuted,
+    color: c.textMuted,
   },
   retryButton: {
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.xs,
     borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.primary,
+    backgroundColor: c.primary,
   },
   retryText: {
     ...theme.typography.caption,
-    color: theme.colors.textInverse,
+    color: c.textInverse,
     fontWeight: '800',
   },
-});
+}));

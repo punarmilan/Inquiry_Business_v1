@@ -1,12 +1,12 @@
 import 'react-native-gesture-handler';
 import React, { useCallback, useEffect, useState } from 'react';
-import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppProvider } from './src/context/AppContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { BrandedLaunchScreen } from './src/components/BrandedLaunchScreen';
+import { ThemedStatusBar } from './src/components/ThemedStatusBar';
 
 const BRANDED_LAUNCH_DURATION_MS = 2400;
 
@@ -28,7 +28,7 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AppProvider>
-          <StatusBar style={showBrandedLaunch ? 'light' : 'dark'} hidden={showBrandedLaunch} />
+          <ThemedStatusBar hidden={showBrandedLaunch} forceLight={showBrandedLaunch} />
           {showBrandedLaunch ? (
             <BrandedLaunchScreen onReady={handleBrandedLaunchReady} />
           ) : (

@@ -9,6 +9,13 @@ const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const { getPagination, paginatedResponse } = require('../utils/pagination');
 const { distanceKm } = require('../domain/rules');
+const { FOLDERS, resolveImagesDeep } = require('../services/cloudinaryService');
+
+// Poster photos, the rendered card preview and any images embedded in the
+// canvas design arrive as base64 data URLs. Store them in Cloudinary and keep
+// only URLs in the offer. One walk over both fields so an image used in
+// `imageUrls` and in the canvas is uploaded once.
+const storeOfferImages = ({ imageUrls, cardDesign }) => resolveImagesDeep({ imageUrls, cardDesign }, { folder: FOLDERS.offers });
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -212,6 +219,8 @@ const createOffer = asyncHandler(async (req, res) => {
     throw new ApiError(409, 'Your maximum active offer limit has been reached', 'ACTIVE_OFFER_LIMIT_REACHED');
   }
   try {
+    // Inside the try so a failed upload rolls the reserved posting quota back.
+    const media = await storeOfferImages({ imageUrls: templateResult.payload.imageUrls, cardDesign: templateResult.cardDesign });
     const offer = await Offer.create({
       business: business._id,
       owner: req.user._id,
@@ -223,8 +232,8 @@ const createOffer = asyncHandler(async (req, res) => {
       originalPrice: templateResult.payload.originalPrice,
       offerPrice: templateResult.payload.offerPrice,
       discountPercentage: templateResult.payload.discountPercentage,
-      imageUrls: templateResult.payload.imageUrls,
-      cardDesign: templateResult.cardDesign,
+      imageUrls: media.imageUrls,
+      cardDesign: media.cardDesign,
       startsAt: templateResult.payload.startsAt,
       expiresAt: templateResult.payload.expiresAt,
       address: templateResult.payload.address,
@@ -267,6 +276,14 @@ const updateOffer = asyncHandler(async (req, res) => {
     throw new ApiError(422, 'Offer price cannot exceed original price', 'INVALID_OFFER_PRICE');
   }
   const templateResult = await applyTemplateRules(req.body.cardDesign || offer.cardDesign, req.body, offer);
+  // Only fields present in the request are converted; untouched fields keep
+  // whatever the offer already stores.
+  const media = await storeOfferImages({
+    imageUrls: req.body.imageUrls,
+    cardDesign: req.body.cardDesign ? templateResult.cardDesign : undefined,
+  });
+  if (media.imageUrls !== undefined) templateResult.payload.imageUrls = media.imageUrls;
+  if (media.cardDesign !== undefined) templateResult.cardDesign = media.cardDesign;
   const allowed = ['title', 'description', 'category', 'originalPrice', 'offerPrice', 'discountPercentage', 'imageUrls', 'cardDesign', 'startsAt', 'expiresAt', 'address', 'locality', 'addressDetails', 'phone', 'whatsapp', 'terms'];
   allowed.forEach((key) => templateResult.payload[key] !== undefined && (offer[key] = key === 'cardDesign' ? templateResult.cardDesign : templateResult.payload[key]));
   if (req.body.longitude !== undefined) offer.location = { type: 'Point', coordinates: [Number(req.body.longitude), Number(req.body.latitude)] };

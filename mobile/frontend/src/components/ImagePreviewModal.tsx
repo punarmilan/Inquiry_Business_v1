@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, Image, Modal, Pressable, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { theme } from '../theme';
+import { theme, createThemedStyles } from '../theme';
 
 interface ImagePreviewModalProps {
   visible: boolean;
@@ -51,7 +51,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({ visible, u
   </Modal>
 );
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   overlay: {
     flex: 1,
     backgroundColor: '#000000',
@@ -78,7 +78,7 @@ const styles = StyleSheet.create({
   },
   title: {
     ...theme.typography.bodyBold,
-    color: theme.colors.textInverse,
+    color: c.textInverse,
     flex: 1,
     textAlign: 'center',
   },
@@ -93,4 +93,4 @@ const styles = StyleSheet.create({
     ...theme.typography.caption,
     color: 'rgba(255,255,255,0.75)',
   },
-});
+}));

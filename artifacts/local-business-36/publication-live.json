@@ -1,0 +1,224 @@
+﻿{
+    "baseUrl":  "https://web-api.inquiry.business",
+    "startedAt":  "2026-09-21T14:37:28.1926306Z",
+    "verified":  true,
+    "records":  [
+                    {
+                        "category":  "Food",
+                        "id":  "6ab1413a2fc63035692b9aa0",
+                        "slug":  "ny36-food-ember-pizza-night",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Food",
+                        "id":  "6ab1413a2fc63035692b9aa4",
+                        "slug":  "ny36-food-brew-break",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Food",
+                        "id":  "6ab1413a2fc63035692b9aa8",
+                        "slug":  "ny36-food-garden-fresh-bowl",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Food",
+                        "id":  "6ab1413a2fc63035692b9aac",
+                        "slug":  "ny36-food-burger-weekend",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Food",
+                        "id":  "6ab1413a2fc63035692b9ab0",
+                        "slug":  "ny36-food-sweet-treats",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Food",
+                        "id":  "6ab1413a2fc63035692b9ab4",
+                        "slug":  "ny36-food-family-table",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Fashion",
+                        "id":  "6ab1413a2fc63035692b9ab8",
+                        "slug":  "ny36-fashion-everyday-edit",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Fashion",
+                        "id":  "6ab1413a2fc63035692b9abc",
+                        "slug":  "ny36-fashion-streetwear-drop",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Fashion",
+                        "id":  "6ab1413a2fc63035692b9ac0",
+                        "slug":  "ny36-fashion-boutique-collection",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Fashion",
+                        "id":  "6ab1413a2fc63035692b9ac4",
+                        "slug":  "ny36-fashion-sneaker-weekend",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Fashion",
+                        "id":  "6ab1413a2fc63035692b9ac8",
+                        "slug":  "ny36-fashion-wardrobe-refresh",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Fashion",
+                        "id":  "6ab1413b2fc63035692b9acc",
+                        "slug":  "ny36-fashion-signature-basics",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Shopping",
+                        "id":  "6ab1413b2fc63035692b9ad0",
+                        "slug":  "ny36-shopping-neighbourhood-finds",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Shopping",
+                        "id":  "6ab1413b2fc63035692b9ad4",
+                        "slug":  "ny36-shopping-bag-boutique",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Shopping",
+                        "id":  "6ab1413b2fc63035692b9ad8",
+                        "slug":  "ny36-shopping-watch-edit",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Shopping",
+                        "id":  "6ab1413b2fc63035692b9adc",
+                        "slug":  "ny36-shopping-shoe-store-special",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Shopping",
+                        "id":  "6ab1413b2fc63035692b9ae0",
+                        "slug":  "ny36-shopping-weekend-store-sale",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Shopping",
+                        "id":  "6ab1413b2fc63035692b9ae4",
+                        "slug":  "ny36-shopping-everyday-essentials",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Gym",
+                        "id":  "6ab1413b2fc63035692b9ae8",
+                        "slug":  "ny36-gym-fresh-start-fitness",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Gym",
+                        "id":  "6ab1413b2fc63035692b9aec",
+                        "slug":  "ny36-gym-strength-club",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Gym",
+                        "id":  "6ab1413b2fc63035692b9af0",
+                        "slug":  "ny36-gym-mindful-movement",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Gym",
+                        "id":  "6ab1413b2fc63035692b9af4",
+                        "slug":  "ny36-gym-training-partner",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Gym",
+                        "id":  "6ab1413b2fc63035692b9af8",
+                        "slug":  "ny36-gym-the-fitness-pass",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Gym",
+                        "id":  "6ab1413b2fc63035692b9afc",
+                        "slug":  "ny36-gym-studio-sessions",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Hotels",
+                        "id":  "6ab1413b2fc63035692b9b00",
+                        "slug":  "ny36-hotels-weekend-escape",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Hotels",
+                        "id":  "6ab1413b2fc63035692b9b04",
+                        "slug":  "ny36-hotels-poolside-days",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Hotels",
+                        "id":  "6ab1413b2fc63035692b9b08",
+                        "slug":  "ny36-hotels-boutique-hideaway",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Hotels",
+                        "id":  "6ab1413c2fc63035692b9b0c",
+                        "slug":  "ny36-hotels-city-stay",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Hotels",
+                        "id":  "6ab1413c2fc63035692b9b10",
+                        "slug":  "ny36-hotels-resort-moments",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Hotels",
+                        "id":  "6ab1413c2fc63035692b9b14",
+                        "slug":  "ny36-hotels-room-for-two",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Electronics",
+                        "id":  "6ab1413c2fc63035692b9b18",
+                        "slug":  "ny36-electronics-sound-upgrade",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Electronics",
+                        "id":  "6ab1413c2fc63035692b9b1c",
+                        "slug":  "ny36-electronics-phone-refresh",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Electronics",
+                        "id":  "6ab1413c2fc63035692b9b20",
+                        "slug":  "ny36-electronics-work-anywhere",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Electronics",
+                        "id":  "6ab1413c2fc63035692b9b24",
+                        "slug":  "ny36-electronics-audio-weekend",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Electronics",
+                        "id":  "6ab1413c2fc63035692b9b28",
+                        "slug":  "ny36-electronics-laptop-upgrade",
+                        "action":  "created"
+                    },
+                    {
+                        "category":  "Electronics",
+                        "id":  "6ab1413c2fc63035692b9b2c",
+                        "slug":  "ny36-electronics-mobile-essentials",
+                        "action":  "created"
+                    }
+                ],
+    "finishedAt":  "2026-09-21T14:37:48.8553556Z"
+}

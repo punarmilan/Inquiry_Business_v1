@@ -1,7 +1,7 @@
 import React from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { theme } from '../theme';
+import { theme, createThemedStyles } from '../theme';
 import type { City } from '../types/hyperlocal';
 import { useApp } from '../context/AppContext';
 
@@ -61,24 +61,24 @@ export const CityPickerModal: React.FC<{
   </Modal>;
 };
 
-const styles = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: theme.colors.overlay },
-  sheet: { maxHeight: '82%', backgroundColor: theme.colors.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20 },
+const styles = createThemedStyles((c) => ({
+  backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: c.overlay },
+  sheet: { maxHeight: '82%', backgroundColor: c.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20 },
   headingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  title: { ...theme.typography.h2, color: theme.colors.text },
-  subtitle: { ...theme.typography.caption, color: theme.colors.textSecondary, marginTop: 3 },
+  title: { ...theme.typography.h2, color: c.text },
+  subtitle: { ...theme.typography.caption, color: c.textSecondary, marginTop: 3 },
   close: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  currentLocation: { flexDirection: 'row', alignItems: 'center', gap: 11, marginTop: 16, padding: 13, borderRadius: theme.radius.lg, backgroundColor: theme.colors.primaryLight },
+  currentLocation: { flexDirection: 'row', alignItems: 'center', gap: 11, marginTop: 16, padding: 13, borderRadius: theme.radius.lg, backgroundColor: c.primaryLight },
   currentLocationDisabled: { opacity: 0.78 },
-  currentLocationTitle: { ...theme.typography.bodyBold, color: theme.colors.primaryDark },
-  currentLocationText: { ...theme.typography.caption, color: theme.colors.textSecondary, marginTop: 2 },
+  currentLocationTitle: { ...theme.typography.bodyBold, color: c.primaryDark },
+  currentLocationText: { ...theme.typography.caption, color: c.textSecondary, marginTop: 2 },
   list: { paddingVertical: 16, gap: 10 },
-  cityCard: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.lg, padding: 12 },
+  cityCard: { borderWidth: 1, borderColor: c.border, borderRadius: theme.radius.lg, padding: 12 },
   cityRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  flex: { flex: 1 }, cityName: { ...theme.typography.bodyBold, color: theme.colors.text },
-  state: { ...theme.typography.caption, color: theme.colors.textSecondary, marginTop: 2 },
+  flex: { flex: 1 }, cityName: { ...theme.typography.bodyBold, color: c.text },
+  state: { ...theme.typography.caption, color: c.textSecondary, marginTop: 2 },
   localities: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingTop: 8 },
-  chip: { backgroundColor: theme.colors.primaryLight, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 99 },
-  chipText: { ...theme.typography.caption, color: theme.colors.primaryDark, fontWeight: '700' },
-  empty: { ...theme.typography.body, color: theme.colors.textSecondary, textAlign: 'center', padding: 24 },
-});
+  chip: { backgroundColor: c.primaryLight, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 99 },
+  chipText: { ...theme.typography.caption, color: c.primaryDark, fontWeight: '700' },
+  empty: { ...theme.typography.body, color: c.textSecondary, textAlign: 'center', padding: 24 },
+}));

@@ -2,10 +2,11 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { theme } from '../../theme';
+import { theme, createThemedStyles } from '../../theme';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { IconButton } from '../../components/IconButton';
 import { LanguageToggle } from '../../components/LanguageToggle';
+import { ThemeToggle } from '../../components/ThemeToggle';
 import { useApp } from '../../context/AppContext';
 import { ProfileStackParamList } from '../../navigation/types';
 
@@ -40,6 +41,18 @@ export const SettingsScreen: React.FC<Props> = ({ navigation }) => {
         </View>
 
         <View style={styles.card}>
+          <View style={styles.settingRow}>
+            <View style={styles.settingCopy}>
+              <Text style={styles.settingTitle}>{t('darkMode')}</Text>
+              <Text style={styles.settingBody}>{t('chooseAppTheme')}</Text>
+            </View>
+          </View>
+          <View style={styles.themeRow}>
+            <ThemeToggle />
+          </View>
+        </View>
+
+        <View style={styles.card}>
           <SettingAction
             icon="account-edit-outline"
             label={t('editProfile')}
@@ -65,7 +78,7 @@ const SettingAction: React.FC<{
   </Pressable>
 );
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -75,7 +88,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...theme.typography.h2,
-    color: theme.colors.text,
+    color: c.text,
   },
   scroll: {
     padding: theme.spacing.lg,
@@ -84,8 +97,8 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: theme.radius.lg,
     borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface,
+    borderColor: c.border,
+    backgroundColor: c.surface,
     overflow: 'hidden',
   },
   settingRow: {
@@ -99,13 +112,18 @@ const styles = StyleSheet.create({
   settingCopy: {
     flex: 1,
   },
+  themeRow: {
+    flexDirection: 'row',
+    paddingHorizontal: theme.spacing.md,
+    paddingBottom: theme.spacing.md,
+  },
   settingTitle: {
     ...theme.typography.bodyBold,
-    color: theme.colors.text,
+    color: c.text,
   },
   settingBody: {
     ...theme.typography.caption,
-    color: theme.colors.textSecondary,
+    color: c.textSecondary,
     marginTop: 2,
   },
   actionRow: {
@@ -115,17 +133,17 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
     paddingHorizontal: theme.spacing.md,
     borderTopWidth: 1,
-    borderTopColor: theme.colors.divider,
+    borderTopColor: c.divider,
   },
   actionText: {
     ...theme.typography.bodyLg,
-    color: theme.colors.text,
+    color: c.text,
     flex: 1,
   },
   actionTextDestructive: {
-    color: theme.colors.danger,
+    color: c.danger,
   },
   pressed: {
     opacity: 0.72,
   },
-});
+}));

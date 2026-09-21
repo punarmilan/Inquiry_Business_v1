@@ -5,10 +5,11 @@ import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { deleteOffer, listMyOffers } from '../../services/api';
+import { isPosterUploadOffer } from '../../config/offerCardDesigner';
 import type { Offer, Business } from '../../types/hyperlocal';
 import type { MoreStackParamList } from '../../navigation/types';
 import { useApp } from '../../context/AppContext';
-import { theme } from '../../theme';
+import { theme, createThemedStyles } from '../../theme';
 
 type Props = NativeStackScreenProps<MoreStackParamList, 'MyOffers'>;
 
@@ -106,7 +107,7 @@ export const MyOffersScreen: React.FC<Props> = ({ navigation }) => {
                 <View style={[styles.badge, badgeStyle]}><Text style={[styles.badgeText, badgeTextStyle]}>{statusLabel(offer.status)}</Text></View>
               </View>
               <View style={styles.meta}>
-                <Text style={styles.price}>{`\u20B9${offer.offerPrice.toLocaleString('en-IN')}`}</Text>
+                <Text style={styles.price}>{isPosterUploadOffer(offer) ? 'Poster offer' : `\u20B9${offer.offerPrice.toLocaleString('en-IN')}`}</Text>
                 <Text style={styles.expiry}>Expires {new Date(offer.expiresAt).toLocaleDateString('en-IN')}</Text>
               </View>
               {offer.moderationReason ? <Text style={styles.reason}>Admin note: {offer.moderationReason}</Text> : null}
@@ -131,37 +132,37 @@ export const MyOffersScreen: React.FC<Props> = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  top: { minHeight: 66, backgroundColor: theme.colors.surface, flexDirection: 'row', alignItems: 'center' },
+const styles = createThemedStyles((c) => ({
+  top: { minHeight: 66, backgroundColor: c.surface, flexDirection: 'row', alignItems: 'center' },
   back: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center' },
-  title: { ...theme.typography.h3, color: theme.colors.text },
-  subtitle: { ...theme.typography.tiny, color: theme.colors.textMuted, marginTop: 1 },
+  title: { ...theme.typography.h3, color: c.text },
+  subtitle: { ...theme.typography.tiny, color: c.textMuted, marginTop: 1 },
   content: { padding: 18, paddingBottom: 100, gap: 12 },
-  card: { padding: 15, backgroundColor: theme.colors.surface, borderRadius: 18, borderWidth: 1, borderColor: theme.colors.border },
+  card: { padding: 15, backgroundColor: c.surface, borderRadius: 18, borderWidth: 1, borderColor: c.border },
   row: { flexDirection: 'row', alignItems: 'center', gap: 11 },
-  icon: { width: 44, height: 44, borderRadius: 13, backgroundColor: theme.colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
+  icon: { width: 44, height: 44, borderRadius: 13, backgroundColor: c.primaryLight, alignItems: 'center', justifyContent: 'center' },
   flex: { flex: 1 },
-  offerTitle: { ...theme.typography.bodyBold, color: theme.colors.text },
-  business: { ...theme.typography.caption, color: theme.colors.textSecondary, marginTop: 2 },
-  badge: { backgroundColor: theme.colors.secondaryLight, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 99 },
-  badge_pending_review: { backgroundColor: '#FFF4D6' },
-  badge_approved: { backgroundColor: theme.colors.secondaryLight },
-  badge_rejected: { backgroundColor: '#FDE8E7' },
-  badge_suspended: { backgroundColor: '#FDE8E7' },
-  badgeText: { fontSize: 9, fontWeight: '900', color: theme.colors.success, textTransform: 'uppercase' },
-  badgeText_pending_review: { color: '#9A6700' },
-  badgeText_approved: { color: theme.colors.success },
-  badgeText_rejected: { color: theme.colors.danger },
-  badgeText_suspended: { color: theme.colors.danger },
-  meta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.colors.divider },
-  price: { ...theme.typography.bodyBold, color: theme.colors.text },
-  expiry: { ...theme.typography.tiny, color: theme.colors.textMuted },
-  reason: { ...theme.typography.caption, color: theme.colors.danger, marginTop: 9 },
+  offerTitle: { ...theme.typography.bodyBold, color: c.text },
+  business: { ...theme.typography.caption, color: c.textSecondary, marginTop: 2 },
+  badge: { backgroundColor: c.secondaryLight, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 99 },
+  badge_pending_review: { backgroundColor: c.accentLight },
+  badge_approved: { backgroundColor: c.secondaryLight },
+  badge_rejected: { backgroundColor: c.dangerLight },
+  badge_suspended: { backgroundColor: c.dangerLight },
+  badgeText: { fontSize: 9, fontWeight: '900', color: c.success, textTransform: 'uppercase' },
+  badgeText_pending_review: { color: c.accentDark },
+  badgeText_approved: { color: c.success },
+  badgeText_rejected: { color: c.danger },
+  badgeText_suspended: { color: c.danger },
+  meta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: c.divider },
+  price: { ...theme.typography.bodyBold, color: c.text },
+  expiry: { ...theme.typography.tiny, color: c.textMuted },
+  reason: { ...theme.typography.caption, color: c.danger, marginTop: 9 },
   actions: { flexDirection: 'row', gap: 10, marginTop: 13 },
   action: { flex: 1, minHeight: 40, borderRadius: 11, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, borderWidth: 1 },
-  editAction: { borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight },
-  deleteAction: { borderColor: '#F4B7B2', backgroundColor: '#FFF5F4' },
-  editText: { ...theme.typography.caption, color: theme.colors.primary, fontWeight: '900' },
-  deleteText: { ...theme.typography.caption, color: theme.colors.danger, fontWeight: '900' },
-  empty: { ...theme.typography.body, color: theme.colors.textSecondary, textAlign: 'center', marginTop: 40 },
-});
+  editAction: { borderColor: c.primary, backgroundColor: c.primaryLight },
+  deleteAction: { borderColor: '#F4B7B2', backgroundColor: c.dangerLight },
+  editText: { ...theme.typography.caption, color: c.primary, fontWeight: '900' },
+  deleteText: { ...theme.typography.caption, color: c.danger, fontWeight: '900' },
+  empty: { ...theme.typography.body, color: c.textSecondary, textAlign: 'center', marginTop: 40 },
+}));

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Modal } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { theme } from '../theme';
+import { theme, createThemedStyles } from '../theme';
 import { useApp } from '../context/AppContext';
 import type { Language } from '../i18n/translations';
 
@@ -55,14 +55,14 @@ export const LanguageToggle: React.FC<{ onboarding?: boolean }> = ({ onboarding 
   );
 };
 
-const styles = StyleSheet.create({
-  onboardingButton: { backgroundColor: '#EFF7F8', height: 34 },
-  onboardingButtonText: { color: '#103C48', fontWeight: '600' },
+const styles = createThemedStyles((c) => ({
+  onboardingButton: { backgroundColor: c.surfaceAlt, height: 34 },
+  onboardingButtonText: { color: c.text, fontWeight: '600' },
   button: {
     minWidth: 82,
     height: 36,
     borderRadius: theme.radius.pill,
-    backgroundColor: theme.colors.surfaceAlt,
+    backgroundColor: c.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -71,23 +71,23 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     ...theme.typography.caption,
-    color: theme.colors.textSecondary,
+    color: c.textSecondary,
     fontWeight: '800',
   },
   overlay: {
     flex: 1,
-    backgroundColor: theme.colors.overlay,
+    backgroundColor: c.overlay,
     justifyContent: 'center',
     paddingHorizontal: theme.spacing.lg,
   },
   card: {
     borderRadius: theme.radius.lg,
-    backgroundColor: theme.colors.surface,
+    backgroundColor: c.surface,
     padding: theme.spacing.lg,
   },
   title: {
     ...theme.typography.h3,
-    color: theme.colors.text,
+    color: c.text,
     marginBottom: theme.spacing.sm,
   },
   option: {
@@ -99,10 +99,10 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.md,
   },
   optionPressed: {
-    backgroundColor: theme.colors.surfaceAlt,
+    backgroundColor: c.surfaceAlt,
   },
   optionText: {
     ...theme.typography.body,
-    color: theme.colors.text,
+    color: c.text,
   },
-});
+}));

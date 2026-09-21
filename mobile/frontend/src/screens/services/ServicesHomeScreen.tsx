@@ -12,6 +12,8 @@ import { listSupportedCities } from '../../services/api';
 import type { City } from '../../types/hyperlocal';
 import type { ServicesStackParamList } from '../../navigation/types';
 import { ServiceBackdrop, ServiceHeader, ServiceImage, ServiceSearch, serviceColors as colors, ui } from './ServiceUI';
+import { tabBarScrollProps } from '../../navigation/hideTabBarOnScroll';
+import { theme, createThemedStyles } from '../../theme';
 
 type Props = NativeStackScreenProps<ServicesStackParamList, 'ServicesHome'>;
 const normalize = (value: string) => value.trim().toLocaleLowerCase('en-IN');
@@ -68,9 +70,9 @@ export const ServicesHomeScreen: React.FC<Props> = ({ navigation }) => {
 
   return <ScreenContainer backgroundColor={colors.background}>
     <ServiceBackdrop />
-    <ServiceHeader title="Select Area" subtitle="Choose your location to find local services" icon="crosshairs-gps" onAction={() => locationState.setPickerVisible(true)} />
+    <ServiceHeader title="Select Area" icon="crosshairs-gps" onAction={() => locationState.setPickerVisible(true)} />
     <ServiceSearch value={search} onChangeText={setSearch} placeholder="Search by area, locality or city" />
-    {locationState.loadingLocation && !city ? <ActivityIndicator color={colors.teal} style={{ marginTop: 35 }} /> : <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 90 + insets.bottom }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.teal} colors={[colors.teal]} />}>
+    {locationState.loadingLocation && !city ? <ActivityIndicator color={colors.teal} style={{ marginTop: 35 }} /> : <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 90 + insets.bottom }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.teal} colors={[colors.teal]} />} {...tabBarScrollProps}>
       {error ? <Text style={ui.emptyText}>{error}</Text> : null}
       {city && recentAreas.length > 0 ? <>
         <View style={styles.sectionRow}><Text style={ui.sectionTitle}>Recent</Text><Pressable accessibilityRole="button" onPress={() => setShowAllRecent(!showAllRecent)} style={ui.pill}><Text style={ui.pillText}>{showAllRecent ? 'Show less' : 'See all'}</Text><MaterialCommunityIcons name={showAllRecent ? 'chevron-up' : 'chevron-right'} size={20} color={colors.darkTeal} /></Pressable></View>
@@ -87,21 +89,19 @@ export const ServicesHomeScreen: React.FC<Props> = ({ navigation }) => {
 const AreaCard = ({ area, city, recent, loading, onPress }: { area: string; city: City; recent: boolean; loading: boolean; onPress: () => void }) => {
   const uri = city.localityImages?.find((item) => normalize(item.name) === normalize(area))?.imageUrl;
   return <Pressable accessibilityRole="button" accessibilityLabel={'View services in ' + area + ', ' + city.name} onPress={onPress} disabled={loading} style={({ pressed }) => [styles.card, ui.shadow, pressed && ui.pressed]}>
-    <View style={styles.cardClip}>
+    <View style={[styles.cardClip, recent && { aspectRatio: 2.4 }]}>
       <ServiceImage uri={uri} style={StyleSheet.absoluteFill} fallback={<LinearGradient colors={['#C3EDF1', '#73BFC8', '#347681']} style={[StyleSheet.absoluteFill, styles.placeholder]}><MaterialCommunityIcons name="city-variant-outline" size={112} color="#E3F6F4" /></LinearGradient>} />
       <LinearGradient colors={['transparent', 'rgba(5,40,48,0.12)', 'rgba(4,39,45,0.9)']} locations={[0, 0.4, 1]} style={StyleSheet.absoluteFill} />
-      <View style={styles.badge}><MaterialCommunityIcons name={recent ? 'clock-time-four' : 'office-building'} size={17} color={colors.darkTeal} /><Text style={styles.badgeText}>{recent ? 'Recently searched' : 'Local Area'}</Text></View>
-      <View style={styles.cardFooter}><MaterialCommunityIcons name="map-marker" size={30} color="#FFFFFF" /><View style={{ flex: 1 }}><Text style={styles.areaName} numberOfLines={2}>{area}{area !== city.name ? ', ' + city.name : ''}</Text><Text style={styles.areaDetail}>{city.name}, {city.state}</Text></View><View style={styles.arrow}>{loading ? <ActivityIndicator color={colors.darkTeal} /> : <MaterialCommunityIcons name="chevron-right" size={27} color={colors.darkTeal} />}</View></View>
+      <View style={styles.cardFooter}><MaterialCommunityIcons name="map-marker" size={30} color="#FFFFFF" /><View style={{ flex: 1 }}><Text style={styles.areaName} numberOfLines={2}>{area}{area !== city.name ? ', ' + city.name : ''}</Text><Text style={styles.areaDetail}>{city.name}, {city.state}</Text></View><View style={styles.arrow}>{loading ? <ActivityIndicator color={theme.colors.background} /> : <MaterialCommunityIcons name="chevron-right" size={27} color={theme.colors.background} />}</View></View>
     </View>
   </Pressable>;
 };
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   content: { paddingHorizontal: 20 }, sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, gap: 10 },
-  card: { width: '100%', borderRadius: 20, marginBottom: 18, backgroundColor: '#E2F7F8' }, cardClip: { width: '100%', overflow: 'hidden', borderRadius: 20, aspectRatio: 2.03 },
+  card: { width: '100%', borderRadius: 20, marginBottom: 18, backgroundColor: c.primaryLight, borderWidth: 1.5, borderColor: c.cardBorder, shadowColor: c.cardGlow, shadowOpacity: 1, shadowRadius: 14, shadowOffset: { width: 0, height: 5 }, elevation: 4 }, cardClip: { width: '100%', overflow: 'hidden', borderRadius: 20, aspectRatio: 2.65 },
   placeholder: { alignItems: 'center', justifyContent: 'center' },
-  badge: { position: 'absolute', top: 12, left: 12, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 22, backgroundColor: '#E5FCFA', paddingVertical: 7, paddingHorizontal: 11 }, badgeText: { color: '#007681', fontSize: 11, fontWeight: '700' },
   cardFooter: { position: 'absolute', bottom: 12, left: 12, right: 12, flexDirection: 'row', alignItems: 'center', gap: 7 },
-  areaName: { fontSize: 20, fontWeight: '800', color: '#FFFFFF', lineHeight: 26 }, areaDetail: { fontSize: 12, color: '#E7F6F5', marginTop: 2 },
-  arrow: { width: 34, height: 34, borderRadius: 20, backgroundColor: '#E8F6EF', alignItems: 'center', justifyContent: 'center' },
-});
+  areaName: { fontSize: 20, fontWeight: '800', color: c.textInverse, lineHeight: 26 }, areaDetail: { fontSize: 12, color: c.textInverse, opacity: 0.85, marginTop: 2 },
+  arrow: { width: 36, height: 36, borderRadius: 18, backgroundColor: c.primary, shadowColor: c.primaryGlow, shadowOpacity: 1, shadowRadius: 10, shadowOffset: { width: 0, height: 0 }, elevation: 3, alignItems: 'center', justifyContent: 'center' },
+}));

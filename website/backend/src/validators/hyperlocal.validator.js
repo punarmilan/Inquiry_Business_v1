@@ -115,7 +115,7 @@ const templateElement = Joi.object({
 }).custom((value, helpers) => {
   const hasFlatGeometry = [value.x, value.y, value.width, value.height].every((item) => typeof item === 'number');
   const hasNestedGeometry = value.position && value.size && typeof value.position.x === 'number' && typeof value.position.y === 'number' && typeof value.size.width === 'number' && typeof value.size.height === 'number';
-  if (!hasFlatGeometry && !hasNestedGeometry) return helpers.error('any.custom', { message: 'Elements need x/y/width/height or position/size geometry.' });
+  if (!hasFlatGeometry && !hasNestedGeometry) return helpers.message('Elements need x/y/width/height or position/size geometry.');
   return value;
 }).unknown(true);
 const templateCanvas = Joi.object({
@@ -129,13 +129,13 @@ const templateCanvas = Joi.object({
 }).custom((value, helpers) => {
   const ids = new Set();
   for (const element of value.elements) {
-    if (ids.has(element.id)) return helpers.error('any.custom', { message: `Duplicate element id: ${element.id}.` });
+    if (ids.has(element.id)) return helpers.message(`Duplicate element id: ${element.id}.`);
     ids.add(element.id);
     const x = typeof element.x === 'number' ? element.x : element.position.x;
     const y = typeof element.y === 'number' ? element.y : element.position.y;
     const width = typeof element.width === 'number' ? element.width : element.size.width;
     const height = typeof element.height === 'number' ? element.height : element.size.height;
-    if (x + width > value.width || y + height > value.height) return helpers.error('any.custom', { message: `Element ${element.id} is outside the canvas bounds.` });
+    if (x + width > value.width || y + height > value.height) return helpers.message(`Element ${element.id} is outside the canvas bounds.`);
   }
   return value;
 }).unknown(true);
@@ -177,8 +177,8 @@ const stickerPayload = Joi.object({
   sortOrder: Joi.number().integer().min(0).max(10000).required(),
   isActive: Joi.boolean().required(),
 }).custom((value, helpers) => {
-  if (value.kind === 'image' && !value.imageUrl) return helpers.error('any.custom', { message: 'Image stickers need an image URL.' });
-  if (value.kind === 'emoji' && !value.emoji) return helpers.error('any.custom', { message: 'Emoji stickers need an emoji.' });
+  if (value.kind === 'image' && !value.imageUrl) return helpers.message('Image stickers need an image URL.');
+  if (value.kind === 'emoji' && !value.emoji) return helpers.message('Emoji stickers need an emoji.');
   return value;
 });
 const stickerCreate = Joi.object({ body: stickerPayload });
@@ -207,8 +207,9 @@ const verifyPayment = Joi.object({
   body: Joi.object({ providerPaymentId: Joi.string().trim().min(3).max(200).required(), providerOrderId: Joi.string().trim().allow('').max(200), note: Joi.string().trim().allow('').max(500) }),
 });
 const refundPayment = Joi.object({ params: idParams, body: Joi.object({ reason: Joi.string().trim().min(3).max(500).required() }) });
+const declinePayment = Joi.object({ params: idParams, body: Joi.object({ reason: Joi.string().trim().min(3).max(500).required() }) });
 module.exports = {
   idParams, list, cityCreate, cityUpdate, workerCreate, workerUpdate, demoWorkersCreate, dummyProviderNumbers, categoryCreate, categoryUpdate,
-  businessModerate, offerModerate, templateCreate, templateUpdate, templateAssetDelete, stickerCreate, stickerUpdate, planCreate, planUpdate, assignWorker, forwardBooking, bookingStatus, verifyPayment, refundPayment,
+  businessModerate, offerModerate, templateCreate, templateUpdate, templateAssetDelete, stickerCreate, stickerUpdate, planCreate, planUpdate, assignWorker, forwardBooking, bookingStatus, verifyPayment, declinePayment, refundPayment,
 };
 module.exports.deleteById = deleteById;

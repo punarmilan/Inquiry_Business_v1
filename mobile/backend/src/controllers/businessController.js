@@ -5,6 +5,7 @@ const Offer = require('../models/Offer');
 const Subscription = require('../models/Subscription');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
+const { FOLDERS, resolveImage } = require('../services/cloudinaryService');
 
 const slugify = (value) =>
   `${value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${crypto.randomBytes(3).toString('hex')}`;
@@ -29,6 +30,16 @@ const payloadFromBody = (body) => ({
   website: body.website,
 });
 
+// Logo and cover arrive as base64 data URLs from the app; keep only Cloudinary
+// URLs in the database. Other values (https URLs, '', undefined) pass through.
+const storeBusinessImages = async (payload) => {
+  const [logoUrl, coverImageUrl] = await Promise.all([
+    resolveImage(payload.logoUrl, { folder: FOLDERS.businessLogos }),
+    resolveImage(payload.coverImageUrl, { folder: FOLDERS.businessCovers }),
+  ]);
+  return { ...payload, logoUrl, coverImageUrl };
+};
+
 const assertSupportedCity = async (cityId) => {
   const city = await City.findOne({ _id: cityId, isActive: true, offersEnabled: true });
   if (!city) {
@@ -40,7 +51,7 @@ const assertSupportedCity = async (cityId) => {
 const createBusiness = asyncHandler(async (req, res) => {
   await assertSupportedCity(req.body.cityId);
   const business = await Business.create({
-    ...payloadFromBody(req.body),
+    ...(await storeBusinessImages(payloadFromBody(req.body))),
     owner: req.user._id,
     slug: slugify(req.body.name),
     verificationStatus: 'pending',
@@ -87,7 +98,7 @@ const updateBusiness = asyncHandler(async (req, res) => {
   const business = await Business.findOne({ _id: req.params.id, owner: req.user._id });
   if (!business) throw new ApiError(404, 'Business not found', 'BUSINESS_NOT_FOUND');
   if (req.body.cityId && String(req.body.cityId) !== String(business.city)) await assertSupportedCity(req.body.cityId);
-  const payload = payloadFromBody(req.body);
+  const payload = await storeBusinessImages(payloadFromBody(req.body));
   Object.keys(payload).forEach((key) => payload[key] === undefined && delete payload[key]);
   Object.assign(business, payload);
   // Every profile edit needs a fresh review, including edits to a previously

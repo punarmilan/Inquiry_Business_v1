@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
 import Svg, { Defs, Image as SvgImage, Mask, Path, Rect } from 'react-native-svg';
+import { createThemedStyles } from '../theme';
 
 const infinityLogo = require('../../assets/splash-icon.png');
 const AnimatedPath = Animated.createAnimatedComponent(Path);
@@ -125,7 +126,7 @@ export const AnimatedInfinityMark: React.FC<AnimatedInfinityMarkProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -139,4 +140,4 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-});
+}));

@@ -2,7 +2,7 @@ import React, { useState, useRef, useLayoutEffect, useEffect, useCallback } from
 import { View, Text, FlatList, TextInput, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { theme } from '../../theme';
+import { theme, createThemedStyles } from '../../theme';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { IconButton } from '../../components/IconButton';
 import { getAiChatMessages, sendAiChatMessage, BackendAiChatMessage, ApiRequestError } from '../../services/api';
@@ -180,7 +180,7 @@ export const AiAssistantScreen: React.FC<Props> = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   flex: { flex: 1 },
   header: {
     flexDirection: 'row',
@@ -189,19 +189,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.xs,
     paddingVertical: theme.spacing.xs,
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    borderBottomColor: c.border,
   },
   headerIcon: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: theme.colors.primaryLight,
+    backgroundColor: c.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerName: {
     ...theme.typography.h3,
-    color: theme.colors.text,
+    color: c.text,
     flex: 1,
   },
   loading: {
@@ -227,12 +227,12 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     ...theme.typography.bodyBold,
-    color: theme.colors.text,
+    color: c.text,
     marginTop: theme.spacing.sm,
   },
   emptyBody: {
     ...theme.typography.body,
-    color: theme.colors.textSecondary,
+    color: c.textSecondary,
     textAlign: 'center',
     paddingHorizontal: theme.spacing.xl,
   },
@@ -249,7 +249,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: theme.colors.primaryLight,
+    backgroundColor: c.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -260,28 +260,28 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.xs,
   },
   bubbleThem: {
-    backgroundColor: theme.colors.surfaceAlt,
+    backgroundColor: c.surfaceAlt,
     borderBottomLeftRadius: 4,
   },
   bubbleMe: {
-    backgroundColor: theme.colors.primary,
+    backgroundColor: c.primary,
     borderBottomRightRadius: 4,
   },
   bubbleText: {
     ...theme.typography.body,
-    color: theme.colors.text,
+    color: c.text,
   },
   bubbleTextMe: {
-    color: theme.colors.textInverse,
+    color: c.textInverse,
   },
   bubbleTime: {
     ...theme.typography.tiny,
-    color: theme.colors.textMuted,
+    color: c.textMuted,
     marginTop: 2,
     alignSelf: 'flex-end',
   },
   bubbleTimeMe: {
-    color: theme.colors.primaryLight,
+    color: c.primaryLight,
   },
   typingRow: {
     flexDirection: 'row',
@@ -292,7 +292,7 @@ const styles = StyleSheet.create({
   },
   typingText: {
     ...theme.typography.caption,
-    color: theme.colors.textSecondary,
+    color: c.textSecondary,
   },
   inputRow: {
     flexDirection: 'row',
@@ -301,18 +301,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.sm,
     paddingVertical: theme.spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: theme.colors.divider,
-    backgroundColor: theme.colors.surface,
+    borderTopColor: c.divider,
+    backgroundColor: c.surface,
   },
   input: {
     flex: 1,
     ...theme.typography.body,
-    color: theme.colors.text,
-    backgroundColor: theme.colors.surfaceAlt,
+    color: c.text,
+    backgroundColor: c.surfaceAlt,
     borderRadius: theme.radius.lg,
     paddingHorizontal: theme.spacing.sm,
     paddingVertical: theme.spacing.sm,
     maxHeight: 100,
     minHeight: theme.MIN_TAP_TARGET,
   },
-});
+}));

@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const net = require('node:net');
 const os = require('node:os');
 const path = require('node:path');
+const { keepReverseAlive } = require('./adbReverse.cjs');
 
 const DEFAULT_PORT = Number(process.env.EXPO_START_PORT || 8081);
 const API_PORT = Number(process.env.EXPO_API_PORT || 5000);
@@ -181,6 +182,17 @@ const run = async () => {
   // over USB, forward the backend port too so the phone reaches the host machine's API.
   if (usingAdbReverse && API_PORT !== selectedPort) {
     reversePortForDevices(adbPath, androidDevices, API_PORT);
+  }
+
+  // The reverse rules above disappear whenever the phone's USB connection resets, which
+  // leaves a still-running Metro unreachable ("Unable to load script"). Keep restoring them
+  // for as long as this launcher lives.
+  if (usingAdbReverse) {
+    keepReverseAlive({
+      adbPath,
+      listDevices: () => getConnectedAndroidDevices(adbPath),
+      ports: API_PORT !== selectedPort ? [selectedPort, API_PORT] : [selectedPort],
+    });
   }
 
   if (!explicitHostMode) {

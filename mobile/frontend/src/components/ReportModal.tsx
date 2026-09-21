@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable, Alert } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { theme } from '../theme';
+import { theme, createThemedStyles } from '../theme';
 import { Button } from './Button';
 import { Input } from './Input';
 import { useApp } from '../context/AppContext';
@@ -128,10 +128,10 @@ export const ReportModal: React.FC<ReportModalProps> = ({ visible, targetType, t
   );
 };
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   overlay: {
     flex: 1,
-    backgroundColor: theme.colors.overlay,
+    backgroundColor: c.overlay,
     alignItems: 'center',
     justifyContent: 'center',
     padding: theme.spacing.lg,
@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
     maxWidth: 420,
     maxHeight: '85%',
     borderRadius: theme.radius.xl,
-    backgroundColor: theme.colors.surface,
+    backgroundColor: c.surface,
     padding: theme.spacing.lg,
   },
   header: {
@@ -151,11 +151,11 @@ const styles = StyleSheet.create({
   },
   title: {
     ...theme.typography.h3,
-    color: theme.colors.text,
+    color: c.text,
   },
   subtitle: {
     ...theme.typography.body,
-    color: theme.colors.textSecondary,
+    color: c.textSecondary,
     marginTop: 4,
     marginBottom: theme.spacing.sm,
   },
@@ -168,14 +168,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.sm,
   },
   reasonRowActive: {
-    backgroundColor: theme.colors.primaryLight,
+    backgroundColor: c.primaryLight,
   },
   reasonText: {
     ...theme.typography.body,
-    color: theme.colors.text,
+    color: c.text,
   },
   reasonTextActive: {
-    color: theme.colors.primary,
+    color: c.primary,
     fontWeight: '700',
   },
   descriptionInput: {
@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     ...theme.typography.caption,
-    color: theme.colors.danger,
+    color: c.danger,
     marginBottom: theme.spacing.xs,
   },
   actions: {
@@ -196,4 +196,4 @@ const styles = StyleSheet.create({
   actionBtn: {
     flex: 1,
   },
-});
+}));

@@ -3,6 +3,36 @@ const SUPPORTED_ELEMENT_TYPES = new Set([
 ]);
 
 const BINDING_PATTERN = /^[a-zA-Z][a-zA-Z0-9_.-]{0,59}$/;
+const TOKEN_PATTERN = /\{\{\s*([a-zA-Z][a-zA-Z0-9_.-]{0,59})\s*\}\}/g;
+
+// Values the mobile app fills in from the offer itself, so a {{token}} for one of
+// these needs no editable/dynamic field of its own (see OfferCard's posterText).
+const RUNTIME_FIELDS = new Set([
+  'title', 'description', 'category', 'terms', 'imageUrls', 'business', 'businessName', 'businessLogo',
+  'buttonText', 'discount', 'discountPercentage', 'offerPrice', 'originalPrice', 'startsAt', 'expiresAt',
+]);
+
+// The phone is not this machine: a URL pointing at the admin's own dev server can
+// never load on a device. Android also blocks plain http by default.
+const DEV_ONLY_HOST = /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|10\.0\.2\.2|\[::1\]|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?(\/|$)/i;
+
+const assertUsableUrl = (value: unknown, where: string) => {
+  if (typeof value !== 'string' || !value.trim()) return;
+  const url = value.trim();
+  if (url.startsWith('data:image/') || url.startsWith('{{')) return;
+  if (DEV_ONLY_HOST.test(url)) {
+    throw new Error(`${where} points at a local development address (${url.slice(0, 48)}…). Upload the image so it gets a public https URL.`);
+  }
+  if (/^http:\/\//i.test(url)) throw new Error(`${where} uses http://. Use an https:// URL so the image loads on phones.`);
+  if (!/^https:\/\//i.test(url)) throw new Error(`${where} must be an https:// URL, an uploaded image, or a {{field}} binding.`);
+};
+
+const collectTokens = (value: unknown): string[] => {
+  if (typeof value !== 'string') return [];
+  const found = [...value.matchAll(TOKEN_PATTERN)].map((match) => match[1]);
+  TOKEN_PATTERN.lastIndex = 0;
+  return found;
+};
 
 export const isTemplateJsonObject = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -50,6 +80,7 @@ export const assertPublishableTemplateJson = (value: unknown, index: number) => 
     if (typeof value.previewUrl !== 'string' || !value.previewUrl.trim()) {
       throw new Error(`Template ${label}: canvas with elements is required.`);
     }
+    assertUsableUrl(value.previewUrl, `Template ${label}: previewUrl`);
     return;
   }
   if (!isTemplateJsonObject(value.canvas)) throw new Error(`Template ${label}: canvas must be an object.`);
@@ -93,17 +124,32 @@ export const assertPublishableTemplateJson = (value: unknown, index: number) => 
     if (typeof element.field === 'string' && typeof element.key === 'string' && element.field !== element.key) {
       throw new Error(`${item} field and key bindings must match.`);
     }
-    if (binding && !fieldKeys.has(binding)) throw new Error(`${item} binds “${binding}” but no matching editable/dynamic field exists.`);
+    if (binding && !fieldKeys.has(binding) && !RUNTIME_FIELDS.has(binding)) {
+      throw new Error(`${item} binds “${binding}” but no matching editable/dynamic field exists.`);
+    }
 
     if (element.type === 'image') {
       const src = [element.src, element.imageUrl, content.src, content.imageUrl].find((candidate) => typeof candidate === 'string' && candidate.trim());
       if (!src && !binding) throw new Error(`${item} needs src/imageUrl or an image field binding.`);
+      assertUsableUrl(src, `${item}'s image`);
     } else if (['text', 'button', 'badge', 'icon'].includes(element.type)) {
       const text = [element.text, typeof element.content === 'string' ? element.content : undefined, content.text]
         .find((candidate) => typeof candidate === 'string' && candidate.trim());
       if (!text && !binding) throw new Error(`${item} needs text/content or a field binding.`);
     }
+
+    // A {{token}} nobody fills in renders as an empty layer on the phone (an image
+    // element disappears entirely), which is how blank holes reached production.
+    const tokenSources = [element.text, element.content, element.src, element.imageUrl, content.text, content.src, content.imageUrl];
+    for (const token of tokenSources.flatMap(collectTokens)) {
+      if (!fieldKeys.has(token) && !RUNTIME_FIELDS.has(token)) {
+        throw new Error(`${item} uses {{${token}}} but nothing fills that in. Add “${token}” to dynamicFields/editableFields, or bind the layer to an offer field.`);
+      }
+    }
   });
+
+  assertUsableUrl(value.previewUrl, `Template ${label}: previewUrl`);
+  assertUsableUrl(canvas.backgroundImageUrl, `Template ${label}: canvas backgroundImageUrl`);
 
   const hasArtwork = canvas.elements.length > 0
     || (typeof canvas.backgroundImageUrl === 'string' && canvas.backgroundImageUrl.trim().length > 0)

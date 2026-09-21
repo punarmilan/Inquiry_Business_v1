@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, FlatList, Pressable, RefreshControl } from 'rea
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
-import { theme } from '../../theme';
+import { theme, createThemedStyles } from '../../theme';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { IconButton } from '../../components/IconButton';
 import { useApp } from '../../context/AppContext';
@@ -123,7 +123,7 @@ export const NotificationsScreen: React.FC<Props> = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -133,12 +133,12 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...theme.typography.h2,
-    color: theme.colors.text,
+    color: c.text,
     flex: 1,
   },
   markAllText: {
     ...theme.typography.caption,
-    color: theme.colors.primary,
+    color: c.primary,
     fontWeight: '700',
   },
   listContent: {
@@ -150,50 +150,50 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: theme.spacing.sm,
-    backgroundColor: theme.colors.surface,
+    backgroundColor: c.surface,
     borderRadius: theme.radius.lg,
     padding: theme.spacing.sm,
     marginBottom: theme.spacing.sm,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: c.border,
   },
   rowUnread: {
-    backgroundColor: theme.colors.primaryLight,
-    borderColor: `${theme.colors.primary}33`,
+    backgroundColor: c.primaryLight,
+    borderColor: `${c.primary}33`,
   },
   icon: {
     width: 40,
     height: 40,
     borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.surfaceAlt,
+    backgroundColor: c.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
   iconUnread: {
-    backgroundColor: theme.colors.surface,
+    backgroundColor: c.surface,
   },
   copy: {
     flex: 1,
   },
   title: {
     ...theme.typography.bodyBold,
-    color: theme.colors.text,
+    color: c.text,
   },
   body: {
     ...theme.typography.caption,
-    color: theme.colors.textSecondary,
+    color: c.textSecondary,
     marginTop: 2,
   },
   time: {
     ...theme.typography.tiny,
-    color: theme.colors.textMuted,
+    color: c.textMuted,
     marginTop: 4,
   },
   unreadDot: {
     width: 9,
     height: 9,
     borderRadius: 5,
-    backgroundColor: theme.colors.primary,
+    backgroundColor: c.primary,
     marginTop: 4,
   },
   center: {
@@ -205,7 +205,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     ...theme.typography.body,
-    color: theme.colors.textMuted,
+    color: c.textMuted,
   },
   pressed: {
     opacity: 0.75,
@@ -217,16 +217,16 @@ const styles = StyleSheet.create({
     padding: theme.spacing.sm,
     marginBottom: theme.spacing.sm,
     borderRadius: theme.radius.md,
-    backgroundColor: `${theme.colors.danger}12`,
+    backgroundColor: `${c.danger}12`,
   },
   errorText: {
     ...theme.typography.caption,
-    color: theme.colors.danger,
+    color: c.danger,
     flex: 1,
   },
   retryText: {
     ...theme.typography.caption,
-    color: theme.colors.primary,
+    color: c.primary,
     fontWeight: '800',
   },
-});
+}));

@@ -10,6 +10,7 @@ import { listServiceCategories } from '../../services/api';
 import type { ServiceCategory } from '../../types/hyperlocal';
 import type { ServicesStackParamList } from '../../navigation/types';
 import { ServiceBackdrop, ServiceHeader, ServiceImage, ServiceSearch, categoryPalette, isEmergencyCategory, safeIcon, serviceColors as colors, ui } from './ServiceUI';
+import { createThemedStyles, getThemeMode } from '../../theme';
 
 type Props = NativeStackScreenProps<ServicesStackParamList, 'ServiceCategories'>;
 const normalize = (value: string) => value.trim().toLocaleLowerCase('en-IN');
@@ -37,7 +38,7 @@ export const ServiceCategoriesScreen: React.FC<Props> = ({ route, navigation }) 
     <FlatList data={visibleCategories} numColumns={2} keyExtractor={(item) => item._id} columnWrapperStyle={styles.row} contentContainerStyle={[styles.content, { paddingBottom: 90 + insets.bottom }]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" refreshing={loading} onRefresh={load}
       ListHeaderComponent={<>
         <Pressable accessibilityRole="button" accessibilityLabel={emergencyOnly ? 'Show all services' : 'Show local emergency contacts'} onPress={() => { setEmergencyOnly(!emergencyOnly); setSearch(''); }} style={({ pressed }) => [styles.emergency, ui.shadow, pressed && ui.pressed]}>
-          <LinearGradient colors={['#FFFCFD', '#FFF2F5']} style={StyleSheet.absoluteFill} />
+          <LinearGradient colors={getThemeMode() === 'dark' ? ['#2A171B', '#1E1216'] : ['#FFFCFD', '#FFF2F5']} style={StyleSheet.absoluteFill} />
           <View style={styles.emergencyArt} pointerEvents="none"><MaterialCommunityIcons name="city-variant" size={102} color="#FFDFE7" /><MaterialCommunityIcons name="ambulance" size={66} color="#E94766" style={styles.ambulance} /></View>
           <View style={styles.emergencyIcon}><MaterialCommunityIcons name="alarm-light" size={45} color="#E5173D" /></View>
           <View style={styles.emergencyCopy}><Text style={styles.emergencyTitle}>Local Emergency Contacts</Text><Text style={styles.emergencyText}>Ambulance, Fire Brigade, Police...</Text></View>
@@ -53,7 +54,7 @@ export const ServiceCategoriesScreen: React.FC<Props> = ({ route, navigation }) 
           <View style={styles.clip}>
             <View style={[styles.corner, { backgroundColor: palette.light }]} />
             <View style={[styles.categoryIcon, { backgroundColor: palette.light }]}><ServiceImage uri={category.imageUrl} style={styles.categoryImage} fallback={<MaterialCommunityIcons name={safeIcon(category.icon)} size={43} color={palette.ink} />} /></View>
-            <View style={styles.categoryLabel}><Text style={styles.categoryName}>{category.name}</Text><MaterialCommunityIcons name="chevron-right" size={23} color="#647283" /></View>
+            <View style={styles.categoryLabel}><Text style={styles.categoryName}>{category.name}</Text><MaterialCommunityIcons name="chevron-right" size={23} color={colors.muted} /></View>
           </View>
         </Pressable>;
       }}
@@ -62,21 +63,21 @@ export const ServiceCategoriesScreen: React.FC<Props> = ({ route, navigation }) 
   </ScreenContainer>;
 };
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   content: { paddingHorizontal: 16 }, row: { gap: 12, alignItems: 'stretch' },
-  emergency: { minHeight: 138, borderRadius: 19, borderWidth: 1, borderColor: '#FFE1E8', flexDirection: 'row', alignItems: 'center', padding: 12, gap: 13, overflow: 'hidden' },
+  emergency: { minHeight: 138, borderRadius: 19, borderWidth: 1, borderColor: c.border, flexDirection: 'row', alignItems: 'center', padding: 12, gap: 13, overflow: 'hidden' },
   emergencyArt: { position: 'absolute', right: 18, bottom: -20, opacity: 0.65 }, ambulance: { position: 'absolute', bottom: 12, right: 18 },
-  emergencyIcon: { width: 73, height: 73, borderRadius: 34, backgroundColor: '#FFE4EB', alignItems: 'center', justifyContent: 'center' },
+  emergencyIcon: { width: 73, height: 73, borderRadius: 34, backgroundColor: c.dangerLight, alignItems: 'center', justifyContent: 'center' },
   emergencyCopy: { flex: 1, paddingVertical: 15, paddingRight: 25 },
   emergencyTitle: { fontSize: 19, fontWeight: '800', color: '#DC1135', lineHeight: 24 },
   emergencyText: { fontSize: 13, color: '#4E5A6A', lineHeight: 18, marginTop: 5 },
-  safetyBadge: { position: 'absolute', right: 8, top: 8, borderRadius: 20, backgroundColor: '#FFE5EA', paddingHorizontal: 10, paddingVertical: 5 }, safetyText: { fontSize: 9, color: '#D71536' },
-  emergencyArrow: { position: 'absolute', right: 10, top: 53, width: 32, height: 32, borderRadius: 17, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+  safetyBadge: { position: 'absolute', right: 8, top: 8, borderRadius: 20, backgroundColor: c.dangerLight, paddingHorizontal: 10, paddingVertical: 5 }, safetyText: { fontSize: 9, color: '#D71536' },
+  emergencyArrow: { position: 'absolute', right: 10, top: 53, width: 32, height: 32, borderRadius: 17, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center' },
   sectionRow: { marginTop: 24, marginBottom: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  categoryCard: { width: '48.3%', flexShrink: 1, borderRadius: 18, backgroundColor: '#FFFFFF', marginBottom: 12 },
+  categoryCard: { width: '48.3%', flexShrink: 1, borderRadius: 18, backgroundColor: c.surface, marginBottom: 12 },
   clip: { flex: 1, minHeight: 146, padding: 15, borderRadius: 18, overflow: 'hidden' },
   corner: { position: 'absolute', width: 115, height: 90, borderTopLeftRadius: 100, right: -57, bottom: -50, transform: [{ rotate: '-23deg' }] },
   categoryIcon: { width: 69, height: 64, borderRadius: 21, alignItems: 'center', justifyContent: 'center' }, categoryImage: { width: 56, height: 52, borderRadius: 12, resizeMode: 'contain' },
   categoryLabel: { flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 3, flex: 1 },
   categoryName: { flex: 1, fontSize: 16, lineHeight: 21, fontWeight: '700', color: colors.text },
-});
+}));

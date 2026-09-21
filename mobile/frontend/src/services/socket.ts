@@ -1,5 +1,5 @@
 import { io, Socket } from 'socket.io-client';
-import { API_BASE_URL } from './api';
+import { API_BASE_URL, isLanDevHost, LOCALHOST_API_BASE_URL } from './api';
 
 let socket: Socket | null = null;
 
@@ -19,6 +19,15 @@ export const connectSocket = (accessToken: string): Socket | null => {
       auth: { token: accessToken },
       transports: ['websocket'],
     });
+    if (isLanDevHost) {
+      socket.once('connect_error', () => {
+        socket?.disconnect();
+        socket = io(LOCALHOST_API_BASE_URL, {
+          auth: { token: accessToken },
+          transports: ['websocket'],
+        });
+      });
+    }
     return socket;
   } catch {
     return null;

@@ -1,15 +1,16 @@
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { Button } from '../../components/Button';
 import { listMyBusinesses } from '../../services/api';
+import { pickPosterImage } from '../../services/posterUpload';
 import type { Business } from '../../types/hyperlocal';
 import type { PostStackParamList } from '../../navigation/types';
 import { useApp } from '../../context/AppContext';
-import { theme } from '../../theme';
+import { theme, createThemedStyles } from '../../theme';
 
 type Props = NativeStackScreenProps<PostStackParamList, 'PostEntry'>;
 
@@ -20,6 +21,7 @@ export const PostEntryScreen: React.FC<Props> = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [businessPickerOpen, setBusinessPickerOpen] = useState(false);
+  const [posterLoading, setPosterLoading] = useState(false);
 
   const load = useCallback(() => {
     if (!accessToken) { setLoading(false); setLoadError('Sign in to load your businesses.'); return; }
@@ -51,6 +53,21 @@ export const PostEntryScreen: React.FC<Props> = ({ navigation }) => {
   const hasPlan = Boolean(business && isApproved && business.activeSubscription?.status === 'active' && new Date(business.activeSubscription.endsAt) >= new Date());
   const statusLabel = business?.verificationStatus === 'verified' ? 'Approved' : business?.verificationStatus === 'pending' ? 'Pending approval' : business?.verificationStatus === 'rejected' ? 'Needs changes' : 'Suspended';
 
+  // A ready-made poster skips the designer but still goes through the normal
+  // offer form and submission, so admin review applies exactly as before.
+  const uploadPoster = async () => {
+    if (!business || posterLoading) return;
+    setPosterLoading(true);
+    try {
+      const pick = await pickPosterImage();
+      if (!pick) return;
+      if ('error' in pick) return Alert.alert('Poster not added', pick.error);
+      navigation.navigate('CreateOffer', { businessId: business._id, uploadedPoster: pick.poster });
+    } finally {
+      setPosterLoading(false);
+    }
+  };
+
   return (
     <ScreenContainer style={styles.container}>
       <View style={styles.topBar}><Pressable onPress={navigation.goBack} style={styles.backButton}><MaterialCommunityIcons name="chevron-left" size={26} color={theme.colors.text} /></Pressable><Text style={styles.topBarTitle}>Post a Local Offer</Text><View style={styles.topBarSpacer} /></View>
@@ -77,11 +94,9 @@ export const PostEntryScreen: React.FC<Props> = ({ navigation }) => {
         if (business) navigation.navigate('TemplateLibrary', { businessId: business._id });
       }} fullWidth />
 
-
-      {business ? <Pressable onPress={() => navigation.navigate('BusinessSetup', { businessId: business._id })} style={styles.customize}>
-        <MaterialCommunityIcons name="pencil-outline" size={18} color={theme.colors.primary} />
-        <Text style={styles.customizeText}>{business.verificationStatus === 'rejected' ? 'Update & resubmit profile' : 'Customize business profile'}</Text>
-      </Pressable> : null}
+      <View style={styles.orRow}><View style={styles.orLine} /><Text style={styles.orText}>or</Text><View style={styles.orLine} /></View>
+      <Button label="Upload your poster" variant="outline" disabled={!business} loading={posterLoading} onPress={uploadPoster} fullWidth icon={<MaterialCommunityIcons name="cloud-upload-outline" size={20} color={theme.colors.primary} />} />
+      <Text style={styles.uploadHint}>Already have a design? Upload your own poster and post it directly. Admin reviews every offer before it goes live.</Text>
       </ScrollView>
       <Modal transparent animationType="slide" visible={businessPickerOpen} onRequestClose={() => setBusinessPickerOpen(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setBusinessPickerOpen(false)}>
@@ -101,12 +116,12 @@ export const PostEntryScreen: React.FC<Props> = ({ navigation }) => {
 
 const Step = ({ number, label, done }: { number: string; label: string; done: boolean }) => <View style={styles.step}><View style={[styles.stepCircle, done && styles.done]}>{done ? <MaterialCommunityIcons name="check" size={18} color={theme.colors.textInverse} /> : <Text style={styles.stepNumber}>{number}</Text>}</View><Text style={styles.stepLabel}>{label}</Text></View>;
 
-const styles = StyleSheet.create({
-  container: { paddingHorizontal: 14 }, scrollContent: { flexGrow: 1, paddingBottom: 20 }, center: { alignItems: 'center', justifyContent: 'center' }, flex: { flex: 1 }, topBar: { height: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, backButton: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }, topBarTitle: { ...theme.typography.bodyBold, color: theme.colors.text }, topBarSpacer: { width: 36 },
-  heroBanner: { height: 178, marginTop: 8, overflow: 'hidden', borderRadius: 18, backgroundColor: '#DDF3FC', position: 'relative' }, heroGlow: { position: 'absolute', width: 240, height: 240, borderRadius: 120, backgroundColor: '#BDE9F9', right: -35, top: -32 }, heroImage: { width: '100%', height: '100%', transform: [{ scale: 1.08 }] }, hero: { alignItems: 'center', paddingHorizontal: 8, paddingTop: 17 }, icon: { width: 96, height: 96, borderRadius: 30, backgroundColor: theme.colors.primaryLight, alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginBottom: 18 }, title: { ...theme.typography.h2, color: theme.colors.text, textAlign: 'center' }, body: { ...theme.typography.body, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 20, marginTop: 7 },
-  selectionLabel: { ...theme.typography.caption, color: theme.colors.text, fontWeight: '900', marginTop: 25, marginBottom: 8 }, businessSelectCard: { minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 12, borderRadius: 10, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: '#E6EAF0', shadowColor: '#64748B', shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 2 }, businessSelectLogo: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', backgroundColor: theme.colors.primaryLight }, businessSelectText: { flex: 1, ...theme.typography.bodyBold, color: theme.colors.text }, businessPlaceholder: { color: theme.colors.textSecondary, fontWeight: '700' },
-  selectedBusiness: { flexDirection: 'row', alignItems: 'center', gap: 11, backgroundColor: theme.colors.primaryLight, borderRadius: 17, padding: 13, marginTop: 18 }, selectedIcon: { width: 45, height: 45, borderRadius: 14, backgroundColor: theme.colors.surface, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }, selectedLogo: { width: '100%', height: '100%' }, selectedLabel: { ...theme.typography.tiny, color: theme.colors.textMuted, fontWeight: '900', letterSpacing: 1 }, selectedName: { ...theme.typography.bodyBold, color: theme.colors.text, marginTop: 2 }, status: { ...theme.typography.tiny, color: theme.colors.warning, fontWeight: '900', textTransform: 'uppercase' }, statusApproved: { color: theme.colors.success }, helperCard: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, marginTop: 16, borderRadius: 13, backgroundColor: theme.colors.primaryLight }, helperText: { ...theme.typography.caption, color: theme.colors.primaryDark, fontWeight: '700' },
-  modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(15,23,42,0.28)' }, businessSheet: { padding: 16, paddingBottom: 28, borderTopLeftRadius: 24, borderTopRightRadius: 24, backgroundColor: theme.colors.surface }, sheetHandle: { width: 38, height: 4, alignSelf: 'center', borderRadius: 2, backgroundColor: theme.colors.border, marginBottom: 14 }, sheetTitle: { ...theme.typography.h3, color: theme.colors.text, marginBottom: 10 }, sheetOption: { minHeight: 55, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 10, borderRadius: 12 }, sheetOptionActive: { backgroundColor: theme.colors.primaryLight }, sheetLogo: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', backgroundColor: theme.colors.surfaceAlt }, sheetOptionText: { flex: 1, ...theme.typography.bodyBold, color: theme.colors.text },
-  steps: { marginVertical: 22, backgroundColor: theme.colors.surface, borderRadius: 20, padding: 16, gap: 14 }, step: { flexDirection: 'row', alignItems: 'center', gap: 12 }, stepCircle: { width: 34, height: 34, borderRadius: 17, backgroundColor: theme.colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }, done: { backgroundColor: theme.colors.success }, stepNumber: { fontWeight: '900', color: theme.colors.textMuted }, stepLabel: { ...theme.typography.bodyBold, color: theme.colors.text }, approvalCard: { flexDirection: 'row', gap: 11, backgroundColor: theme.colors.secondaryLight, borderRadius: 16, padding: 14, marginBottom: 16 }, approvalTitle: { ...theme.typography.bodyBold, color: theme.colors.text }, approvalText: { ...theme.typography.caption, color: theme.colors.textSecondary, lineHeight: 18, marginTop: 3 }, customize: { minHeight: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 8 }, customizeText: { ...theme.typography.caption, color: theme.colors.primary, fontWeight: '900' },
+const styles = createThemedStyles((c) => ({
+  container: { paddingHorizontal: 14 }, scrollContent: { flexGrow: 1, paddingBottom: 20 }, center: { alignItems: 'center', justifyContent: 'center' }, flex: { flex: 1 }, topBar: { height: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, backButton: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }, topBarTitle: { ...theme.typography.bodyBold, color: c.text }, topBarSpacer: { width: 36 },
+  heroBanner: { height: 178, marginTop: 8, overflow: 'hidden', borderRadius: 18, backgroundColor: c.primaryLight, position: 'relative' }, heroGlow: { position: 'absolute', width: 240, height: 240, borderRadius: 120, backgroundColor: c.primaryLight, right: -35, top: -32 }, heroImage: { width: '100%', height: '100%', transform: [{ scale: 1.08 }] }, hero: { alignItems: 'center', paddingHorizontal: 8, paddingTop: 17 }, icon: { width: 96, height: 96, borderRadius: 30, backgroundColor: c.primaryLight, alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginBottom: 18 }, title: { ...theme.typography.h2, color: c.text, textAlign: 'center' }, body: { ...theme.typography.body, color: c.textSecondary, textAlign: 'center', lineHeight: 20, marginTop: 7 },
+  selectionLabel: { ...theme.typography.caption, color: c.text, fontWeight: '900', marginTop: 25, marginBottom: 8 }, businessSelectCard: { minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 12, borderRadius: 10, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border, shadowColor: c.shadowStrong, shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 2 }, businessSelectLogo: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', backgroundColor: c.primaryLight }, businessSelectText: { flex: 1, ...theme.typography.bodyBold, color: c.text }, businessPlaceholder: { color: c.textSecondary, fontWeight: '700' },
+  selectedBusiness: { flexDirection: 'row', alignItems: 'center', gap: 11, backgroundColor: c.primaryLight, borderRadius: 17, padding: 13, marginTop: 18 }, selectedIcon: { width: 45, height: 45, borderRadius: 14, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }, selectedLogo: { width: '100%', height: '100%' }, selectedLabel: { ...theme.typography.tiny, color: c.textMuted, fontWeight: '900', letterSpacing: 1 }, selectedName: { ...theme.typography.bodyBold, color: c.text, marginTop: 2 }, status: { ...theme.typography.tiny, color: c.warning, fontWeight: '900', textTransform: 'uppercase' }, statusApproved: { color: c.success }, helperCard: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, marginTop: 16, borderRadius: 13, backgroundColor: c.primaryLight }, helperText: { ...theme.typography.caption, color: c.primaryDark, fontWeight: '700' },
+  modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(15,23,42,0.28)' }, businessSheet: { padding: 16, paddingBottom: 28, borderTopLeftRadius: 24, borderTopRightRadius: 24, backgroundColor: c.surface }, sheetHandle: { width: 38, height: 4, alignSelf: 'center', borderRadius: 2, backgroundColor: c.border, marginBottom: 14 }, sheetTitle: { ...theme.typography.h3, color: c.text, marginBottom: 10 }, sheetOption: { minHeight: 55, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 10, borderRadius: 12 }, sheetOptionActive: { backgroundColor: c.primaryLight }, sheetLogo: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', backgroundColor: c.surfaceAlt }, sheetOptionText: { flex: 1, ...theme.typography.bodyBold, color: c.text },
+  steps: { marginVertical: 22, backgroundColor: c.surface, borderRadius: 20, padding: 16, gap: 14 }, step: { flexDirection: 'row', alignItems: 'center', gap: 12 }, stepCircle: { width: 34, height: 34, borderRadius: 17, backgroundColor: c.surfaceAlt, alignItems: 'center', justifyContent: 'center' }, done: { backgroundColor: c.success }, stepNumber: { fontWeight: '900', color: c.textMuted }, stepLabel: { ...theme.typography.bodyBold, color: c.text }, approvalCard: { flexDirection: 'row', gap: 11, backgroundColor: c.secondaryLight, borderRadius: 16, padding: 14, marginBottom: 16 }, approvalTitle: { ...theme.typography.bodyBold, color: c.text }, approvalText: { ...theme.typography.caption, color: c.textSecondary, lineHeight: 18, marginTop: 3 }, orRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 14 }, orLine: { flex: 1, height: 1, backgroundColor: c.border }, orText: { ...theme.typography.caption, color: c.textMuted, fontWeight: '800' }, uploadHint: { ...theme.typography.caption, color: c.textSecondary, textAlign: 'center', lineHeight: 18, marginTop: 10, paddingHorizontal: 12 },
   designChoices: { marginTop: 2 },
-});
+}));

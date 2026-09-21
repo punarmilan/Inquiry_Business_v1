@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { theme } from '../../theme';
+import { theme, createThemedStyles } from '../../theme';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { IconButton } from '../../components/IconButton';
 import { Avatar } from '../../components/Avatar';
@@ -144,7 +144,7 @@ const Stat: React.FC<{
   </View>
 );
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...theme.typography.h3,
-    color: theme.colors.text,
+    color: c.text,
   },
   center: {
     flex: 1,
@@ -164,7 +164,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     ...theme.typography.body,
-    color: theme.colors.textMuted,
+    color: c.textMuted,
   },
   scroll: {
     paddingHorizontal: theme.spacing.lg,
@@ -177,32 +177,32 @@ const styles = StyleSheet.create({
   },
   name: {
     ...theme.typography.h2,
-    color: theme.colors.text,
+    color: c.text,
   },
   verifiedPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: theme.colors.successLight,
+    backgroundColor: c.successLight,
     borderRadius: theme.radius.md,
     paddingHorizontal: theme.spacing.xs,
     paddingVertical: 3,
   },
   verifiedText: {
     ...theme.typography.tiny,
-    color: theme.colors.success,
+    color: c.success,
     fontWeight: '700',
   },
   memberSince: {
     ...theme.typography.caption,
-    color: theme.colors.textMuted,
+    color: c.textMuted,
   },
   statsRow: {
     flexDirection: 'row',
-    backgroundColor: theme.colors.surface,
+    backgroundColor: c.surface,
     borderRadius: theme.radius.lg,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: c.border,
     paddingVertical: theme.spacing.sm,
     marginTop: theme.spacing.xs,
   },
@@ -213,11 +213,11 @@ const styles = StyleSheet.create({
   },
   statValue: {
     ...theme.typography.bodyBold,
-    color: theme.colors.text,
+    color: c.text,
   },
   statLabel: {
     ...theme.typography.tiny,
-    color: theme.colors.textMuted,
+    color: c.textMuted,
     textAlign: 'center',
   },
   section: {
@@ -226,7 +226,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...theme.typography.bodyBold,
-    color: theme.colors.text,
+    color: c.text,
   },
   chipRow: {
     flexDirection: 'row',
@@ -234,26 +234,26 @@ const styles = StyleSheet.create({
     gap: theme.spacing.xs,
   },
   chip: {
-    backgroundColor: theme.colors.primaryLight,
+    backgroundColor: c.primaryLight,
     borderRadius: theme.radius.md,
     paddingHorizontal: theme.spacing.sm,
     paddingVertical: 6,
   },
   chipText: {
     ...theme.typography.caption,
-    color: theme.colors.primaryDark,
+    color: c.primaryDark,
     fontWeight: '700',
   },
   emptyReviews: {
     ...theme.typography.body,
-    color: theme.colors.textMuted,
+    color: c.textMuted,
   },
   reviewRow: {
     flexDirection: 'row',
     gap: theme.spacing.sm,
     paddingVertical: theme.spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.divider,
+    borderBottomColor: c.divider,
   },
   reviewBody: {
     flex: 1,
@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
   },
   reviewerName: {
     ...theme.typography.bodyBold,
-    color: theme.colors.text,
+    color: c.text,
   },
   reviewStars: {
     flexDirection: 'row',
@@ -274,12 +274,12 @@ const styles = StyleSheet.create({
   },
   reviewScore: {
     ...theme.typography.caption,
-    color: theme.colors.accentDark,
+    color: c.accentDark,
     fontWeight: '700',
   },
   reviewComment: {
     ...theme.typography.caption,
-    color: theme.colors.textSecondary,
+    color: c.textSecondary,
     marginTop: 2,
   },
-});
+}));

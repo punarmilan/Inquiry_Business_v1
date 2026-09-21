@@ -9,6 +9,7 @@ const items = [
   { to: '/service-categories', label: 'Service Categories', icon: Wrench },
   { to: '/businesses', label: 'Businesses', icon: Building2 },
   { to: '/offers', label: 'Offers', icon: Tags },
+  { to: '/home-showcase', label: 'Home Showcase', icon: PanelsTopLeft },
   { to: '/plans', label: 'Subscription Plans', icon: CreditCard },
   { to: '/offer-templates', label: 'Offer Templates', icon: PanelsTopLeft },
   { to: '/payments', label: 'Payments', icon: CreditCard },

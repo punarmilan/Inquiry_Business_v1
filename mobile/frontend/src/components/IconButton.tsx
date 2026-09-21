@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, View, StyleSheet, ViewStyle, StyleProp } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { theme } from '../theme';
+import { theme, createThemedStyles } from '../theme';
 
 interface IconButtonProps {
   name: keyof typeof MaterialCommunityIcons.glyphMap;
@@ -43,7 +43,7 @@ export const IconButton: React.FC<IconButtonProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   base: {
     minWidth: theme.MIN_TAP_TARGET,
     minHeight: theme.MIN_TAP_TARGET,
@@ -61,8 +61,8 @@ const styles = StyleSheet.create({
     width: 9,
     height: 9,
     borderRadius: 5,
-    backgroundColor: theme.colors.danger,
+    backgroundColor: c.danger,
     borderWidth: 1.5,
-    borderColor: theme.colors.surface,
+    borderColor: c.surface,
   },
-});
+}));

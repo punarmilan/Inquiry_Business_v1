@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { theme } from '../../theme';
+import { theme, createThemedStyles } from '../../theme';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { IconButton } from '../../components/IconButton';
 import { ProfileStackParamList } from '../../navigation/types';
@@ -73,7 +73,7 @@ const HelpAction: React.FC<{
   </Pressable>
 );
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -83,7 +83,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...theme.typography.h2,
-    color: theme.colors.text,
+    color: c.text,
   },
   scroll: {
     padding: theme.spacing.lg,
@@ -91,26 +91,26 @@ const styles = StyleSheet.create({
   },
   hero: {
     borderRadius: theme.radius.lg,
-    backgroundColor: theme.colors.primaryLight,
+    backgroundColor: c.primaryLight,
     padding: theme.spacing.lg,
     alignItems: 'center',
   },
   heroTitle: {
     ...theme.typography.h2,
-    color: theme.colors.text,
+    color: c.text,
     marginTop: theme.spacing.sm,
   },
   heroBody: {
     ...theme.typography.body,
-    color: theme.colors.textSecondary,
+    color: c.textSecondary,
     textAlign: 'center',
     marginTop: theme.spacing.xs,
   },
   card: {
     borderRadius: theme.radius.lg,
     borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface,
+    borderColor: c.border,
+    backgroundColor: c.surface,
     overflow: 'hidden',
   },
   actionRow: {
@@ -120,13 +120,13 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
     paddingHorizontal: theme.spacing.md,
     borderTopWidth: 1,
-    borderTopColor: theme.colors.divider,
+    borderTopColor: c.divider,
   },
   actionIcon: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: theme.colors.primaryLight,
+    backgroundColor: c.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -135,14 +135,14 @@ const styles = StyleSheet.create({
   },
   actionTitle: {
     ...theme.typography.bodyBold,
-    color: theme.colors.text,
+    color: c.text,
   },
   actionBody: {
     ...theme.typography.caption,
-    color: theme.colors.textSecondary,
+    color: c.textSecondary,
     marginTop: 2,
   },
   pressed: {
     opacity: 0.72,
   },
-});
+}));

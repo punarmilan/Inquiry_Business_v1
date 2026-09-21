@@ -3,10 +3,16 @@ const controller = require('../controllers/hyperlocalController');
 const validate = require('../middleware/validate');
 const { requireAdminAuth } = require('../middleware/auth');
 const schemas = require('../validators/hyperlocal.validator');
+const homeShowcase = require('../controllers/homeShowcaseController');
+const homeShowcaseSchemas = require('../validators/homeShowcase.validator');
 
 const router = express.Router();
 router.get('/template-assets/:id', controller.getTemplateAsset);
 router.use(requireAdminAuth);
+
+router.get('/home-showcase', homeShowcase.getHomeShowcase);
+router.get('/home-showcase/posters', validate(schemas.list), homeShowcase.listPosterCandidates);
+router.put('/home-showcase', validate(homeShowcaseSchemas.updateHomeShowcase), homeShowcase.updateHomeShowcase);
 
 router.get('/cities', controller.listCities);
 router.post('/cities', validate(schemas.cityCreate), controller.createCity);
@@ -48,6 +54,8 @@ router.patch('/bookings/:id/forward', validate(schemas.forwardBooking), controll
 router.patch('/bookings/:id/status', validate(schemas.bookingStatus), controller.updateBookingStatus);
 router.get('/commerce-payments', validate(schemas.list), controller.listPayments);
 router.post('/commerce-payments/:id/verify', validate(schemas.verifyPayment), controller.verifyPayment);
+router.post('/commerce-payments/:id/decline', validate(schemas.declinePayment), controller.declinePayment);
 router.post('/commerce-payments/:id/refund', validate(schemas.refundPayment), controller.refundPayment);
+router.delete('/commerce-payments/:id', validate(schemas.deleteById), controller.deletePayment);
 
 module.exports = router;

@@ -11,6 +11,7 @@ import type { ServiceProvider } from '../../types/hyperlocal';
 import type { ServicesStackParamList } from '../../navigation/types';
 import { CoolingArtwork, ServiceBackdrop, ServiceHeader, ServiceImage, ServiceSearch, categoryPalette, safeIcon, serviceColors as colors, ui } from './ServiceUI';
 import type { ServiceIconName } from './ServiceUI';
+import { createThemedStyles, getThemeMode } from '../../theme';
 
 type Props = NativeStackScreenProps<ServicesStackParamList, 'ServiceProviders'>;
 const normalize = (value: string) => value.trim().toLocaleLowerCase('en-IN');
@@ -59,7 +60,7 @@ export const ServiceProvidersScreen: React.FC<Props> = ({ route, navigation }) =
     <FlatList data={visible} keyExtractor={(item) => item._id} contentContainerStyle={[styles.content, { paddingBottom: 90 + insets.bottom }]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" refreshing={loading} onRefresh={load}
       ListHeaderComponent={<>
         <View style={[styles.banner, ui.shadow]}>
-          <LinearGradient colors={['#EEFCFF', '#E5F9FB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+          <LinearGradient colors={getThemeMode() === 'dark' ? ['#083744', '#052A33'] : ['#EEFCFF', '#E5F9FB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
           <View style={styles.bannerBadge}><MaterialCommunityIcons name="shield-check" size={31} color={colors.teal} /></View>
           <View style={styles.bannerCopy}><Text style={styles.bannerTitle}>{cooling ? 'Stay Cool, Stay Comfortable' : 'Find help, close to home'}</Text><Text style={styles.bannerText}>{cooling ? 'Local AC service professionals' : categoryName + ' providers'} in your area</Text></View>
           {cooling ? <CoolingArtwork /> : <View style={[styles.bannerSymbol, { backgroundColor: palette.light }]}><MaterialCommunityIcons name={bannerIcon} size={43} color={palette.ink} /></View>}
@@ -86,7 +87,7 @@ const ProviderCard = ({ provider, categoryName, locality, index, onCall, onWhats
       <View style={styles.identityCopy}>
         <View style={styles.nameRow}><Text style={styles.name}>{provider.name}</Text>{rated ? <View style={[styles.rating, { backgroundColor: highRating ? '#EAFBEF' : '#FFF8E2' }]}><MaterialCommunityIcons name="star" size={17} color={highRating ? '#41B62B' : '#DDA800'} /><Text style={styles.ratingValue}>{provider.ratingAverage.toFixed(1)}<Text style={styles.ratingCount}> ({provider.ratingCount})</Text></Text></View> : null}</View>
         <Text style={styles.category}>{categoryName}</Text>
-        <View style={styles.areaLine}><MaterialCommunityIcons name="map-marker" size={16} color="#354351" /><Text style={styles.areaText}>Home Visit Available in {locality}</Text></View>
+        <View style={styles.areaLine}><MaterialCommunityIcons name="map-marker" size={16} color={colors.muted} /><Text style={styles.areaText}>Home Visit Available in {locality}</Text></View>
         {provider.verificationStatus === 'verified' ? <View accessibilityLabel="Verified provider" style={styles.verifiedBadge}><MaterialCommunityIcons name="shield-check" size={15} color="#168447" /><Text style={styles.verifiedText}>Verified provider</Text></View> : null}
       </View>
     </View>
@@ -102,27 +103,27 @@ const ContactButton = ({ icon, label, color, background, onPress, disabled }: { 
   <LinearGradient colors={[color, color + 'BB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.actionIcon}><MaterialCommunityIcons name={icon} size={18} color="#FFFFFF" /></LinearGradient><Text style={[styles.actionLabel, { color }]}>{label}</Text>
 </Pressable>;
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   headerRow: { flexDirection: 'row', alignItems: 'center' }, headerCopy: { flex: 1 }, headerArt: { width: 64, overflow: 'hidden', marginRight: 10 },
   content: { paddingHorizontal: 16 },
-  banner: { overflow: 'hidden', flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, paddingRight: 0, borderRadius: 18, borderWidth: 1, borderColor: '#DBF3F7', marginBottom: 12, minHeight: 86 },
-  bannerBadge: { width: 42, height: 46, borderRadius: 16, backgroundColor: '#D5F5F7', alignItems: 'center', justifyContent: 'center' },
+  banner: { overflow: 'hidden', flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, paddingRight: 0, borderRadius: 18, borderWidth: 1, borderColor: c.border, marginBottom: 12, minHeight: 86 },
+  bannerBadge: { width: 42, height: 46, borderRadius: 16, backgroundColor: c.primaryLight, alignItems: 'center', justifyContent: 'center' },
   bannerCopy: { flex: 1 }, bannerTitle: { fontSize: 14, lineHeight: 19, fontWeight: '800', color: colors.darkTeal }, bannerText: { fontSize: 12, lineHeight: 17, color: '#738091', marginTop: 4 },
   bannerSymbol: { width: 62, height: 62, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 22, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#EDF8FA' },
+  card: { backgroundColor: c.surface, borderRadius: 22, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: c.border },
   identity: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  photo: { width: 68, height: 68, borderRadius: 34 }, initialsCircle: { alignItems: 'center', justifyContent: 'center' }, initials: { fontSize: 27, fontWeight: '800', color: '#00778B' },
-  availableDot: { position: 'absolute', width: 17, height: 17, borderRadius: 10, backgroundColor: '#65CE3C', right: 1, bottom: 3, borderWidth: 2.5, borderColor: '#FFFFFF' },
+  photo: { width: 68, height: 68, borderRadius: 34 }, initialsCircle: { alignItems: 'center', justifyContent: 'center' }, initials: { fontSize: 27, fontWeight: '800', color: c.primaryDark },
+  availableDot: { position: 'absolute', width: 17, height: 17, borderRadius: 10, backgroundColor: '#65CE3C', right: 1, bottom: 3, borderWidth: 2.5, borderColor: c.surface },
   identityCopy: { flex: 1 }, nameRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: 5 },
   name: { flexGrow: 1, flexShrink: 1, flexBasis: 135, fontSize: 17, lineHeight: 22, fontWeight: '800', color: colors.text },
   rating: { flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: 18, paddingHorizontal: 8, paddingVertical: 7 },
-  ratingValue: { fontSize: 12, fontWeight: '700', color: '#1A5940' }, ratingCount: { fontSize: 10, color: '#374B42', fontWeight: '400' },
-  category: { fontSize: 13, color: '#008B9B', lineHeight: 18, marginTop: 3 },
+  ratingValue: { fontSize: 12, fontWeight: '700', color: c.primaryDark }, ratingCount: { fontSize: 10, color: c.text, fontWeight: '400' },
+  category: { fontSize: 13, color: c.primaryDark, lineHeight: 18, marginTop: 3 },
   areaLine: { flexDirection: 'row', alignItems: 'flex-start', gap: 3, marginTop: 4 }, areaText: { flex: 1, fontSize: 12, lineHeight: 17, color: '#4D586B' },
-  verifiedBadge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 4, marginTop: 6, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, backgroundColor: '#EAF8EF' }, verifiedText: { color: '#168447', fontSize: 11, fontWeight: '700' },
+  verifiedBadge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 4, marginTop: 6, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, backgroundColor: c.successLight }, verifiedText: { color: c.success, fontSize: 11, fontWeight: '700' },
   description: { fontSize: 13, color: '#596579', lineHeight: 18, marginTop: 14 },
-  actions: { flexDirection: 'row', alignItems: 'center', gap: 6, borderTopWidth: 1, borderTopColor: '#EEF2F5', marginTop: 12, paddingTop: 10 },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: 6, borderTopWidth: 1, borderTopColor: c.border, marginTop: 12, paddingTop: 10 },
   action: { flex: 1, minHeight: 43, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: 4, borderRadius: 25 },
   actionIcon: { width: 29, height: 29, borderRadius: 17, alignItems: 'center', justifyContent: 'center' }, actionLabel: { fontSize: 11, fontWeight: '700', flexShrink: 1 },
   emptyTitle: { fontSize: 20, fontWeight: '700', color: colors.text },
-});
+}));

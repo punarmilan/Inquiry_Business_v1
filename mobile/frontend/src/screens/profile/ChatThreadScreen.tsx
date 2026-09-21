@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { theme } from '../../theme';
+import { theme, createThemedStyles } from '../../theme';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { IconButton } from '../../components/IconButton';
 import { Avatar } from '../../components/Avatar';
@@ -193,7 +193,7 @@ export const ChatThreadScreen: React.FC<Props> = ({ route, navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   flex: { flex: 1 },
   header: {
     flexDirection: 'row',
@@ -202,11 +202,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.xs,
     paddingVertical: theme.spacing.xs,
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    borderBottomColor: c.border,
   },
   headerName: {
     ...theme.typography.h3,
-    color: theme.colors.text,
+    color: c.text,
     flex: 1,
   },
   messageList: {
@@ -233,28 +233,28 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.xs,
   },
   bubbleThem: {
-    backgroundColor: theme.colors.surfaceAlt,
+    backgroundColor: c.surfaceAlt,
     borderBottomLeftRadius: 4,
   },
   bubbleMe: {
-    backgroundColor: theme.colors.primary,
+    backgroundColor: c.primary,
     borderBottomRightRadius: 4,
   },
   bubbleText: {
     ...theme.typography.body,
-    color: theme.colors.text,
+    color: c.text,
   },
   bubbleTextMe: {
-    color: theme.colors.textInverse,
+    color: c.textInverse,
   },
   bubbleTime: {
     ...theme.typography.tiny,
-    color: theme.colors.textMuted,
+    color: c.textMuted,
     marginTop: 2,
     alignSelf: 'flex-end',
   },
   bubbleTimeMe: {
-    color: theme.colors.primaryLight,
+    color: c.primaryLight,
   },
   inputRow: {
     flexDirection: 'row',
@@ -263,13 +263,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.sm,
     paddingVertical: theme.spacing.xs,
     borderTopWidth: 1,
-    borderTopColor: theme.colors.divider,
+    borderTopColor: c.divider,
   },
   input: {
     flex: 1,
     ...theme.typography.body,
-    color: theme.colors.text,
-    backgroundColor: theme.colors.surfaceAlt,
+    color: c.text,
+    backgroundColor: c.surfaceAlt,
     borderRadius: theme.radius.lg,
     paddingHorizontal: theme.spacing.sm,
     paddingVertical: theme.spacing.sm,
@@ -287,7 +287,7 @@ const styles = StyleSheet.create({
   },
   threadStateText: {
     ...theme.typography.body,
-    color: theme.colors.textMuted,
+    color: c.textMuted,
     textAlign: 'center',
   },
-});
+}));

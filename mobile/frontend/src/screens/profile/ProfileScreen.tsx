@@ -1,27 +1,125 @@
 import React, { useCallback, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, ScrollView, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { Avatar } from '../../components/Avatar';
+import { SkylineMasthead } from '../../components/NeonUI';
 import { listMyBusinesses } from '../../services/api';
 import type { Business } from '../../types/hyperlocal';
 import type { ProfileStackParamList } from '../../navigation/types';
 import { useApp } from '../../context/AppContext';
-import { theme } from '../../theme';
+import { theme, createThemedStyles } from '../../theme';
+import { subscriptionPlanName } from '../../utils/subscription';
+import { tabBarScrollProps } from '../../navigation/hideTabBarOnScroll';
 
 type Props = NativeStackScreenProps<ProfileStackParamList, 'ProfileMain'>;
+
 export const ProfileScreen: React.FC<Props> = ({ navigation }) => {
-  const { currentUser, accessToken, logout, refreshProfile, language, t } = useApp(); const [business, setBusiness] = useState<Business | null>(null);
+  const { currentUser, accessToken, logout, refreshProfile, language, t } = useApp();
+  const [business, setBusiness] = useState<Business | null>(null);
   useFocusEffect(useCallback(() => { refreshProfile(); if (accessToken) listMyBusinesses(accessToken).then((r) => setBusiness(r.data[0] || null)).catch(() => undefined); }, [accessToken, refreshProfile]));
   const confirmLogout = () => Alert.alert(t('logoutQuestion'), '', [{ text: t('cancel') }, { text: t('logout'), style: 'destructive', onPress: logout }]);
-  return <ScreenContainer><View style={styles.top}><Text style={styles.topTitle}>{t('profileTitle')}</Text><Pressable onPress={() => navigation.navigate('Settings')} style={({ pressed }) => [styles.settings, pressed && styles.pressed]}><MaterialCommunityIcons name="cog-outline" size={24} /></Pressable></View><ScrollView contentContainerStyle={styles.content}>
-    <View style={styles.identity}><View pointerEvents="none" style={styles.identityGlow} /><Avatar uri={currentUser?.avatar} name={currentUser?.name || t('userFallback')} size={88} verified={currentUser?.verified} /><Text style={styles.name}>{currentUser?.name || t('userFallback')}</Text><Text style={styles.phone}>{currentUser?.phone}</Text>{currentUser?.email ? <Text style={styles.email}>{currentUser.email}</Text> : null}<Pressable onPress={() => navigation.navigate('EditProfile', { section: 'profile' })} style={({ pressed }) => [styles.edit, pressed && styles.pressed]}><MaterialCommunityIcons name="pencil-outline" size={17} color={theme.colors.primary} /><Text style={styles.editText}>{t('editProfileShort')}</Text></Pressable></View>
-    <Text style={styles.section}>{t('accountSection')}</Text><Menu icon="map-marker-outline" title={t('savedLocationsTitle')} subtitle={t('savedLocationsSubtitle')} onPress={() => navigation.navigate('SavedLocations')} /><Menu icon="bookmark-outline" title={t('savedOffersTitle')} subtitle={t('savedOffersSubtitle')} onPress={() => navigation.navigate('SavedOffers')} />
-    <Text style={styles.section}>{t('businessSection')}</Text>{business ? <><Menu icon="storefront-outline" title={business.name} subtitle={`${t('verification')}: ${business.verificationStatus}`} onPress={() => navigation.navigate('MyBusiness')} /><Menu icon="crown-outline" title={business.activeSubscription ? t('activeBusinessPlan') : t('chooseBusinessPlan')} subtitle={business.activeSubscription ? `${t('validUntil')} ${new Date(business.activeSubscription.endsAt).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-IN')}` : t('planRequired')} onPress={() => navigation.navigate('Plans', { businessId: business._id })} /></> : <View style={styles.noBusiness}><MaterialCommunityIcons name="storefront-plus-outline" size={28} color={theme.colors.primary} /><Text style={styles.noBusinessText}>{t('createBusinessHint')}</Text></View>}
-    <Text style={styles.section}>{t('settingsSection')}</Text><Menu icon="account-cog-outline" title={t('accountSettings')} subtitle={t('accountSettingsSubtitle')} onPress={() => navigation.navigate('Settings')} /><Menu icon="lifebuoy" title={t('help')} subtitle={t('profileHelpSubtitle')} onPress={() => navigation.navigate('HelpSupport')} /><Pressable onPress={confirmLogout} style={styles.logout}><MaterialCommunityIcons name="logout" size={21} color={theme.colors.danger} /><Text style={styles.logoutText}>{t('logout')}</Text></Pressable>
-  </ScrollView></ScreenContainer>;
+  const editProfile = () => navigation.navigate('EditProfile', { section: 'profile' });
+
+  return <ScreenContainer>
+    <SkylineMasthead height={260} />
+    <View style={styles.top}>
+      <View style={styles.topCopy}>
+        <Text style={styles.topTitle}>{t('profileTitle')}</Text>
+      </View>
+      <Pressable accessibilityRole="button" accessibilityLabel={t('accountSettings')} onPress={() => navigation.navigate('Settings')} style={({ pressed }) => [styles.settings, pressed && styles.pressed]}>
+        <MaterialCommunityIcons name="cog-outline" size={20} color={theme.colors.primary} />
+      </Pressable>
+    </View>
+    <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} {...tabBarScrollProps}>
+      <View style={styles.identity}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('editProfileShort')} onPress={editProfile} style={styles.avatarWrap}>
+          <Avatar uri={currentUser?.avatar} name={currentUser?.name || t('userFallback')} size={58} verified={currentUser?.verified} />
+          <View style={styles.cameraBadge}><MaterialCommunityIcons name="camera" size={13} color={theme.colors.background} /></View>
+        </Pressable>
+        <View style={styles.identityCopy}>
+          <Text numberOfLines={1} style={styles.name}>{currentUser?.name || t('userFallback')}</Text>
+          {currentUser?.phone ? <View style={styles.identityLine}><MaterialCommunityIcons name="phone" size={14} color={theme.colors.primary} /><Text numberOfLines={1} style={styles.identityText}>{currentUser.phone}</Text></View> : null}
+          {currentUser?.email ? <View style={styles.identityLine}><MaterialCommunityIcons name="email-outline" size={14} color={theme.colors.primary} /><Text numberOfLines={1} style={styles.identityText}>{currentUser.email}</Text></View> : null}
+        </View>
+        <View style={styles.identityDivider} />
+        <Pressable accessibilityRole="button" onPress={editProfile} style={({ pressed }) => [styles.edit, pressed && styles.pressed]}>
+          <MaterialCommunityIcons name="pencil-outline" size={16} color={theme.colors.primary} />
+          <Text numberOfLines={1} style={styles.editText}>{t('editProfileShort')}</Text>
+        </Pressable>
+      </View>
+
+      <SectionLabel title={t('exploreSection')} />
+      <Menu icon="map-marker-outline" tone="#2F80ED" title={t('savedLocationsTitle')} onPress={() => navigation.navigate('SavedLocations')} />
+      <Menu icon="tag-outline" tone="#12B76A" title={t('savedOffersTitle')} onPress={() => navigation.navigate('SavedOffers')} />
+
+      <SectionLabel title={t('businessSection')} />
+      {business ? <>
+        <Menu icon="storefront-outline" tone="#00A6B4" title={business.name} subtitle={`${t('verification')}: ${business.verificationStatus}`} onPress={() => navigation.navigate('MyBusiness')} photo={business.logoUrl || business.coverImageUrl} />
+        <Menu icon="crown-outline" tone="#7A5AF8" title={business.activeSubscription ? t('activeBusinessPlan') : t('chooseBusinessPlan')} subtitle={business.activeSubscription ? `${subscriptionPlanName(business.activeSubscription) ? `${subscriptionPlanName(business.activeSubscription)} · ` : ''}${t('validUntil')} ${new Date(business.activeSubscription.endsAt).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-IN')}` : t('planRequired')} onPress={() => navigation.navigate('Plans', { businessId: business._id })} />
+      </> : <View style={styles.noBusiness}><MaterialCommunityIcons name="storefront-plus-outline" size={28} color={theme.colors.primary} /><Text style={styles.noBusinessText}>{t('createBusinessHint')}</Text></View>}
+
+      <SectionLabel title={t('settingsSection')} />
+      <Menu icon="account-cog-outline" tone="#00A6B4" title={t('accountSettings')} onPress={() => navigation.navigate('Settings')} />
+      <Menu icon="lifebuoy" tone="#FF7A3D" title={t('help')} onPress={() => navigation.navigate('HelpSupport')} />
+      <Pressable accessibilityRole="button" onPress={confirmLogout} style={({ pressed }) => [styles.logout, pressed && styles.pressed]}>
+        <MaterialCommunityIcons name="logout" size={21} color={theme.colors.danger} />
+        <Text style={styles.logoutText}>{t('logout')}</Text>
+      </Pressable>
+    </ScrollView>
+  </ScreenContainer>;
 };
-const Menu = ({ icon, title, subtitle, onPress }: { icon: keyof typeof MaterialCommunityIcons.glyphMap; title: string; subtitle: string; onPress: () => void }) => <Pressable onPress={onPress} style={({ pressed }) => [styles.menu, pressed && styles.pressed]}><View style={styles.menuIcon}><View pointerEvents="none" style={styles.iconShine} /><MaterialCommunityIcons name={icon} size={22} color={theme.colors.primary} /></View><View style={styles.flex}><Text style={styles.menuTitle}>{title}</Text><Text style={styles.menuSubtitle}>{subtitle}</Text></View><MaterialCommunityIcons name="chevron-right" size={22} color={theme.colors.textMuted} /></Pressable>;
-const styles = StyleSheet.create({ top: { height: 60, backgroundColor: theme.colors.surface, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, borderBottomWidth: 1, borderBottomColor: theme.colors.divider }, topTitle: { flex: 1, ...theme.typography.h1, color: theme.colors.text }, settings: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, content: { padding: 18, paddingBottom: 120 }, identity: { alignItems: 'center', backgroundColor: theme.colors.surface, borderRadius: 22, padding: 22, borderWidth: 1, borderColor: theme.colors.border, shadowColor: theme.colors.shadowStrong, shadowOpacity: 1, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 5, overflow: 'hidden', position: 'relative' }, identityGlow: { position: 'absolute', top: -42, width: '72%', height: 110, borderRadius: 90, backgroundColor: 'rgba(34,184,181,0.1)' }, name: { ...theme.typography.h2, color: theme.colors.text, marginTop: 12 }, phone: { ...theme.typography.body, color: theme.colors.textSecondary, marginTop: 3 }, email: { ...theme.typography.caption, color: theme.colors.textMuted, marginTop: 2 }, edit: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: theme.colors.primaryLight, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 9, marginTop: 14, shadowColor: theme.colors.primary, shadowOpacity: 0.18, shadowRadius: 7, shadowOffset: { width: 0, height: 3 }, elevation: 2 }, editText: { ...theme.typography.caption, color: theme.colors.primary, fontWeight: '800' }, section: { fontSize: 10, fontWeight: '900', color: theme.colors.textMuted, letterSpacing: 1.3, marginTop: 24, marginBottom: 8 }, menu: { minHeight: 70, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.colors.surface, borderRadius: 17, padding: 13, borderWidth: 1, borderColor: theme.colors.border, marginBottom: 9, shadowColor: theme.colors.shadow, shadowOpacity: 1, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 3 }, pressed: { transform: [{ scale: 0.985 }] }, menuIcon: { width: 43, height: 43, borderRadius: 14, backgroundColor: theme.colors.primaryLight, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', position: 'relative' }, iconShine: { position: 'absolute', top: 0, left: 5, right: 5, height: 13, borderRadius: 99, backgroundColor: 'rgba(255,255,255,0.3)' }, flex: { flex: 1 }, menuTitle: { ...theme.typography.bodyBold, color: theme.colors.text }, menuSubtitle: { ...theme.typography.caption, color: theme.colors.textSecondary, marginTop: 2 }, noBusiness: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.colors.primaryLight, borderRadius: 17, padding: 16, shadowColor: theme.colors.primary, shadowOpacity: 0.16, shadowRadius: 9, shadowOffset: { width: 0, height: 4 }, elevation: 2 }, noBusinessText: { flex: 1, ...theme.typography.caption, color: theme.colors.textSecondary, lineHeight: 18 }, logout: { minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 14 }, logoutText: { ...theme.typography.bodyBold, color: theme.colors.danger } });
+
+const SectionLabel = ({ title }: { title: string }) => (
+  <View style={styles.sectionWrap}>
+    <Text style={styles.section}>{title}</Text>
+  </View>
+);
+
+const Menu = ({ icon, title, subtitle, onPress, tone, photo }: { icon: keyof typeof MaterialCommunityIcons.glyphMap; title: string; subtitle?: string; onPress: () => void; tone: string; photo?: string }) => (
+  <Pressable accessibilityRole="button" accessibilityLabel={title} onPress={onPress} style={({ pressed }) => [styles.menu, pressed && styles.pressed]}>
+    {photo ? <Image source={{ uri: photo }} style={styles.menuPhoto} resizeMode="cover" /> : <View style={[styles.menuIcon, { backgroundColor: tone + '88', borderColor: tone, borderWidth: 1 }]}><MaterialCommunityIcons name={icon} size={20} color="#FFFFFF" /></View>}
+    <View style={styles.flex}>
+      <Text numberOfLines={1} style={styles.menuTitle}>{title}</Text>
+      {subtitle ? <Text numberOfLines={2} style={styles.menuSubtitle}>{subtitle}</Text> : null}
+    </View>
+    <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.textMuted} />
+  </Pressable>
+);
+
+const styles = createThemedStyles((c) => ({
+  top: { minHeight: 60, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingTop: 6, gap: 12 },
+  topCopy: { flex: 1, minWidth: 0 },
+  topTitle: { fontSize: 23, lineHeight: 29, fontWeight: '900', color: c.text },
+  settings: { width: 40, height: 40, borderRadius: 20, borderWidth: 1.5, borderColor: c.cardBorder, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center', shadowColor: c.cardGlow, shadowOpacity: 1, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 3 },
+  content: { padding: 16, paddingBottom: 130 },
+
+  identity: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: c.surface, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: c.cardBorder, shadowColor: c.cardGlow, shadowOpacity: 1, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 4 },
+  avatarWrap: { position: 'relative', borderWidth: 1.5, borderColor: c.primary, borderRadius: 40 },
+  cameraBadge: { position: 'absolute', right: -2, bottom: -2, width: 24, height: 24, borderRadius: 12, backgroundColor: c.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: c.surface },
+  identityCopy: { flex: 1, minWidth: 0 },
+  name: { fontSize: 18, lineHeight: 24, fontWeight: '900', color: c.text },
+  identityLine: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+  identityText: { flex: 1, minWidth: 0, fontSize: 12, lineHeight: 16, color: c.textSecondary },
+  identityDivider: { width: 1, alignSelf: 'stretch', marginVertical: 4, backgroundColor: c.divider },
+  edit: { maxWidth: 102, flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 18, borderWidth: 1.5, borderColor: c.primary, paddingHorizontal: 10, paddingVertical: 8 },
+  editText: { flexShrink: 1, fontSize: 11.5, fontWeight: '800', color: c.primary },
+
+  sectionWrap: { marginTop: 18, marginBottom: 8 },
+  section: { fontSize: 15.5, lineHeight: 21, fontWeight: '900', color: c.text },
+
+  menu: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 11, backgroundColor: c.surface, borderRadius: 14, padding: 10, borderWidth: 1, borderColor: c.cardBorder, marginBottom: 9, shadowColor: c.cardGlow, shadowOpacity: 1, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 3 },
+  pressed: { transform: [{ scale: 0.985 }], opacity: 0.85 },
+  menuIcon: { width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  menuPhoto: { width: 42, height: 42, borderRadius: 13, backgroundColor: c.surfaceAlt },
+  flex: { flex: 1, minWidth: 0 },
+  menuTitle: { fontSize: 15, lineHeight: 20, fontWeight: '800', color: c.text },
+  menuSubtitle: { fontSize: 11.5, lineHeight: 15, color: c.textSecondary, marginTop: 2 },
+
+  noBusiness: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: c.surface, borderWidth: 1, borderColor: c.primary, borderRadius: 16, padding: 13, shadowColor: c.primaryGlow, shadowOpacity: 1, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 3 },
+  noBusinessText: { flex: 1, ...theme.typography.caption, color: c.textSecondary, lineHeight: 18 },
+  logout: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 18 },
+  logoutText: { ...theme.typography.bodyBold, color: c.danger },
+}));

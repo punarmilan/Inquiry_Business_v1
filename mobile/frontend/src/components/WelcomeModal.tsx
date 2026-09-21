@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { View, Text, Modal, StyleSheet, Animated, Easing, Pressable } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { theme } from '../theme';
+import { theme, createThemedStyles } from '../theme';
 
 interface WelcomeModalProps {
   visible: boolean;
@@ -78,10 +78,10 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ visible, name, isNew
   );
 };
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   overlay: {
     flex: 1,
-    backgroundColor: theme.colors.overlay,
+    backgroundColor: c.overlay,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: theme.spacing.xl,
@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
   card: {
     alignSelf: 'stretch',
     alignItems: 'center',
-    backgroundColor: theme.colors.surface,
+    backgroundColor: c.surface,
     borderRadius: theme.radius.xl,
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.xl,
@@ -105,12 +105,12 @@ const styles = StyleSheet.create({
   },
   title: {
     ...theme.typography.h2,
-    color: theme.colors.text,
+    color: c.text,
     textAlign: 'center',
   },
   body: {
     ...theme.typography.body,
-    color: theme.colors.textSecondary,
+    color: c.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
     marginTop: theme.spacing.xs,
@@ -120,15 +120,15 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     minHeight: 50,
     borderRadius: theme.radius.pill,
-    backgroundColor: theme.colors.primary,
+    backgroundColor: c.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   buttonText: {
     ...theme.typography.button,
-    color: theme.colors.textInverse,
+    color: c.textInverse,
   },
   pressed: {
     opacity: 0.75,
   },
-});
+}));

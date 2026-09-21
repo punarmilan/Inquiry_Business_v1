@@ -8,6 +8,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const { toGeoPoint } = require('../utils/location');
 const { getPagination, paginatedResponse } = require('../utils/pagination');
 const env = require('../config/env');
+const { FOLDERS, resolveImage } = require('../services/cloudinaryService');
 
 const hasText = (value) => typeof value === 'string' && value.trim().length > 0;
 const requireRegistrationFields = (body, user) => {
@@ -43,6 +44,9 @@ const profilePayload = async (body, user) => {
   const payload = { ...body };
   if (body.location) {
     payload.location = toGeoPoint(body.location);
+  }
+  if (body.photoUrl) {
+    payload.photoUrl = await resolveImage(body.photoUrl, { folder: FOLDERS.profilePhotos });
   }
   // Email now doubles as an optional login identifier (see authController's email+OTP
   // path), so two accounts sharing one email would make login ambiguous. Enforced here

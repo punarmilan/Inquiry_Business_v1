@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, ImageBackground, StyleSheet, Text, View } from 'react-native';
 import { AnimatedInfinityMark } from './AnimatedInfinityMark';
+import { createThemedStyles } from '../theme';
 
 const launchBackground = require('../../assets/android-icon-background.png');
 
@@ -69,7 +70,7 @@ export const BrandedLaunchScreen: React.FC<BrandedLaunchScreenProps> = ({ onRead
   );
 };
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   container: {
     flex: 1,
     alignItems: 'center',
@@ -140,4 +141,4 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
   },
-});
+}));

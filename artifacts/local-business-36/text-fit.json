@@ -1,0 +1,86 @@
+﻿[
+    {
+        "height":  224,
+        "fontSize":  100,
+        "measuredHeight":  230,
+        "slug":  "ny36-food-sweet-treats",
+        "element":  "offer-title"
+    },
+    {
+        "height":  158,
+        "fontSize":  70,
+        "measuredHeight":  161,
+        "slug":  "ny36-food-family-table",
+        "element":  "offer-title"
+    },
+    {
+        "height":  224,
+        "fontSize":  100,
+        "measuredHeight":  230,
+        "slug":  "ny36-fashion-wardrobe-refresh",
+        "element":  "offer-title"
+    },
+    {
+        "height":  158,
+        "fontSize":  70,
+        "measuredHeight":  161,
+        "slug":  "ny36-fashion-signature-basics",
+        "element":  "offer-title"
+    },
+    {
+        "height":  224,
+        "fontSize":  100,
+        "measuredHeight":  230,
+        "slug":  "ny36-shopping-weekend-store-sale",
+        "element":  "offer-title"
+    },
+    {
+        "height":  158,
+        "fontSize":  70,
+        "measuredHeight":  161,
+        "slug":  "ny36-shopping-everyday-essentials",
+        "element":  "offer-title"
+    },
+    {
+        "height":  224,
+        "fontSize":  100,
+        "measuredHeight":  230,
+        "slug":  "ny36-gym-the-fitness-pass",
+        "element":  "offer-title"
+    },
+    {
+        "height":  158,
+        "fontSize":  70,
+        "measuredHeight":  161,
+        "slug":  "ny36-gym-studio-sessions",
+        "element":  "offer-title"
+    },
+    {
+        "height":  224,
+        "fontSize":  100,
+        "measuredHeight":  230,
+        "slug":  "ny36-hotels-resort-moments",
+        "element":  "offer-title"
+    },
+    {
+        "height":  158,
+        "fontSize":  70,
+        "measuredHeight":  161,
+        "slug":  "ny36-hotels-room-for-two",
+        "element":  "offer-title"
+    },
+    {
+        "height":  224,
+        "fontSize":  100,
+        "measuredHeight":  230,
+        "slug":  "ny36-electronics-laptop-upgrade",
+        "element":  "offer-title"
+    },
+    {
+        "height":  158,
+        "fontSize":  70,
+        "measuredHeight":  161,
+        "slug":  "ny36-electronics-mobile-essentials",
+        "element":  "offer-title"
+    }
+]

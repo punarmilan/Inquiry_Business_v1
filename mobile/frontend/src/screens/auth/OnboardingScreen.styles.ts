@@ -1,4 +1,5 @@
 import { StyleSheet } from 'react-native';
+import { createThemedStyles } from '../../theme';
 
 export const ONBOARDING_COLORS = {
   ink: '#073438',
@@ -8,7 +9,7 @@ export const ONBOARDING_COLORS = {
   paper: '#FCFFFF',
 };
 
-export const onboardingStyles = StyleSheet.create({
+export const onboardingStyles = createThemedStyles((c) => ({
   screen: { flex: 1, backgroundColor: '#E2F8F4' },
   carousel: { flex: 1 },
   page: { height: '100%', alignItems: 'center', paddingVertical: 3 },
@@ -19,4 +20,4 @@ export const onboardingStyles = StyleSheet.create({
     gap: 18,
     backgroundColor: ONBOARDING_COLORS.paper,
   },
-});
+}));

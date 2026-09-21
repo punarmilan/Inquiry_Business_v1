@@ -1,5 +1,6 @@
 const express = require('express');
 const controller = require('../controllers/offerController');
+const homeShowcase = require('../controllers/homeShowcaseController');
 const validate = require('../middleware/validate');
 const { requireAuth } = require('../middleware/auth');
 const {
@@ -8,6 +9,7 @@ const {
 
 const router = express.Router();
 router.get('/nearby', validate(nearbyOffersSchema), controller.nearbyOffers);
+router.get('/home-showcase', validate(nearbyOffersSchema), homeShowcase.getHomeShowcase);
 router.get('/mine', requireAuth, controller.listMine);
 router.get('/saved', requireAuth, controller.listSaved);
 router.post('/', requireAuth, validate(createOfferSchema), controller.createOffer);

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, Text, StyleSheet, StyleProp, View, ViewStyle } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { theme } from '../theme';
+import { theme, createThemedStyles } from '../theme';
 
 interface ChipProps {
   label: string;
@@ -55,7 +55,7 @@ export const Chip: React.FC<ChipProps> = ({ label, icon, trailingIcon, selected,
   );
 };
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -64,9 +64,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.md,
     borderRadius: theme.radius.pill,
     borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface,
-    shadowColor: theme.colors.shadow,
+    borderColor: c.border,
+    backgroundColor: c.surface,
+    shadowColor: c.shadow,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 1,
     shadowRadius: 8,
@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
   },
   label: {
     ...theme.typography.caption,
-    color: theme.colors.text,
+    color: c.text,
     fontWeight: '700',
   },
   labelCompact: {
@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   labelSelected: {
-    color: theme.colors.textInverse,
+    color: c.textInverse,
   },
   chipGloss: {
     position: 'absolute',
@@ -111,4 +111,4 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: theme.radius.pill,
     backgroundColor: 'rgba(255,255,255,0.18)',
   },
-});
+}));

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { theme } from '../../theme';
+import { theme, createThemedStyles } from '../../theme';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { Button } from '../../components/Button';
 import { IconButton } from '../../components/IconButton';
@@ -162,7 +162,7 @@ export const OtpVerificationScreen: React.FC<Props> = ({ navigation, route }) =>
   );
 };
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   header: {
     paddingHorizontal: theme.spacing.sm,
     paddingTop: theme.spacing.xs,
@@ -176,25 +176,25 @@ const styles = StyleSheet.create({
     width: 76,
     height: 76,
     borderRadius: 38,
-    backgroundColor: theme.colors.primaryLight,
+    backgroundColor: c.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: theme.spacing.md,
   },
   title: {
     ...theme.typography.h2,
-    color: theme.colors.text,
+    color: c.text,
     textAlign: 'center',
   },
   subtitle: {
     ...theme.typography.body,
-    color: theme.colors.textSecondary,
+    color: c.textSecondary,
     textAlign: 'center',
     marginTop: theme.spacing.xs,
   },
   hint: {
     ...theme.typography.caption,
-    color: theme.colors.accentDark,
+    color: c.accentDark,
     marginTop: theme.spacing.xs,
   },
   otpBoxRow: {
@@ -207,20 +207,20 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: theme.radius.md,
     borderWidth: 2,
-    borderColor: theme.colors.border,
+    borderColor: c.border,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.colors.surface,
+    backgroundColor: c.surface,
   },
   otpBoxFilled: {
-    borderColor: theme.colors.primary,
+    borderColor: c.primary,
   },
   otpBoxError: {
-    borderColor: theme.colors.danger,
+    borderColor: c.danger,
   },
   otpDigit: {
     ...theme.typography.h2,
-    color: theme.colors.text,
+    color: c.text,
   },
   hiddenInput: {
     position: 'absolute',
@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     ...theme.typography.caption,
-    color: theme.colors.danger,
+    color: c.danger,
     marginTop: theme.spacing.sm,
     textAlign: 'center',
   },
@@ -238,7 +238,7 @@ const styles = StyleSheet.create({
     minHeight: theme.MIN_TAP_TARGET,
     borderRadius: theme.radius.md,
     borderWidth: 1,
-    borderColor: theme.colors.primary,
+    borderColor: c.primary,
     paddingHorizontal: theme.spacing.lg,
     alignItems: 'center',
     justifyContent: 'center',
@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
   },
   registerPromptText: {
     ...theme.typography.bodyBold,
-    color: theme.colors.primary,
+    color: c.primary,
   },
   resendBtn: {
     marginTop: theme.spacing.lg,
@@ -256,11 +256,11 @@ const styles = StyleSheet.create({
   },
   resendText: {
     ...theme.typography.bodyBold,
-    color: theme.colors.primary,
+    color: c.primary,
   },
   cooldownText: {
     ...theme.typography.caption,
-    color: theme.colors.textSecondary,
+    color: c.textSecondary,
     marginTop: theme.spacing.lg,
   },
   footer: {
@@ -276,6 +276,6 @@ const styles = StyleSheet.create({
   },
   changeNumberText: {
     ...theme.typography.body,
-    color: theme.colors.textSecondary,
+    color: c.textSecondary,
   },
-});
+}));

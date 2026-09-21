@@ -197,3 +197,17 @@ export const useRefundPayment = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['commerce-payments'] }),
   });
 };
+export const useDeclinePayment = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => api.declinePayment(id, reason),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['commerce-payments'] }),
+  });
+};
+export const useDeletePayment = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.deletePayment(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['commerce-payments'] }),
+  });
+};

@@ -4,8 +4,23 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Rect, Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
+import { SkylineMasthead } from '../../components/NeonUI';
+import { theme, createThemedStyles, getThemeMode } from '../../theme';
 
-export const serviceColors = { background: '#F3FBFD', teal: '#009BA4', darkTeal: '#006978', text: '#11181D', muted: '#697586', border: '#E5F4F7' };
+// Service-surface palette. Light keeps the original tuned hues; dark switches
+// to the night palette. Read through getters so both resolve at render time.
+const servicePalettes = {
+  light: { background: '#F3FBFD', teal: '#009BA4', darkTeal: '#006978', text: '#11181D', muted: '#697586', border: '#E5F4F7' },
+  dark: { background: '#000000', teal: '#00B0BA', darkTeal: '#008B93', text: '#F7FCFD', muted: '#9AADB1', border: '#1A282B' },
+};
+export const serviceColors = {
+  get background() { return servicePalettes[getThemeMode()].background; },
+  get teal() { return servicePalettes[getThemeMode()].teal; },
+  get darkTeal() { return servicePalettes[getThemeMode()].darkTeal; },
+  get text() { return servicePalettes[getThemeMode()].text; },
+  get muted() { return servicePalettes[getThemeMode()].muted; },
+  get border() { return servicePalettes[getThemeMode()].border; },
+};
 export type ServiceIconName = keyof typeof MaterialCommunityIcons.glyphMap;
 export const safeIcon = (name?: string): ServiceIconName => name && name in MaterialCommunityIcons.glyphMap ? name as ServiceIconName : 'tools';
 export const isEmergencyCategory = (name: string) => /ambulance|fire brigade|police|rescue/i.test(name);
@@ -22,22 +37,22 @@ export const categoryPalette = (name: string) => {
   return palettes[[...name].reduce((sum, character) => sum + character.charCodeAt(0), 0) % palettes.length];
 };
 
+// Service screens sit on the same skyline masthead as the rest of the app, with
+// the backdrop gradient continuing below it.
 export const ServiceBackdrop = () => { const insets = useSafeAreaInsets(); return <View pointerEvents="none" style={[StyleSheet.absoluteFill, { top: insets.top }]}>
-  <LinearGradient colors={['#F3FCFD', '#F6FBFF']} style={StyleSheet.absoluteFill} />
-  <View style={ui.headerBlob} />
-  <View style={ui.dottedRoute} />
-  <View style={ui.mapDot}><MaterialCommunityIcons name="map-marker" size={24} color="#49C0B0" /></View>
+  <LinearGradient colors={[theme.colors.backdropStart, theme.colors.backdropEnd]} style={StyleSheet.absoluteFill} />
+  <SkylineMasthead height={210} />
 </View>; };
 
 export const ServiceSearch = ({ value, onChangeText, placeholder }: { value: string; onChangeText: (text: string) => void; placeholder: string }) => <View style={ui.search}>
-  <MaterialCommunityIcons name="magnify" size={27} color="#536170" />
-  <TextInput accessibilityLabel={placeholder} value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor="#7C8795" style={ui.searchInput} returnKeyType="search" />
-  {value ? <Pressable onPress={() => onChangeText('')} accessibilityRole="button" accessibilityLabel="Clear search" hitSlop={10}><MaterialCommunityIcons name="close-circle" size={21} color="#7C8795" /></Pressable> : null}
+  <MaterialCommunityIcons name="magnify" size={27} color={serviceColors.muted} />
+  <TextInput accessibilityLabel={placeholder} value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={serviceColors.muted} style={ui.searchInput} returnKeyType="search" />
+  {value ? <Pressable onPress={() => onChangeText('')} accessibilityRole="button" accessibilityLabel="Clear search" hitSlop={10}><MaterialCommunityIcons name="close-circle" size={21} color={serviceColors.muted} /></Pressable> : null}
 </View>;
 
-export const ServiceHeader = ({ title, subtitle, onBack, icon = 'map-marker-radius', onAction, compact = false }: { title: string; subtitle: string; onBack?: () => void; icon?: ServiceIconName; onAction?: () => void; compact?: boolean }) => <View style={ui.header}>
+export const ServiceHeader = ({ title, subtitle, onBack, icon = 'map-marker-radius', onAction, compact = false }: { title: string; subtitle?: string; onBack?: () => void; icon?: ServiceIconName; onAction?: () => void; compact?: boolean }) => <View style={ui.header}>
   {onBack ? <Pressable accessibilityLabel="Go back" accessibilityRole="button" onPress={onBack} style={ui.back}><MaterialCommunityIcons name="arrow-left" size={27} color={serviceColors.text} /></Pressable> : <MaterialCommunityIcons name="map-marker" size={37} color={serviceColors.teal} />}
-  <View style={ui.headerCopy}><Text style={[ui.title, !onBack && { fontSize: 27 }, compact && { fontSize: 19, lineHeight: 24 }]} numberOfLines={2}>{title}</Text><Text style={[ui.subtitle, !onBack && ui.homeSubtitle]}>{subtitle}</Text></View>
+  <View style={ui.headerCopy}><Text style={[ui.title, !onBack && { fontSize: 27 }, compact && { fontSize: 19, lineHeight: 24 }]} numberOfLines={2}>{title}</Text>{subtitle ? <Text style={[ui.subtitle, !onBack && ui.homeSubtitle]}>{subtitle}</Text> : null}</View>
   {onAction ? <Pressable onPress={onAction} accessibilityLabel="Change location" accessibilityRole="button" style={ui.locationButton}><MaterialCommunityIcons name={icon} size={27} color={serviceColors.teal} /></Pressable> : null}
 </View>;
 
@@ -58,23 +73,20 @@ export const CoolingArtwork = ({ width = 90 }: { width?: number }) => <Svg width
   <Path d="M10 52v16 M3 56l14 8 M3 64l14-8" stroke="#6BCFF1" strokeWidth="2" />
 </Svg>;
 
-export const ui = StyleSheet.create({
-  headerBlob: { position: 'absolute', right: -14, top: 0, width: 140, height: 134, borderRadius: 65, backgroundColor: '#E5F9FA', transform: [{ rotate: '-25deg' }] },
-  dottedRoute: { position: 'absolute', right: 89, top: 24, width: 66, height: 75, borderRadius: 28, borderWidth: 2, borderStyle: 'dashed', borderColor: '#CDF2F3', transform: [{ rotate: '-23deg' }] },
-  mapDot: { position: 'absolute', right: 113, top: 9 },
+export const ui = createThemedStyles((c) => ({
   header: { minHeight: 85, paddingHorizontal: 18, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
   back: { minHeight: 44, width: 30, justifyContent: 'center' }, headerCopy: { flex: 1 },
   title: { fontSize: 23, lineHeight: 29, fontWeight: '800', color: serviceColors.text },
-  subtitle: { fontSize: 16, fontWeight: '700', color: '#00848E', marginTop: 2 },
-  homeSubtitle: { fontSize: 12, lineHeight: 18, fontWeight: '400', color: '#7A8491' },
-  locationButton: { height: 47, width: 47, borderRadius: 15, borderWidth: 1.5, borderColor: '#FFFFFF', backgroundColor: '#E0FAFA', alignItems: 'center', justifyContent: 'center', shadowColor: '#52BDC7', shadowOpacity: 0.17, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
-  search: { minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 16, marginBottom: 18, paddingHorizontal: 16, backgroundColor: '#FFFFFF', borderRadius: 20, shadowColor: '#55BBC8', shadowOpacity: 0.15, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 2 },
+  subtitle: { fontSize: 16, fontWeight: '700', color: c.primaryDark, marginTop: 2 },
+  homeSubtitle: { fontSize: 12, lineHeight: 18, fontWeight: '400', color: c.textSecondary },
+  locationButton: { height: 47, width: 47, borderRadius: 15, borderWidth: 1.5, borderColor: c.cardBorder, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center', shadowColor: c.shadowStrong, shadowOpacity: 0.17, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  search: { minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 16, marginBottom: 18, paddingHorizontal: 16, backgroundColor: c.surface, borderRadius: 20, borderWidth: 1, borderColor: c.cardBorder, shadowColor: c.cardGlow, shadowOpacity: 1, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 2 },
   searchInput: { flex: 1, fontSize: 14, color: serviceColors.text, paddingVertical: 15, minWidth: 0 },
-  shadow: { shadowColor: '#63BACA', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  shadow: { shadowColor: c.cardGlow, shadowOpacity: 1, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
   sectionTitle: { fontSize: 23, lineHeight: 30, fontWeight: '800', color: serviceColors.text },
-  pill: { minHeight: 36, paddingHorizontal: 13, borderRadius: 22, backgroundColor: '#E3F7F8', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
-  pillText: { color: '#007783', fontSize: 12, fontWeight: '700' },
+  pill: { minHeight: 36, paddingHorizontal: 13, borderRadius: 22, borderWidth: 1, borderColor: c.cardBorder, backgroundColor: c.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
+  pillText: { color: c.primary, fontSize: 12, fontWeight: '700' },
   pressed: { opacity: 0.72 },
   empty: { padding: 30, alignItems: 'center', gap: 12 },
   emptyText: { fontSize: 15, color: serviceColors.muted, textAlign: 'center', lineHeight: 22 },
-});
+}));

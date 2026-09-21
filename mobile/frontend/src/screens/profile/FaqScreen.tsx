@@ -5,7 +5,7 @@ import { ScreenContainer } from '../../components/ScreenContainer';
 import { IconButton } from '../../components/IconButton';
 import { useApp } from '../../context/AppContext';
 import type { ProfileStackParamList } from '../../navigation/types';
-import { theme } from '../../theme';
+import { theme, createThemedStyles } from '../../theme';
 
 type Props = NativeStackScreenProps<ProfileStackParamList, 'Faq'>;
 
@@ -61,14 +61,14 @@ export const FaqScreen: React.FC<Props> = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  header: { minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs, paddingHorizontal: theme.spacing.sm, backgroundColor: theme.colors.surface, borderBottomWidth: 1, borderBottomColor: theme.colors.divider },
-  headerTitle: { flex: 1, ...theme.typography.h3, color: theme.colors.text },
+const styles = createThemedStyles((c) => ({
+  header: { minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs, paddingHorizontal: theme.spacing.sm, backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.divider },
+  headerTitle: { flex: 1, ...theme.typography.h3, color: c.text },
   content: { padding: theme.spacing.lg, paddingBottom: 40, gap: theme.spacing.sm },
-  intro: { ...theme.typography.body, color: theme.colors.textSecondary, lineHeight: 22, marginBottom: theme.spacing.xs },
-  card: { padding: theme.spacing.md, borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
-  question: { ...theme.typography.bodyBold, color: theme.colors.text },
-  answer: { ...theme.typography.body, color: theme.colors.textSecondary, lineHeight: 21, marginTop: theme.spacing.xs },
-  managedCard: { padding: theme.spacing.lg, borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
-  managedText: { ...theme.typography.body, color: theme.colors.text, lineHeight: 23 },
-});
+  intro: { ...theme.typography.body, color: c.textSecondary, lineHeight: 22, marginBottom: theme.spacing.xs },
+  card: { padding: theme.spacing.md, borderRadius: theme.radius.lg, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface },
+  question: { ...theme.typography.bodyBold, color: c.text },
+  answer: { ...theme.typography.body, color: c.textSecondary, lineHeight: 21, marginTop: theme.spacing.xs },
+  managedCard: { padding: theme.spacing.lg, borderRadius: theme.radius.lg, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface },
+  managedText: { ...theme.typography.body, color: c.text, lineHeight: 23 },
+}));

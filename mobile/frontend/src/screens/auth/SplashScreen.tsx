@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { theme } from '../../theme';
+import { theme, createThemedStyles } from '../../theme';
 import { Button } from '../../components/Button';
 import { LanguageToggle } from '../../components/LanguageToggle';
 import { useApp } from '../../context/AppContext';
@@ -73,7 +73,7 @@ const IconPill: React.FC<{ icon: keyof typeof MaterialCommunityIcons.glyphMap }>
   </View>
 );
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   container: {
     flex: 1,
     paddingHorizontal: theme.spacing.lg,
@@ -93,19 +93,19 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: theme.colors.surface,
+    backgroundColor: c.surface,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: theme.spacing.lg,
   },
   title: {
     ...theme.typography.h1,
-    color: theme.colors.textInverse,
+    color: c.textInverse,
     fontSize: 32,
   },
   tagline: {
     ...theme.typography.bodyLg,
-    color: theme.colors.primaryLight,
+    color: c.primaryLight,
     marginTop: theme.spacing.xs,
     textAlign: 'center',
   },
@@ -125,4 +125,4 @@ const styles = StyleSheet.create({
   bottom: {
     paddingBottom: theme.spacing.md,
   },
-});
+}));

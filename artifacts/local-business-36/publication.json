@@ -1,0 +1,268 @@
+{
+  "baseUrl": "http://localhost:5001",
+  "startedAt": "2026-09-21T14:31:19.258Z",
+  "records": [
+    {
+      "id": "6ab13fb706d795381b870090",
+      "slug": "ny36-food-ember-pizza-night",
+      "name": "Ember Pizza Night",
+      "category": "Food",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b870094",
+      "slug": "ny36-food-brew-break",
+      "name": "Brew Break",
+      "category": "Food",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b870098",
+      "slug": "ny36-food-garden-fresh-bowl",
+      "name": "Garden Fresh Bowl",
+      "category": "Food",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b87009c",
+      "slug": "ny36-food-burger-weekend",
+      "name": "Burger Weekend",
+      "category": "Food",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b8700a0",
+      "slug": "ny36-food-sweet-treats",
+      "name": "Sweet Treats",
+      "category": "Food",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b8700a4",
+      "slug": "ny36-food-family-table",
+      "name": "Family Table",
+      "category": "Food",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b8700a8",
+      "slug": "ny36-fashion-everyday-edit",
+      "name": "Everyday Edit",
+      "category": "Fashion",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b8700ac",
+      "slug": "ny36-fashion-streetwear-drop",
+      "name": "Streetwear Drop",
+      "category": "Fashion",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b8700b0",
+      "slug": "ny36-fashion-boutique-collection",
+      "name": "Boutique Collection",
+      "category": "Fashion",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b8700b4",
+      "slug": "ny36-fashion-sneaker-weekend",
+      "name": "Sneaker Weekend",
+      "category": "Fashion",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b8700b8",
+      "slug": "ny36-fashion-wardrobe-refresh",
+      "name": "Wardrobe Refresh",
+      "category": "Fashion",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b8700bc",
+      "slug": "ny36-fashion-signature-basics",
+      "name": "Signature Basics",
+      "category": "Fashion",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b8700c0",
+      "slug": "ny36-shopping-neighbourhood-finds",
+      "name": "Neighbourhood Finds",
+      "category": "Shopping",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b8700c4",
+      "slug": "ny36-shopping-bag-boutique",
+      "name": "Bag Boutique",
+      "category": "Shopping",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b8700c8",
+      "slug": "ny36-shopping-watch-edit",
+      "name": "Watch Edit",
+      "category": "Shopping",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b8700cc",
+      "slug": "ny36-shopping-shoe-store-special",
+      "name": "Shoe Store Special",
+      "category": "Shopping",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b8700d0",
+      "slug": "ny36-shopping-weekend-store-sale",
+      "name": "Weekend Store Sale",
+      "category": "Shopping",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b8700d4",
+      "slug": "ny36-shopping-everyday-essentials",
+      "name": "Everyday Essentials",
+      "category": "Shopping",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b8700d8",
+      "slug": "ny36-gym-fresh-start-fitness",
+      "name": "Fresh Start Fitness",
+      "category": "Gym",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b8700dc",
+      "slug": "ny36-gym-strength-club",
+      "name": "Strength Club",
+      "category": "Gym",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b8700e0",
+      "slug": "ny36-gym-mindful-movement",
+      "name": "Mindful Movement",
+      "category": "Gym",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b8700e4",
+      "slug": "ny36-gym-training-partner",
+      "name": "Training Partner",
+      "category": "Gym",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b8700e8",
+      "slug": "ny36-gym-the-fitness-pass",
+      "name": "The Fitness Pass",
+      "category": "Gym",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b8700ec",
+      "slug": "ny36-gym-studio-sessions",
+      "name": "Studio Sessions",
+      "category": "Gym",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b8700f0",
+      "slug": "ny36-hotels-weekend-escape",
+      "name": "Weekend Escape",
+      "category": "Hotels",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b8700f4",
+      "slug": "ny36-hotels-poolside-days",
+      "name": "Poolside Days",
+      "category": "Hotels",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b8700f8",
+      "slug": "ny36-hotels-boutique-hideaway",
+      "name": "Boutique Hideaway",
+      "category": "Hotels",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b8700fc",
+      "slug": "ny36-hotels-city-stay",
+      "name": "City Stay",
+      "category": "Hotels",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b870100",
+      "slug": "ny36-hotels-resort-moments",
+      "name": "Resort Moments",
+      "category": "Hotels",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b870104",
+      "slug": "ny36-hotels-room-for-two",
+      "name": "Room for Two",
+      "category": "Hotels",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b870108",
+      "slug": "ny36-electronics-sound-upgrade",
+      "name": "Sound Upgrade",
+      "category": "Electronics",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b87010c",
+      "slug": "ny36-electronics-phone-refresh",
+      "name": "Phone Refresh",
+      "category": "Electronics",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b870110",
+      "slug": "ny36-electronics-work-anywhere",
+      "name": "Work Anywhere",
+      "category": "Electronics",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b870114",
+      "slug": "ny36-electronics-audio-weekend",
+      "name": "Audio Weekend",
+      "category": "Electronics",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b870118",
+      "slug": "ny36-electronics-laptop-upgrade",
+      "name": "Laptop Upgrade",
+      "category": "Electronics",
+      "action": "created"
+    },
+    {
+      "id": "6ab13fb706d795381b87011c",
+      "slug": "ny36-electronics-mobile-essentials",
+      "name": "Mobile Essentials",
+      "category": "Electronics",
+      "action": "created"
+    }
+  ],
+  "verified": true,
+  "counts": {
+    "Food": 6,
+    "Fashion": 6,
+    "Shopping": 6,
+    "Gym": 6,
+    "Hotels": 6,
+    "Electronics": 6
+  },
+  "finishedAt": "2026-09-21T14:31:19.982Z"
+}

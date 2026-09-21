@@ -211,7 +211,7 @@ export const PlansPage = () => {
       ) : (
         <div className="grid gap-4 md:grid-cols-3">
           {plans?.map((p) => (
-            <Card key={p._id}>
+            <Card key={p._id} className={p.isActive ? undefined : 'opacity-70'}>
               <CardHeader>
                 <CardTitle>{p.name}</CardTitle>
               </CardHeader>
@@ -220,26 +220,52 @@ export const PlansPage = () => {
                 <p>
                   {p.offerPostingLimit === -1 ? 'Unlimited' : p.offerPostingLimit} posts · {p.imagesPerOffer} images
                 </p>
-                <p>{p.isActive ? 'Active' : 'Inactive'}</p>
-                <div className="flex gap-2">
+                <p>{p.isActive ? 'Active' : 'Disabled · hidden from the app'}</p>
+                <div className="flex flex-wrap gap-2">
                   <Button variant="outline" onClick={() => edit(p)}>
                     Edit
                   </Button>
-                  {p.isActive && (
-                    <Button
-                      variant="destructive"
-                      onClick={() => {
-                        if (!window.confirm(`Delete ${p.name}? Existing subscriptions will be preserved.`)) return;
-                        deletePlan.mutate(p._id, {
-                          onSuccess: () => toast.success('Plan deleted.'),
-                          onError: (e: any) => toast.error(e.response?.data?.error?.message || 'Failed to delete plan.'),
-                        });
-                      }}
-                      disabled={deletePlan.isPending}
-                    >
-                      Delete
-                    </Button>
-                  )}
+                  {/* Reversible: a disabled plan disappears from the app for new purchases, and existing subscriptions keep running. */}
+                  <Button
+                    variant="outline"
+                    disabled={updatePlan.isPending}
+                    onClick={() =>
+                      updatePlan.mutate(
+                        { id: p._id, payload: { isActive: !p.isActive } },
+                        {
+                          onSuccess: () => toast.success(p.isActive ? 'Plan disabled.' : 'Plan enabled.'),
+                          onError: (e: any) => toast.error(e.response?.data?.error?.message || 'Failed to update plan.'),
+                        }
+                      )
+                    }
+                  >
+                    {p.isActive ? 'Disable' : 'Enable'}
+                  </Button>
+                  {/* Permanent: only possible for a plan nobody has bought (the server refuses otherwise). */}
+                  <Button
+                    variant="destructive"
+                    disabled={deletePlan.isPending}
+                    onClick={() => {
+                      if (
+                        !window.confirm(
+                          `Delete "${p.name}" permanently? This cannot be undone.\n\nA plan that already has payments or subscriptions cannot be deleted; disable it instead.`
+                        )
+                      )
+                        return;
+                      deletePlan.mutate(p._id, {
+                        onSuccess: () => {
+                          toast.success('Plan deleted.');
+                          if (editing === p._id) {
+                            setEditing('');
+                            setForm(initial);
+                          }
+                        },
+                        onError: (e: any) => toast.error(e.response?.data?.error?.message || 'Failed to delete plan.'),
+                      });
+                    }}
+                  >
+                    Delete
+                  </Button>
                 </div>
               </CardContent>
             </Card>

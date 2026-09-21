@@ -59,6 +59,13 @@ export const router = createBrowserRouter([
             },
           },
           {
+            path: '/home-showcase',
+            lazy: async () => {
+              const { HomeShowcasePage } = await import('@/pages/hyperlocal/HomeShowcasePage');
+              return { Component: HomeShowcasePage };
+            },
+          },
+          {
             path: '/plans',
             lazy: async () => {
               const { PlansPage } = await import('@/pages/hyperlocal/PlansPage');

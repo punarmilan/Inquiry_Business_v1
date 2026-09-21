@@ -13,7 +13,7 @@ import { createBusiness, listMyBusinesses, updateBusiness } from '../../services
 import type { Business, City } from '../../types/hyperlocal';
 import type { PostStackParamList } from '../../navigation/types';
 import { useApp } from '../../context/AppContext';
-import { theme } from '../../theme';
+import { theme, createThemedStyles } from '../../theme';
 import { isValidIndianPhoneDigits, sanitizeIndianPhoneInput, toIndianPhone } from '../../utils/phoneValidation';
 
 type Props = NativeStackScreenProps<PostStackParamList, 'BusinessSetup'>;
@@ -327,13 +327,13 @@ export const BusinessSetupScreen: React.FC<Props> = ({ route, navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   flex: {
     flex: 1,
   },
   top: {
     height: 58,
-    backgroundColor: theme.colors.surface,
+    backgroundColor: c.surface,
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -345,7 +345,7 @@ const styles = StyleSheet.create({
   },
   title: {
     ...theme.typography.h3,
-    color: theme.colors.text,
+    color: c.text,
   },
   content: {
     padding: 18,
@@ -354,15 +354,15 @@ const styles = StyleSheet.create({
   },
   label: {
     ...theme.typography.bodyBold,
-    color: theme.colors.text,
+    color: c.text,
     marginBottom: 8,
   },
   selector: {
     minHeight: 54,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: c.border,
     borderRadius: 14,
-    backgroundColor: theme.colors.surface,
+    backgroundColor: c.surface,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
@@ -370,36 +370,36 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   selectorError: {
-    borderColor: theme.colors.danger,
+    borderColor: c.danger,
     marginBottom: 4,
   },
   selectorText: {
     flex: 1,
     ...theme.typography.body,
-    color: theme.colors.text,
+    color: c.text,
   },
   error: {
     ...theme.typography.caption,
-    color: theme.colors.danger,
+    color: c.danger,
     marginBottom: 16,
   },
   pinError: {
     ...theme.typography.caption,
-    color: theme.colors.danger,
+    color: c.danger,
     marginTop: 4,
   },
   spacer: {
     height: 18,
   },
-  imagePicker: { height: 150, borderRadius: 18, overflow: 'hidden', backgroundColor: theme.colors.primaryLight, borderWidth: 1, borderColor: theme.colors.border, position: 'relative', marginBottom: 6 },
+  imagePicker: { height: 150, borderRadius: 18, overflow: 'hidden', backgroundColor: c.primaryLight, borderWidth: 1, borderColor: c.border, position: 'relative', marginBottom: 6 },
   shopImage: { width: '100%', height: '100%' },
   imagePlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 7 },
-  imagePlaceholderText: { ...theme.typography.caption, color: theme.colors.primary, fontWeight: '800' },
+  imagePlaceholderText: { ...theme.typography.caption, color: c.primary, fontWeight: '800' },
   imageOverlay: { position: 'absolute', right: 10, bottom: 10, flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 99 },
-  imageOverlayText: { ...theme.typography.tiny, color: theme.colors.textInverse, fontWeight: '800' },
-  imageHint: { ...theme.typography.tiny, color: theme.colors.textMuted, marginBottom: 16 },
+  imageOverlayText: { ...theme.typography.tiny, color: c.textInverse, fontWeight: '800' },
+  imageHint: { ...theme.typography.tiny, color: c.textMuted, marginBottom: 16 },
   removeImage: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-end', marginBottom: 8, paddingVertical: 4 },
-  removeImageText: { ...theme.typography.tiny, color: theme.colors.danger, fontWeight: '800' },
-  approvalNote: { flexDirection: 'row', gap: 10, backgroundColor: theme.colors.secondaryLight, borderRadius: 15, padding: 14, marginBottom: 18 },
-  approvalText: { flex: 1, ...theme.typography.caption, color: theme.colors.textSecondary, lineHeight: 18 },
-});
+  removeImageText: { ...theme.typography.tiny, color: c.danger, fontWeight: '800' },
+  approvalNote: { flexDirection: 'row', gap: 10, backgroundColor: c.secondaryLight, borderRadius: 15, padding: 14, marginBottom: 18 },
+  approvalText: { flex: 1, ...theme.typography.caption, color: c.textSecondary, lineHeight: 18 },
+}));

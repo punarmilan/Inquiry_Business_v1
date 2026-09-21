@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Dimensions, findNodeHandle, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Dimensions, findNodeHandle, Image, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Location from 'expo-location';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -10,11 +10,12 @@ import { Button } from '../../components/Button';
 import { OfferCardDesigner } from '../../components/OfferCardDesigner';
 import { OfferCard } from '../../components/OfferCard';
 import { createOffer, getCityAvailability, listMyBusinesses, listOfferTemplates, updateOffer, type OfferPayload } from '../../services/api';
-import { DEFAULT_OFFER_CARD_DESIGN, resolveOfferCardLayout, toOfferCardTemplate, type OfferCardDesign, type OfferCardTemplate } from '../../config/offerCardDesigner';
+import { pickPosterImage } from '../../services/posterUpload';
+import { DEFAULT_OFFER_CARD_DESIGN, isPosterUploadOffer, makePosterOfferDetails, makePosterUploadDesign, resolveOfferCardLayout, toOfferCardTemplate, type OfferCardDesign, type OfferCardTemplate } from '../../config/offerCardDesigner';
 import type { Business } from '../../types/hyperlocal';
 import type { PostStackParamList } from '../../navigation/types';
 import { useApp } from '../../context/AppContext';
-import { theme } from '../../theme';
+import { theme, createThemedStyles } from '../../theme';
 import { sanitizeIndianPhoneInput, toIndianPhone } from '../../utils/phoneValidation';
 
 type Props = NativeStackScreenProps<PostStackParamList, 'CreateOffer'>;
@@ -32,6 +33,11 @@ export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
   const isEditing = Boolean(existingOffer);
   const designMode = params.designMode || 'templates';
   const hasDesignDraft = Boolean(params.initialDesign && !isEditing);
+  // A poster replaces the designer and the offer copy/price fields (the poster
+  // carries those); the offer is still submitted, and reviewed by admin, through
+  // the same flow as any other offer. Editing a posted poster keeps this form.
+  const uploadedPoster = isEditing ? undefined : params.uploadedPoster;
+  const isPosterUpload = isEditing ? Boolean(existingOffer && isPosterUploadOffer(existingOffer)) : Boolean(uploadedPoster);
   const [business, setBusiness] = useState<Business | null>(null);
   const [title, setTitle] = useState(existingOffer?.title || params.initialTitle || '');
   const [description, setDescription] = useState(existingOffer?.description || params.initialDescription || '');
@@ -40,6 +46,8 @@ export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
   const [offerPrice, setOfferPrice] = useState(existingOffer ? String(existingOffer.offerPrice) : '');
   const [cardDesign, setCardDesign] = useState<OfferCardDesign>(() => existingOffer?.cardDesign
     ? { ...DEFAULT_OFFER_CARD_DESIGN, ...existingOffer.cardDesign, layout: resolveOfferCardLayout(existingOffer.cardDesign) }
+    : uploadedPoster
+      ? makePosterUploadDesign(uploadedPoster)
     : params.initialDesign
       ? { ...DEFAULT_OFFER_CARD_DESIGN, ...params.initialDesign, layout: resolveOfferCardLayout(params.initialDesign) }
     : designMode === 'custom'
@@ -60,9 +68,10 @@ export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
     return Array.isArray(value) && value.length >= 2 ? { latitude: value[1], longitude: value[0] } : null;
   });
   const [locationLoading, setLocationLoading] = useState(false);
-  const [imageUrls, setImageUrls] = useState<string[]>(existingOffer?.imageUrls || params.initialImageUrls || []);
+  const [imageUrls, setImageUrls] = useState<string[]>(existingOffer?.imageUrls || (uploadedPoster ? [uploadedPoster.dataUrl] : params.initialImageUrls) || []);
   const [adminTemplates, setAdminTemplates] = useState<OfferCardTemplate[]>([]);
   const [loading, setLoading] = useState(false);
+  const [keyboardInset, setKeyboardInset] = useState(0);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -83,6 +92,7 @@ export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
   }, [accessToken, isEditing, params.businessId]);
 
   useEffect(() => {
+    if (isPosterUpload) return;
     let mounted = true;
     listOfferTemplates()
       .then((response) => {
@@ -110,7 +120,7 @@ export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
         // The bundled templates remain available when the admin service is offline.
       });
     return () => { mounted = false; };
-  }, [designMode, isEditing]);
+  }, [designMode, isEditing, isPosterUpload]);
 
   const selectedAdminTemplate = adminTemplates.find((template) => template.id === cardDesign.templateId);
   // Templates provide a starting layout only; every offer field remains editable
@@ -184,10 +194,23 @@ export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
     }
   };
 
+  const changePoster = async () => {
+    const pick = await pickPosterImage();
+    if (!pick) return;
+    if ('error' in pick) return Alert.alert('Poster not added', pick.error);
+    setImageUrls([pick.poster.dataUrl]);
+    setCardDesign(makePosterUploadDesign(pick.poster));
+  };
+
   const submit = async () => {
-    if (!accessToken || !business || !title || !description || !originalPrice || !offerPrice || !streetAddress.trim()) {
-      return Alert.alert('Complete required fields', 'Title, description and prices are required.');
+    if (!accessToken || !business || !streetAddress.trim() || (!isPosterUpload && (!title || !description || !originalPrice || !offerPrice))) {
+      return Alert.alert('Complete required fields', isPosterUpload ? 'Add the offer address.' : 'Title, description and prices are required.');
     }
+    // A poster carries its own message, so the copy and prices the API requires
+    // are placeholders that customer-facing cards hide.
+    const details = isPosterUpload
+      ? makePosterOfferDetails(business.name)
+      : { title, description, originalPrice: Number(originalPrice), offerPrice: Number(offerPrice), discountPercentage: discount };
     // The server validates the business's linked city (by id), not the typed
     // address — pre-check it so a paused city fails fast with a clear message
     // instead of a confusing post-submit error. A failed lookup fails open;
@@ -215,16 +238,16 @@ export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
       const cityName = typeof business.city === 'string' ? '' : business.city?.name || '';
       const combinedAddress = [houseNo.trim(), streetAddress.trim(), locality.trim(), cityName].filter(Boolean).join(', ').slice(0, 300);
       const payload: Omit<OfferPayload, 'businessId'> = {
-        title,
-        description,
+        title: details.title,
+        description: details.description,
         category,
-        originalPrice: Number(originalPrice),
-        offerPrice: Number(offerPrice),
-        discountPercentage: discount,
+        originalPrice: details.originalPrice,
+        offerPrice: details.offerPrice,
+        discountPercentage: details.discountPercentage,
         imageUrls,
         cardDesign: {
           ...cardDesign,
-          customizations: { ...(cardDesign.customizations || {}), title, description, category, originalPrice, offerPrice, startsAt: startsAt.toISOString(), expiresAt: expiresAt.toISOString(), terms },
+          customizations: { ...(cardDesign.customizations || {}), title: details.title, description: details.description, category, originalPrice, offerPrice, startsAt: startsAt.toISOString(), expiresAt: expiresAt.toISOString(), terms },
         },
         startsAt: startsAt.toISOString(),
         expiresAt: expiresAt.toISOString(),
@@ -266,6 +289,7 @@ export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
     }
   };
 
+  const posterRatio = cardDesign.canvas && cardDesign.canvas.height > 0 ? cardDesign.canvas.width / cardDesign.canvas.height : 1;
   const datePickerValue = activeDatePicker === 'expiry' ? expiresAt : startsAt;
   const datePickerMinimum = activeDatePicker === 'expiry' ? startsAt : new Date();
   const revealFocusedInput = () => {
@@ -286,6 +310,27 @@ export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
     }, 250);
   };
 
+  // With edge-to-edge the Android keyboard overlays the form instead of resizing
+  // it, so the scroll range never grows and the Submit button stays hidden behind
+  // the keyboard. Add scroll room equal to the part of the list the keyboard covers
+  // (zero when the window was resized instead), then re-reveal the focused field.
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const show = Keyboard.addListener('keyboardDidShow', (event) => {
+      const scrollNode = scrollRef.current?.getNativeScrollRef();
+      if (!scrollNode) {
+        setKeyboardInset(event.endCoordinates.height);
+        return;
+      }
+      scrollNode.measureInWindow((_x, y, _width, height) => {
+        setKeyboardInset(Math.max(0, Math.round(y + height - event.endCoordinates.screenY)));
+        revealFocusedInput();
+      });
+    });
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardInset(0));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
+
   return (
     <ScreenContainer>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -304,7 +349,23 @@ export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
           </View>
         </View>
 
-        {hasDesignDraft ? (
+        {isPosterUpload ? (
+          <View style={styles.posterCard}>
+            <View style={styles.posterHeader}>
+              <View style={styles.flex}>
+                <Text style={styles.posterTitle}>Your poster</Text>
+                <Text style={styles.posterHint}>Admin reviews it before it goes live.</Text>
+              </View>
+              <Pressable onPress={changePoster} style={styles.editDesign} accessibilityRole="button" accessibilityLabel="Change poster">
+                <MaterialCommunityIcons name="image-edit-outline" size={17} color={theme.colors.primary} />
+                <Text style={styles.editDesignText}>Change</Text>
+              </Pressable>
+            </View>
+            <Image source={{ uri: imageUrls[0] }} style={[styles.posterPreview, { aspectRatio: posterRatio }]} resizeMode="contain" />
+          </View>
+        ) : null}
+
+        {isPosterUpload ? null : hasDesignDraft ? (
           <View style={styles.copySummary}>
             <View style={styles.copySummaryHeader}>
               <View style={styles.flex}>
@@ -327,21 +388,25 @@ export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
             <Input label={`Category *${isFieldEditable('category') ? '' : ' (locked by template)'}`} editable={isFieldEditable('category')} value={category} onChangeText={setCategory} onFocus={revealFocusedInput} />
           </>
         )}
-        <View style={styles.two}>
-          <View style={styles.flex}>
-            <Input label={`Original price *${isFieldEditable('originalPrice') ? '' : ' (locked by template)'}`} editable={isFieldEditable('originalPrice')} value={originalPrice} onChangeText={setOriginalPrice} keyboardType="numeric" onFocus={revealFocusedInput} />
-          </View>
-          <View style={styles.flex}>
-            <Input label={`Offer price *${isFieldEditable('offerPrice') ? '' : ' (locked by template)'}`} editable={isFieldEditable('offerPrice')} value={offerPrice} onChangeText={setOfferPrice} keyboardType="numeric" onFocus={revealFocusedInput} />
-          </View>
-        </View>
+        {isPosterUpload ? null : (
+          <>
+            <View style={styles.two}>
+              <View style={styles.flex}>
+                <Input label={`Original price *${isFieldEditable('originalPrice') ? '' : ' (locked by template)'}`} editable={isFieldEditable('originalPrice')} value={originalPrice} onChangeText={setOriginalPrice} keyboardType="numeric" onFocus={revealFocusedInput} />
+              </View>
+              <View style={styles.flex}>
+                <Input label={`Offer price *${isFieldEditable('offerPrice') ? '' : ' (locked by template)'}`} editable={isFieldEditable('offerPrice')} value={offerPrice} onChangeText={setOfferPrice} keyboardType="numeric" onFocus={revealFocusedInput} />
+              </View>
+            </View>
 
-        <View style={styles.discount}>
-          <Text style={styles.discountLabel}>Calculated discount</Text>
-          <Text style={styles.discountValue}>{discount}% OFF</Text>
-        </View>
+            <View style={styles.discount}>
+              <Text style={styles.discountLabel}>Calculated discount</Text>
+              <Text style={styles.discountValue}>{discount}% OFF</Text>
+            </View>
+          </>
+        )}
 
-        {params.initialDesign ? (
+        {isPosterUpload ? null : params.initialDesign ? (
           <View style={styles.designReady}>
             <View style={styles.designReadyIcon}><MaterialCommunityIcons name="check-decagram" size={24} color={theme.colors.success} /></View>
             <View style={styles.flex}><Text style={styles.designReadyTitle}>Design ready</Text><Text style={styles.designReadyText}>Your card design, typography, colors and image are saved.</Text></View>
@@ -388,56 +453,62 @@ export const CreateOfferScreen: React.FC<Props> = ({ route, navigation }) => {
         <Input label="City" value={typeof business?.city === 'string' ? '' : business?.city?.name || ''} editable={false} />
         <Button label="Use Current Location" variant="outline" onPress={useCurrentLocation} loading={locationLoading} icon={<MaterialCommunityIcons name="crosshairs-gps" size={20} color={theme.colors.primary} />} />
 
-        <Input label="Phone" value={phone} onChangeText={(value) => setPhone(sanitizeIndianPhoneInput(value).digits)} keyboardType="phone-pad" maxLength={10} onFocus={revealFocusedInput} />
+        {isPosterUpload ? null : <Input label="Phone" value={phone} onChangeText={(value) => setPhone(sanitizeIndianPhoneInput(value).digits)} keyboardType="phone-pad" maxLength={10} onFocus={revealFocusedInput} />}
         <Input label="WhatsApp" value={whatsapp} onChangeText={(value) => setWhatsapp(sanitizeIndianPhoneInput(value).digits)} keyboardType="phone-pad" maxLength={10} onFocus={revealFocusedInput} />
-        <Input label={`Terms & Conditions${isFieldEditable('terms') ? '' : ' (locked by template)'}`} editable={isFieldEditable('terms')} value={terms} onChangeText={setTerms} multiline textAlignVertical="top" placeholder="Usage conditions, exclusions..." onFocus={revealFocusedInput} />
+        {isPosterUpload ? null : <Input label={`Terms & Conditions${isFieldEditable('terms') ? '' : ' (locked by template)'}`} editable={isFieldEditable('terms')} value={terms} onChangeText={setTerms} multiline textAlignVertical="top" placeholder="Usage conditions, exclusions..." onFocus={revealFocusedInput} />}
 
         <View style={styles.note}>
           <MaterialCommunityIcons name="shield-check-outline" size={22} color={theme.colors.secondary} />
           <Text style={styles.noteText}>{isEditing ? 'Your changes will go to admin review again. Expected offer approval time: within 1 hour.' : 'Your active plan lets you submit an offer. Expected offer approval time: within 1 hour.'}</Text>
         </View>
         <Button label={isEditing ? 'Submit changes' : 'Submit offer'} onPress={submit} loading={loading} fullWidth />
+        {keyboardInset > 0 ? <View style={{ height: keyboardInset }} /> : null}
       </ScrollView>
       </KeyboardAvoidingView>
     </ScreenContainer>
   );
 };
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   flex: { flex: 1 },
-  top: { height: 58, backgroundColor: theme.colors.surface, flexDirection: 'row', alignItems: 'center' },
+  top: { height: 58, backgroundColor: c.surface, flexDirection: 'row', alignItems: 'center' },
   back: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center' },
-  topTitle: { ...theme.typography.h3, color: theme.colors.text },
+  topTitle: { ...theme.typography.h3, color: c.text },
   content: { flexGrow: 1, padding: 18, paddingBottom: 100 },
-  business: { flexDirection: 'row', gap: 12, alignItems: 'center', backgroundColor: theme.colors.primaryLight, borderRadius: 16, padding: 14, marginBottom: 18 },
-  businessLabel: { fontSize: 9, color: theme.colors.textMuted, fontWeight: '900', letterSpacing: 1 },
-  businessName: { ...theme.typography.bodyBold, color: theme.colors.text, marginTop: 2 },
+  business: { flexDirection: 'row', gap: 12, alignItems: 'center', backgroundColor: c.primaryLight, borderRadius: 16, padding: 14, marginBottom: 18 },
+  businessLabel: { fontSize: 9, color: c.textMuted, fontWeight: '900', letterSpacing: 1 },
+  businessName: { ...theme.typography.bodyBold, color: c.text, marginTop: 2 },
   two: { flexDirection: 'row', gap: 10 },
-  discount: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: theme.colors.secondaryLight, borderRadius: 14, padding: 14, marginBottom: 18 },
-  discountLabel: { ...theme.typography.caption, color: theme.colors.textSecondary },
-  discountValue: { ...theme.typography.h3, color: theme.colors.success },
-  label: { ...theme.typography.bodyBold, color: theme.colors.text, marginBottom: 9 },
-  dateCard: { minHeight: 78, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 14, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, padding: 12, marginBottom: 10 },
+  discount: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: c.secondaryLight, borderRadius: 14, padding: 14, marginBottom: 18 },
+  discountLabel: { ...theme.typography.caption, color: c.textSecondary },
+  discountValue: { ...theme.typography.h3, color: c.success },
+  label: { ...theme.typography.bodyBold, color: c.text, marginBottom: 9 },
+  dateCard: { minHeight: 78, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 14, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border, padding: 12, marginBottom: 10 },
   dateCopy: { flex: 1, paddingRight: 8 },
-  dateLabel: { ...theme.typography.bodyBold, color: theme.colors.text },
-  dateHint: { ...theme.typography.caption, color: theme.colors.textMuted, marginTop: 3 },
-  dateButton: { minWidth: 130, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 7, borderRadius: 10, backgroundColor: theme.colors.primaryLight, paddingHorizontal: 10, paddingVertical: 9 },
-  dateValue: { ...theme.typography.caption, color: theme.colors.primary, fontWeight: '800' },
-  note: { flexDirection: 'row', gap: 10, backgroundColor: theme.colors.secondaryLight, borderRadius: 15, padding: 14, marginBottom: 18 },
-  noteText: { flex: 1, ...theme.typography.caption, color: theme.colors.textSecondary, lineHeight: 18 },
+  dateLabel: { ...theme.typography.bodyBold, color: c.text },
+  dateHint: { ...theme.typography.caption, color: c.textMuted, marginTop: 3 },
+  dateButton: { minWidth: 130, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 7, borderRadius: 10, backgroundColor: c.primaryLight, paddingHorizontal: 10, paddingVertical: 9 },
+  dateValue: { ...theme.typography.caption, color: c.primary, fontWeight: '800' },
+  note: { flexDirection: 'row', gap: 10, backgroundColor: c.secondaryLight, borderRadius: 15, padding: 14, marginBottom: 18 },
+  noteText: { flex: 1, ...theme.typography.caption, color: c.textSecondary, lineHeight: 18 },
   disabledControl: { opacity: 0.6 },
-  designReady: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.colors.successLight || '#E9F8EF', borderRadius: 16, padding: 13, marginBottom: 17 },
-  designReadyIcon: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.surface },
-  designReadyTitle: { ...theme.typography.bodyBold, color: theme.colors.text },
-  designReadyText: { ...theme.typography.caption, color: theme.colors.textSecondary, marginTop: 2 },
-  copySummary: { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 16, padding: 14, marginBottom: 17 },
+  designReady: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: c.successLight || '#E9F8EF', borderRadius: 16, padding: 13, marginBottom: 17 },
+  designReadyIcon: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: c.surface },
+  designReadyTitle: { ...theme.typography.bodyBold, color: c.text },
+  designReadyText: { ...theme.typography.caption, color: c.textSecondary, marginTop: 2 },
+  copySummary: { backgroundColor: c.surface, borderWidth: 1, borderColor: c.border, borderRadius: 16, padding: 14, marginBottom: 17 },
   copySummaryHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
-  copySummaryTitle: { ...theme.typography.bodyBold, color: theme.colors.text },
-  copySummaryHint: { ...theme.typography.caption, color: theme.colors.textMuted, marginTop: 2 },
-  copySummaryValue: { ...theme.typography.h3, color: theme.colors.text },
-  copySummaryDescription: { ...theme.typography.caption, color: theme.colors.textSecondary, marginTop: 5 },
-  copySummaryCategory: { ...theme.typography.tiny, color: theme.colors.primary, fontWeight: '800', marginTop: 8 },
+  copySummaryTitle: { ...theme.typography.bodyBold, color: c.text },
+  copySummaryHint: { ...theme.typography.caption, color: c.textMuted, marginTop: 2 },
+  copySummaryValue: { ...theme.typography.h3, color: c.text },
+  copySummaryDescription: { ...theme.typography.caption, color: c.textSecondary, marginTop: 5 },
+  copySummaryCategory: { ...theme.typography.tiny, color: c.primary, fontWeight: '800', marginTop: 8 },
+  posterCard: { backgroundColor: c.surface, borderWidth: 1, borderColor: c.border, borderRadius: 16, padding: 14, marginBottom: 17 },
+  posterHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  posterTitle: { ...theme.typography.bodyBold, color: c.text },
+  posterHint: { ...theme.typography.caption, color: c.textMuted, marginTop: 2 },
+  posterPreview: { width: '100%', maxHeight: 380, borderRadius: 12, backgroundColor: c.surfaceAlt },
   editDesign: { flexDirection: 'row', alignItems: 'center', gap: 4, padding: 7 },
-  editDesignText: { ...theme.typography.caption, color: theme.colors.primary, fontWeight: '900' },
+  editDesignText: { ...theme.typography.caption, color: c.primary, fontWeight: '900' },
   existingDesign: { marginBottom: 18 },
-});
+}));

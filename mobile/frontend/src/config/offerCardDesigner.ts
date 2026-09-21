@@ -139,6 +139,17 @@ export const resolveTemplateElementValue = (value: unknown, field: string | unde
   }
   return resolveDynamicValue(value, dynamicFields);
 };
+/**
+ * Text for a preview that has no offer behind it yet (the template library).
+ * Anything still holding a {{token}} would otherwise show template syntax to the
+ * user, so it resolves to nothing and the layer is skipped — the same rule images
+ * already follow in resolveTemplateImageValue.
+ */
+export const resolveTemplatePreviewText = (value: unknown, field: string | undefined, dynamicFields: Record<string, unknown>): string => {
+  const resolved = resolveTemplateElementValue(value, field, dynamicFields);
+  return /\{\{\s*[\w.-]+\s*\}\}/.test(resolved) ? '' : resolved;
+};
+
 /** Image bindings resolve to one URL; missing data keeps the layer fallback. */
 export const resolveTemplateImageValue = (value: unknown, field: string | undefined, dynamicFields: Record<string, unknown>): string => {
   const bound = field ? dynamicFields[field] : undefined;
@@ -360,6 +371,41 @@ export const DEFAULT_OFFER_CARD_DESIGN: OfferCardDesign = {
   textAlign: 'left',
   dynamicFields: {},
 };
+
+export const POSTER_UPLOAD_TEMPLATE_ID = 'poster-upload';
+
+// An uploaded poster is a finished design: one full-size image layer bound to the
+// offer's first image, on a canvas that keeps the poster's own aspect ratio so
+// every card renders it without cropping. The API caps canvas sides at 10,000.
+export const makePosterUploadDesign = (size?: { width: number; height: number }): OfferCardDesign => {
+  const width = 1080;
+  const ratio = size && size.width > 0 && size.height > 0 ? size.height / size.width : 1.25;
+  const height = Math.round(width * Math.min(Math.max(ratio, 0.25), 9));
+  return {
+    ...DEFAULT_OFFER_CARD_DESIGN,
+    templateId: POSTER_UPLOAD_TEMPLATE_ID,
+    templateSource: 'custom',
+    canvas: {
+      width,
+      height,
+      backgroundColor: '#FFFFFF',
+      background: { type: 'solid', color: '#FFFFFF' },
+      elements: [{ id: 'poster-upload-image', type: 'image', field: 'imageUrls', x: 0, y: 0, width, height, zIndex: 1, editable: true, resizeMode: 'contain' }],
+    },
+  };
+};
+
+export const isPosterUploadOffer = (offer: { cardDesign?: { templateId?: string } | null }) => offer.cardDesign?.templateId === POSTER_UPLOAD_TEMPLATE_ID;
+
+// The API requires copy and prices on every offer. A poster already carries its
+// own message, so these are neutral placeholders that customer-facing cards hide.
+export const makePosterOfferDetails = (businessName: string) => ({
+  title: `${businessName} offer`,
+  description: `Special offer from ${businessName}. See the poster for details.`,
+  originalPrice: 0,
+  offerPrice: 0,
+  discountPercentage: 0,
+});
 
 export const toOfferCardTemplate = (template: {
   _id: string;

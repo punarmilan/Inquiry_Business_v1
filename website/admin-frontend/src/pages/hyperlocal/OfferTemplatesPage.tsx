@@ -11,6 +11,8 @@ import { useCreateOfferTemplate, useDeleteOfferTemplate, useOfferTemplatesList, 
 import type { OfferTemplateRecord, TemplateAssetRecord, TemplateElementRecord, TemplateFieldRecord } from '@/api/hyperlocal';
 import PRESET_TEMPLATES from '@/data/offer-template-presets.json';
 import FOOD_TEMPLATE_PACK from '@/data/food-offer-template-pack.json';
+import PROMO_TEMPLATE_PACK from '@/data/promo-offer-template-pack.json';
+import LOCAL_BUSINESS_PACK from '@/data/local-business-36-template-pack.json';
 import TEMPLATE_V2_EXAMPLE from '@/data/template-schema-v2.example.json';
 import { getDynamicFieldName, resolveTemplateElementValue } from '@/utils/templateSchema';
 import { assertPublishableTemplateJson, assertSupportedInputElementTypes, formatTemplateJson, getTemplateJsonEntries, insertAssetIntoTemplateJson, replaceTemplateAssetUrl } from '@/utils/offerTemplateJsonTools';
@@ -547,6 +549,8 @@ export const OfferTemplatesPage = () => {
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => { setJsonInput(JSON.stringify(TEMPLATE_V2_EXAMPLE, null, 2)); setJsonStatus(null); }}>Load v2 example</Button>
             <Button variant="outline" onClick={() => { setJsonInput(JSON.stringify(FOOD_TEMPLATE_PACK, null, 2)); setJsonStatus(null); }}>Load 10 Food pack</Button>
+            <Button variant="outline" onClick={() => { setJsonInput(JSON.stringify(PROMO_TEMPLATE_PACK, null, 2)); setJsonStatus(null); }}>Load promo pack</Button>
+            <Button variant="outline" onClick={() => { setJsonInput(JSON.stringify(LOCAL_BUSINESS_PACK, null, 2)); setJsonStatus(null); }}>Load 36 business templates</Button>
             <Button variant="outline" onClick={() => { setJsonInput(JSON.stringify(PRESET_TEMPLATES, null, 2)); setJsonStatus(null); }}>Load legacy starters</Button>
             <Button variant="outline" onClick={formatJson} disabled={!jsonInput.trim()}>Format JSON</Button>
             <Button variant="outline" onClick={validateJson} disabled={!jsonInput.trim()}><CheckCircle2 className="h-4 w-4" /> Validate JSON</Button>

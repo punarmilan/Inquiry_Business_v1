@@ -10,6 +10,8 @@
     "check": "node --check src/server.js",
     "seed:admin": "node src/scripts/seedAdmin.js",
     "seed:food-pack": "node src/scripts/seedFoodTemplatePack.js",
+    "seed:promo-pack": "node src/scripts/seedPromoTemplatePack.js",
+    "repair:templates": "node src/scripts/repairOfferTemplates.js",
     "seed:stickers": "node src/scripts/seedTemplateStickers.js",
     "seed:demo": "node src/scripts/seedDemoData.js"
   },

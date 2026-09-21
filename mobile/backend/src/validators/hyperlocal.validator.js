@@ -1,4 +1,5 @@
 const { Joi, objectId, pagination, indianPhone } = require('./common');
+const { PAYMENT_METHODS } = require('../services/razorpayService');
 
 const addressDetails = Joi.object({
   houseNo: Joi.string().trim().allow('').max(120),
@@ -134,7 +135,12 @@ const analyticsSchema = Joi.object({
 });
 
 const createPaymentOrderSchema = Joi.object({
-  body: Joi.object({ planId: objectId.required(), businessId: objectId.required() }),
+  body: Joi.object({
+    planId: objectId.required(),
+    businessId: objectId.required(),
+    // Chosen in the app before checkout opens; checkout then shows only this method.
+    method: Joi.string().valid(...PAYMENT_METHODS),
+  }),
 });
 const createServicePaymentOrderSchema = Joi.object({
   body: Joi.object({ bookingId: objectId.required() }),

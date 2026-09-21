@@ -3,6 +3,7 @@ import { AppState, Platform } from 'react-native';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { translations, Language, TranslationKey } from '../i18n/translations';
+import { getThemeMode, setThemeMode as applyThemeMode, type ThemeMode } from '../theme';
 import { AccountType, CategoryMeta, EmployerProfile, Gender, KycProfile, User, WalletProfile, WorkerProfile } from '../types';
 import type { Business } from '../types/hyperlocal';
 import {
@@ -150,6 +151,8 @@ const toApiProfile = (profile: ProfilePayload) => ({
 interface AppContextValue {
   language: Language;
   setLanguage: (lang: Language) => void;
+  themeMode: ThemeMode;
+  setThemeMode: (mode: ThemeMode) => void;
   t: (key: TranslationKey) => string;
 
   isAuthenticated: boolean;
@@ -201,10 +204,13 @@ interface AppContextValue {
 const AppContext = createContext<AppContextValue | undefined>(undefined);
 const LANGUAGE_STORAGE_KEY = 'inquiryexperts_lang';
 const LEGACY_LANGUAGE_STORAGE_KEY = 'kaamsaathi_lang';
+const THEME_STORAGE_KEY = 'inquiryexperts_theme';
 const isLanguage = (value: string | null): value is Language => value === 'en' || value === 'hi';
+const isThemeMode = (value: string | null): value is ThemeMode => value === 'light' || value === 'dark';
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [language, setLanguageState] = useState<Language>('en');
+  const [themeMode, setThemeModeState] = useState<ThemeMode>(getThemeMode);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   // True only until the stored-session restore attempt (below) finishes — RootNavigator
   // holds on a splash screen for this rather than flashing the login screen on every cold
@@ -251,6 +257,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setLanguageState(lang);
     AsyncStorage.setItem(LANGUAGE_STORAGE_KEY, lang).catch(() => {});
     AsyncStorage.removeItem(LEGACY_LANGUAGE_STORAGE_KEY).catch(() => {});
+  }, []);
+
+  // Apply to the style runtime first so the re-render this triggers already
+  // resolves every themed style sheet against the new palette.
+  const setThemeMode = useCallback((mode: ThemeMode) => {
+    applyThemeMode(mode);
+    setThemeModeState(mode);
+    AsyncStorage.setItem(THEME_STORAGE_KEY, mode).catch(() => {});
   }, []);
 
   const t = useCallback(
@@ -621,11 +635,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let cancelled = false;
     (async () => {
       try {
-        const [parsed, savedLanguage, legacyLanguage] = await Promise.all([
+        const [parsed, savedLanguage, legacyLanguage, savedTheme] = await Promise.all([
           loadSessionTokens(),
           AsyncStorage.getItem(LANGUAGE_STORAGE_KEY),
           AsyncStorage.getItem(LEGACY_LANGUAGE_STORAGE_KEY),
+          AsyncStorage.getItem(THEME_STORAGE_KEY),
         ]);
+        if (!cancelled && isThemeMode(savedTheme)) {
+          applyThemeMode(savedTheme);
+          setThemeModeState(savedTheme);
+        }
         const effectiveLanguage = savedLanguage ?? legacyLanguage;
         if (!cancelled && isLanguage(effectiveLanguage)) {
           setLanguageState(effectiveLanguage);
@@ -687,6 +706,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     () => ({
       language,
       setLanguage,
+      themeMode,
+      setThemeMode,
       t,
       isAuthenticated,
       isBootstrapping,
@@ -730,6 +751,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     [
       language,
       setLanguage,
+      themeMode,
+      setThemeMode,
       t,
       isAuthenticated,
       isBootstrapping,

@@ -2,9 +2,9 @@ import React from 'react';
 import { Image, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { findOfferAvatar, resolveDynamicValue, resolveOfferFontFamily, resolveOfferLineHeight, resolveTemplateElementValue, resolveTemplateImageValue } from '../config/offerCardDesigner';
+import { findOfferAvatar, isPosterUploadOffer, resolveDynamicValue, resolveOfferFontFamily, resolveOfferLineHeight, resolveTemplateElementValue, resolveTemplateImageValue } from '../config/offerCardDesigner';
 import { OfferAvatarSprite } from './OfferAvatarSprite';
-import { theme } from '../theme';
+import { theme, createThemedStyles } from '../theme';
 import type { Offer, Business, OfferTemplateCanvas, OfferTemplateElement } from '../types/hyperlocal';
 
 const expiryLabel = (expiresAt: string) => {
@@ -33,7 +33,7 @@ const heroIcon = (category: string): React.ComponentProps<typeof MaterialCommuni
   return 'sale-outline';
 };
 
-const posterText = (offer: Offer, element: OfferTemplateElement) => {
+const posterText = (offer: Offer, element: OfferTemplateElement, editedText: Record<string, string>) => {
   const field = element.field || element.key;
   const business = offer.businessDocument || (offer.business && typeof offer.business !== 'string' ? offer.business : undefined);
   const values: Record<string, unknown> = {
@@ -52,6 +52,7 @@ const posterText = (offer: Offer, element: OfferTemplateElement) => {
     expiresAt: new Date(offer.expiresAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
     ...(offer.imageUrls?.[0] ? { imageUrls: offer.imageUrls[0] } : {}),
   };
+  if (Object.prototype.hasOwnProperty.call(editedText, element.id)) return resolveDynamicValue(editedText[element.id], values);
   if (field === 'title') return offer.title;
   if (field === 'description') return offer.description;
   if (field === 'category') return offer.category;
@@ -91,8 +92,32 @@ const rotationTransform = (rotation?: number) => (
     : []
 );
 
+const PosterHeroArtwork: React.FC<{ offer: Offer; canvas?: OfferTemplateCanvas }> = ({ offer, canvas }) => {
+  const [size, setSize] = React.useState({ width: 0, height: 0 });
+  if (!canvas && offer.imageUrls?.[0]) return <Image source={{ uri: offer.imageUrls[0] }} style={styles.posterImageFill} resizeMode="contain" />;
+  const ratio = canvas && canvas.width > 0 && canvas.height > 0 ? canvas.width / canvas.height : 1;
+  const width = Math.min(size.width, size.height * ratio);
+  const height = ratio > 0 ? width / ratio : 0;
+  return <View style={styles.posterFrame} onLayout={(event) => {
+    const { width: nextWidth, height: nextHeight } = event.nativeEvent.layout;
+    setSize((current) => current.width === nextWidth && current.height === nextHeight ? current : { width: nextWidth, height: nextHeight });
+  }}>
+    {width > 0 && height > 0 ? <View style={{ width, height, overflow: 'hidden' }}>
+      {isPosterUploadOffer(offer) && offer.imageUrls?.[0]
+        ? <Image source={{ uri: offer.imageUrls[0] }} style={styles.posterImageFill} resizeMode="contain" />
+        : canvas ? <PosterLayers offer={offer} canvas={canvas} previewUrl={offer.cardDesign?.previewUrl} /> : null}
+    </View> : null}
+  </View>;
+};
+
 export const PosterLayers: React.FC<{ offer: Offer; canvas: OfferTemplateCanvas; previewUrl?: string }> = ({ offer, canvas, previewUrl }) => {
   const [surfaceWidth, setSurfaceWidth] = React.useState(0);
+  const editedText = React.useMemo(() => {
+    try {
+      const value = JSON.parse(String(offer.cardDesign?.customizations?.posterTextValues || '{}'));
+      return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, string> : {};
+    } catch { return {}; }
+  }, [offer.cardDesign?.customizations?.posterTextValues]);
   const scale = surfaceWidth ? surfaceWidth / canvas.width : 0.28;
   const customAvatar = offer.cardDesign?.templateId === 'custom' && offer.cardDesign.avatarId ? findOfferAvatar(offer.cardDesign.avatarId) : null;
   const avatarOffsetX = Number(offer.cardDesign?.customizations?.avatarOffsetX || 0);
@@ -151,7 +176,7 @@ export const PosterLayers: React.FC<{ offer: Offer; canvas: OfferTemplateCanvas;
           textAlignVertical: element.textAlignVertical || value('textAlignVertical', 'center'),
           textDecorationLine: element.textDecorationLine || value('textDecorationLine', 'none'),
           textTransform: element.textTransform || value('textTransform', 'none'),
-        }]}>{posterText(offer, element)}</Text>;
+        }]}>{posterText(offer, element, editedText)}</Text>;
       })}
       {customAvatar ? <OfferAvatarSprite avatar={customAvatar} size={Math.max(72, Math.round((surfaceWidth || 320) * 0.23))} style={[styles.posterAvatar, { transform: [{ translateX: avatarOffsetX * scale }, { translateY: avatarOffsetY * scale }] }]} /> : null}
     </View>
@@ -168,27 +193,27 @@ export const OfferCard: React.FC<{
 }> = ({ offer, onPress, onSave, saved = false, compact, variant = 'standard' }) => {
   const business = (offer.businessDocument || offer.business) as Business;
   const selectedAvatar = offer.cardDesign?.avatarId ? findOfferAvatar(offer.cardDesign.avatarId) : null;
-  const titleAlign = offer.cardDesign?.textAlign || (offer.cardDesign?.layout === 'center' ? 'center' : 'left');
-  const titleFontSize = offer.cardDesign?.titleFontSize || 30;
-  const descriptionFontSize = offer.cardDesign?.descriptionFontSize || 16;
-  const fontWeight = offer.cardDesign?.fontWeight || '900';
-  const fontStyle = offer.cardDesign?.fontStyle || 'normal';
-  const titleFontWeight = String(offer.cardDesign?.customizations?.titleFontWeight || fontWeight) as '500' | '600' | '700' | '800' | '900';
-  const descriptionFontWeight = String(offer.cardDesign?.customizations?.descriptionFontWeight || '600') as '500' | '600' | '700' | '800' | '900';
-  const titleFontStyle = String(offer.cardDesign?.customizations?.titleFontStyle || fontStyle) as 'normal' | 'italic';
-  const descriptionFontStyle = String(offer.cardDesign?.customizations?.descriptionFontStyle || fontStyle) as 'normal' | 'italic';
-  const titleTextAlign = String(offer.cardDesign?.customizations?.titleTextAlign || titleAlign) as 'left' | 'center' | 'right';
-  const descriptionTextAlign = String(offer.cardDesign?.customizations?.descriptionTextAlign || titleAlign) as 'left' | 'center' | 'right';
   const titleOffsetX = Number(offer.cardDesign?.customizations?.titleOffsetX || 0);
   const titleOffsetY = Number(offer.cardDesign?.customizations?.titleOffsetY || 0);
-  const descriptionOffsetX = Number(offer.cardDesign?.customizations?.descriptionOffsetX || 0);
-  const descriptionOffsetY = Number(offer.cardDesign?.customizations?.descriptionOffsetY || 0);
   const posterCanvas = offer.cardDesign?.canvas;
+  const heroPhotoUrl = offer.imageUrls?.[0];
+  // An uploaded poster already carries its own offer text and has no real prices
+  // or discount, so it never gets the summary overlays.
+  const isPoster = isPosterUploadOffer(offer);
 
-  if (variant === 'hero' && posterCanvas && posterCanvas.width > 0 && posterCanvas.height > 0) {
+  const posterRatio = posterCanvas && posterCanvas.width > 0 && posterCanvas.height > 0
+    ? posterCanvas.width / posterCanvas.height
+    : 0;
+
+  // The saved canvas is the user's poster. Fit it within the carousel slot;
+  // never layer an unrelated offer summary over a finished template.
+  if (variant === 'hero' && ((posterCanvas && posterRatio > 0 && Array.isArray(posterCanvas.elements)) || (isPoster && offer.imageUrls?.[0]))) {
     return (
-      <Pressable onPress={onPress} style={({ pressed }) => [styles.posterCard, compact && styles.posterCardCompact, { aspectRatio: posterCanvas.width / posterCanvas.height }, pressed && styles.pressed]}>
-        <PosterLayers offer={offer} canvas={posterCanvas} previewUrl={offer.cardDesign?.previewUrl} />
+      <Pressable onPress={onPress} style={({ pressed }) => [styles.posterCard, { backgroundColor: posterCanvas?.background?.color || posterCanvas?.backgroundColor || '#071E20' }, compact && styles.posterCardCompact, pressed && styles.pressed]}>
+        <PosterHeroArtwork offer={offer} canvas={posterCanvas} />
+        {onSave ? <Pressable accessibilityRole="button" accessibilityLabel={saved ? 'Unsave offer' : 'Save offer'} hitSlop={8} onPress={(event) => { event.stopPropagation(); onSave(); }} style={[styles.posterSave, compact && styles.posterSaveCompact]}>
+          <MaterialCommunityIcons name={saved ? 'heart' : 'heart-outline'} size={compact ? 17 : 21} color={saved ? theme.colors.danger : '#FFFFFF'} />
+        </Pressable> : null}
       </Pressable>
     );
   }
@@ -197,14 +222,14 @@ export const OfferCard: React.FC<{
     return (
       <Pressable onPress={onPress} style={({ pressed }) => [styles.heroCard, compact && styles.heroCardCompact, pressed && styles.pressed]}>
         <LinearGradient colors={heroPalette(offer)} style={[styles.heroGradient, compact && styles.heroGradientCompact]}>
-          {offer.imageUrls?.[0] || offer.cardDesign?.previewUrl ? (
-            <Image source={{ uri: offer.imageUrls?.[0] || offer.cardDesign?.previewUrl || '' }} style={[styles.heroPhoto, compact && styles.heroPhotoCompact]} resizeMode="contain" />
+          {heroPhotoUrl ? (
+            <Image source={{ uri: heroPhotoUrl }} style={[styles.heroPhoto, compact && styles.heroPhotoCompact]} resizeMode="cover" />
           ) : selectedAvatar ? (
             <OfferAvatarSprite avatar={selectedAvatar} size={compact ? 178 : 200} style={[styles.heroAvatar, compact && styles.heroAvatarCompact]} />
           ) : (
             <MaterialCommunityIcons name={heroIcon(offer.category)} size={118} color="rgba(255,255,255,0.32)" style={styles.heroFallbackIcon} />
           )}
-          <LinearGradient colors={['rgba(0,0,0,0.01)', 'rgba(0,0,0,0.34)']} style={styles.heroShade} />
+          <LinearGradient colors={['rgba(0,0,0,0.03)', 'rgba(0,8,10,0.28)', 'rgba(0,8,10,0.94)']} locations={[0, 0.42, 1]} style={styles.heroShade} />
           <LinearGradient
             colors={['rgba(255,255,255,0.22)', 'rgba(255,255,255,0)']}
             start={{ x: 0, y: 0 }}
@@ -216,23 +241,23 @@ export const OfferCard: React.FC<{
             <View style={[styles.heroCategory, compact && styles.heroCategoryCompact]}>
               <Text style={[styles.heroCategoryText, compact && styles.heroCategoryTextCompact]}>{offer.category.toUpperCase()} - NEAR YOU</Text>
             </View>
-            <View style={[styles.heroDiscount, compact && styles.heroDiscountCompact]}>
-              <Text style={[styles.heroDiscountText, compact && styles.heroDiscountTextCompact]}>{Math.round(offer.discountPercentage)}% OFF</Text>
-            </View>
+            <Pressable accessibilityRole="button" accessibilityLabel={saved ? 'Unsave offer' : 'Save offer'} hitSlop={8} onPress={(event) => { event.stopPropagation(); onSave?.(); }} style={[styles.heroHeart, compact && styles.heroHeartCompact]}>
+              <MaterialCommunityIcons name={saved ? 'heart' : 'heart-outline'} size={compact ? 18 : 23} color={saved ? theme.colors.danger : '#FFFFFF'} />
+            </Pressable>
           </View>
-          <Pressable onPress={(event) => { event.stopPropagation(); onPress(); }} style={[styles.heroMore, compact && styles.heroMoreCompact]} accessibilityLabel="Open offer details">
-            <MaterialCommunityIcons name="dots-horizontal" size={22} color="#FFFFFF" />
-          </Pressable>
+          <View style={[styles.heroDiscount, compact && styles.heroDiscountCompact]}>
+            <Text style={[styles.heroDiscountText, compact && styles.heroDiscountTextCompact]}>{Math.round(offer.discountPercentage)}% OFF</Text>
+          </View>
           <View style={[styles.heroCopy, compact && styles.heroCopyCompact]}>
-            <Text style={[styles.heroTitle, compact && styles.heroTitleCompact, { fontSize: compact ? Math.min(titleFontSize, 24) : titleFontSize, lineHeight: (compact ? Math.min(titleFontSize, 24) : titleFontSize) + 4, fontWeight: titleFontWeight, fontStyle: titleFontStyle, textAlign: titleTextAlign, color: String(offer.cardDesign?.customizations?.titleColor || '#FFFFFF'), letterSpacing: Number(offer.cardDesign?.customizations?.titleLetterSpacing || 0), textDecorationLine: String(offer.cardDesign?.customizations?.titleTextDecoration || 'none') as 'none' | 'underline' | 'line-through', textTransform: String(offer.cardDesign?.customizations?.titleTextTransform || 'none') as 'none' | 'uppercase' | 'lowercase' | 'capitalize', transform: [{ translateX: titleOffsetX }, { translateY: titleOffsetY }] }]} numberOfLines={2}>{offer.title}</Text>
-            <Text style={[styles.heroDescription, compact && styles.heroDescriptionCompact, { fontSize: compact ? Math.min(descriptionFontSize, 14) : descriptionFontSize, fontWeight: descriptionFontWeight, fontStyle: descriptionFontStyle, textAlign: descriptionTextAlign, color: String(offer.cardDesign?.customizations?.descriptionColor || 'rgba(255,255,255,0.94)'), letterSpacing: Number(offer.cardDesign?.customizations?.descriptionLetterSpacing || 0), textDecorationLine: String(offer.cardDesign?.customizations?.descriptionTextDecoration || 'none') as 'none' | 'underline' | 'line-through', textTransform: String(offer.cardDesign?.customizations?.descriptionTextTransform || 'none') as 'none' | 'uppercase' | 'lowercase' | 'capitalize', transform: [{ translateX: descriptionOffsetX }, { translateY: descriptionOffsetY }] }]} numberOfLines={2}>{offer.description}</Text>
+            <Text style={[styles.heroTitle, compact && styles.heroTitleCompact]} numberOfLines={2}>{offer.title}</Text>
+            <Text style={[styles.heroDescription, compact && styles.heroDescriptionCompact]} numberOfLines={compact ? 1 : 2}>{offer.description}</Text>
           </View>
-          <View style={styles.heroFooter}>
-            <View>
-              <Text style={styles.heroPrice}>{`\u20B9${offer.offerPrice.toLocaleString('en-IN')}`}</Text>
-              <Text style={styles.heroOriginal}>{`\u20B9${offer.originalPrice.toLocaleString('en-IN')}`}</Text>
+          <View style={[styles.heroFooter, compact && styles.heroFooterCompact]}>
+            <View style={styles.heroPriceRow}>
+              <Text style={[styles.heroPrice, compact && styles.heroPriceCompact]}>{`\u20B9${offer.offerPrice.toLocaleString('en-IN')}`}</Text>
+              <Text style={[styles.heroOriginal, compact && styles.heroOriginalCompact]}>{`\u20B9${offer.originalPrice.toLocaleString('en-IN')}`}</Text>
             </View>
-            <Pressable onPress={(event) => { event.stopPropagation(); onPress(); }} style={styles.viewOffer}>
+            <Pressable onPress={(event) => { event.stopPropagation(); onPress(); }} style={[styles.viewOffer, compact && styles.viewOfferCompact]}>
               <Text style={styles.viewOfferText}>View Offer</Text>
               <MaterialCommunityIcons name="chevron-right" size={22} color={theme.colors.accent} />
             </Pressable>
@@ -253,7 +278,7 @@ export const OfferCard: React.FC<{
       ) : (
         <View style={[styles.image, styles.placeholder]}><MaterialCommunityIcons name="sale" size={46} color={theme.colors.primary} /></View>
       )}
-      <View style={styles.discount}><Text style={styles.discountText}>{Math.round(offer.discountPercentage)}% OFF</Text></View>
+      {isPoster ? null : <View style={styles.discount}><Text style={styles.discountText}>{Math.round(offer.discountPercentage)}% OFF</Text></View>}
       <View style={styles.body}>
         <Text style={[styles.title, { transform: [{ translateX: titleOffsetX }, { translateY: titleOffsetY }] }]} numberOfLines={2}>{offer.title}</Text>
         <View style={styles.businessRow}>
@@ -261,10 +286,12 @@ export const OfferCard: React.FC<{
           {business?.verificationStatus === 'verified' && <MaterialCommunityIcons name="check-decagram" size={16} color={theme.colors.verified} />}
         </View>
         <Text style={styles.category}>{offer.category}</Text>
-        <View style={styles.priceRow}>
-          <Text style={styles.original}>{`\u20B9${offer.originalPrice.toLocaleString('en-IN')}`}</Text>
-          <Text style={styles.price}>{`\u20B9${offer.offerPrice.toLocaleString('en-IN')}`}</Text>
-        </View>
+        {isPoster ? null : (
+          <View style={styles.priceRow}>
+            <Text style={styles.original}>{`\u20B9${offer.originalPrice.toLocaleString('en-IN')}`}</Text>
+            <Text style={styles.price}>{`\u20B9${offer.offerPrice.toLocaleString('en-IN')}`}</Text>
+          </View>
+        )}
         <View style={styles.metaRow}>
           <Text style={styles.meta}>{offer.distanceKm != null ? `${offer.distanceKm} KM away` : expiryLabel(offer.expiresAt)}</Text>
           <Text style={styles.expiry}>{expiryLabel(offer.expiresAt)}</Text>
@@ -273,7 +300,7 @@ export const OfferCard: React.FC<{
           <Pressable onPress={(event) => { event.stopPropagation(); onSave?.(); }} style={[styles.action, saved && { backgroundColor: theme.colors.primaryLight }]}>
             <MaterialCommunityIcons name={saved ? 'bookmark' : 'bookmark-outline'} size={19} color={theme.colors.primary} /><Text style={styles.actionText}>{saved ? 'Saved' : 'Save'}</Text>
           </Pressable>
-          <Pressable onPress={(event) => { event.stopPropagation(); Share.share({ message: `${offer.title} - \u20B9${offer.offerPrice}` }); }} style={styles.action}>
+          <Pressable onPress={(event) => { event.stopPropagation(); Share.share({ message: isPoster ? offer.title : `${offer.title} - \u20B9${offer.offerPrice}` }); }} style={styles.action}>
             <MaterialCommunityIcons name="share-variant-outline" size={19} color={theme.colors.primary} /><Text style={styles.actionText}>Share</Text>
           </Pressable>
         </View>
@@ -282,49 +309,55 @@ export const OfferCard: React.FC<{
   );
 };
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   pressed: { opacity: 0.9 },
   posterSurface: { flex: 1, width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }, posterBackground: { ...StyleSheet.absoluteFill }, posterText: { includeFontPadding: false, textAlignVertical: 'center' }, posterAvatar: { position: 'absolute', right: 12, bottom: 12, zIndex: 20 },
-  posterCard: { width: '100%', overflow: 'hidden', backgroundColor: '#F4F4F4', borderRadius: 20, borderWidth: 1, borderColor: theme.colors.border, shadowColor: theme.colors.shadowStrong, shadowOpacity: 1, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 7 }, posterCardCompact: { width: 260 },
-  heroCard: { width: '100%', height: 264, borderRadius: 29, overflow: 'hidden', backgroundColor: '#176FCF', borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)', shadowColor: theme.colors.shadowStrong, shadowOpacity: 1, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 7 }, heroCardCompact: { width: 260, height: 342, borderRadius: 24 },
-  heroGradient: { flex: 1, overflow: 'hidden', padding: 20 }, heroGradientCompact: { padding: 14 },
-  heroPhoto: { position: 'absolute', right: -10, bottom: 32, width: '62%', height: '64%', zIndex: 2 }, heroPhotoCompact: { right: -8, bottom: 52, width: '64%', height: '50%' },
+  posterCard: { width: '100%', height: 218, overflow: 'hidden', backgroundColor: c.surfaceAlt, borderRadius: 20, borderWidth: 1.5, borderColor: c.cardBorder, shadowColor: c.cardGlow, shadowOpacity: 1, shadowRadius: 14, shadowOffset: { width: 0, height: 5 }, elevation: 5 }, posterCardCompact: { width: '100%', height: 105, borderRadius: 16 },
+  posterFrame: { flex: 1, width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  posterImageFill: { width: '100%', height: '100%' },
+  posterSave: { position: 'absolute', top: 7, right: 7, width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,10,13,0.62)' },
+  posterSaveCompact: { width: 25, height: 25, borderRadius: 13, top: 5, right: 5 },
+  heroCard: { width: '100%', height: 218, borderRadius: 16, overflow: 'hidden', backgroundColor: '#061519', borderWidth: 1.25, borderColor: c.cardBorder, shadowColor: c.cardGlow, shadowOpacity: 0.92, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 5 }, heroCardCompact: { width: '100%', height: 105, borderRadius: 14 },
+  heroGradient: { flex: 1, overflow: 'hidden', padding: 12 }, heroGradientCompact: { padding: 8 },
+  heroPhoto: { ...StyleSheet.absoluteFill, width: '100%', height: '100%', zIndex: 2 }, heroPhotoCompact: { width: '100%', height: '100%' },
   heroAvatar: { position: 'absolute', right: -20, bottom: 28, zIndex: 2 }, heroAvatarCompact: { right: -16, bottom: 52 },
-  heroFallbackIcon: { position: 'absolute', right: 12, bottom: 48, zIndex: 2 },
+  heroFallbackIcon: { position: 'absolute', right: 12, bottom: 12, zIndex: 2 },
   heroShade: { ...StyleSheet.absoluteFill, zIndex: 3 },
   heroSheen: { position: 'absolute', top: -48, right: -80, width: '86%', height: 150, borderRadius: 90, transform: [{ rotate: '-15deg' }], zIndex: 4 },
-  heroTopRow: { zIndex: 5, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }, heroTopRowCompact: { gap: 4 },
-  heroCategory: { maxWidth: '64%', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 99, backgroundColor: 'rgba(255,255,255,0.2)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)' }, heroCategoryCompact: { maxWidth: '58%', paddingHorizontal: 8, paddingVertical: 6 },
-  heroCategoryText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.6, color: '#FFFFFF' }, heroCategoryTextCompact: { fontSize: 8, letterSpacing: 0.25 },
-  heroDiscount: { paddingHorizontal: 13, paddingVertical: 8, borderRadius: 99, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'rgba(255,255,255,0.75)', shadowColor: '#FFFFFF', shadowOpacity: 0.55, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 4 }, heroDiscountCompact: { paddingHorizontal: 9, paddingVertical: 7 },
-  heroDiscountText: { fontSize: 12, fontWeight: '900', color: theme.colors.accent }, heroDiscountTextCompact: { fontSize: 10 },
-  heroMore: { position: 'absolute', top: 78, right: 17, zIndex: 6, width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,25,70,0.22)' }, heroMoreCompact: { top: 65, right: 12, width: 34, height: 34, borderRadius: 17 },
-  heroCopy: { zIndex: 5, width: '62%', marginTop: 18 }, heroCopyCompact: { marginTop: 14 },
-  heroTitle: { fontSize: 30, lineHeight: 34, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.5, textShadowColor: 'rgba(0,37,75,0.3)', textShadowOffset: { width: 0, height: 3 }, textShadowRadius: 5 }, heroTitleCompact: { fontSize: 24, lineHeight: 28 },
-  heroDescription: { marginTop: 7, fontSize: 16, lineHeight: 21, color: 'rgba(255,255,255,0.96)', fontWeight: '600', textShadowColor: 'rgba(0,37,75,0.24)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 3 }, heroDescriptionCompact: { marginTop: 5, fontSize: 14, lineHeight: 18 },
-  heroFooter: { zIndex: 5, position: 'absolute', left: 20, right: 20, bottom: 16, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8 },
-  heroPrice: { fontSize: 25, lineHeight: 29, fontWeight: '900', color: '#FFFFFF', textShadowColor: 'rgba(0,37,75,0.32)', textShadowOffset: { width: 0, height: 3 }, textShadowRadius: 5 },
-  heroOriginal: { marginTop: 2, fontSize: 14, lineHeight: 18, fontWeight: '700', textDecorationLine: 'line-through', color: 'rgba(255,255,255,0.7)' },
-  viewOffer: { minHeight: 49, paddingHorizontal: 17, borderRadius: 27, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'rgba(255,255,255,0.75)', shadowColor: theme.colors.accent, shadowOpacity: 0.28, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 4 },
-  viewOfferText: { fontSize: 16, fontWeight: '800', color: theme.colors.accent },
-  card: { width: 286, backgroundColor: theme.colors.surface, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: theme.colors.border, shadowColor: theme.colors.shadowStrong, shadowOpacity: 1, shadowRadius: 12, shadowOffset: { width: 0, height: 7 }, elevation: 4 },
+  heroTopRow: { zIndex: 5, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }, heroTopRowCompact: { gap: 3 },
+  heroCategory: { maxWidth: '72%', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 99, backgroundColor: 'rgba(2,23,28,0.78)', borderWidth: 1, borderColor: 'rgba(160,244,249,0.42)' }, heroCategoryCompact: { maxWidth: '72%', paddingHorizontal: 6, paddingVertical: 3 },
+  heroCategoryText: { fontSize: 8.5, fontWeight: '900', letterSpacing: 0.45, color: c.textInverse }, heroCategoryTextCompact: { fontSize: 6.5, letterSpacing: 0.1 },
+  heroHeart: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,10,13,0.42)' }, heroHeartCompact: { width: 24, height: 24, borderRadius: 12 },
+  heroDiscount: { position: 'absolute', top: 48, right: 10, zIndex: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: '#FF4A43', shadowColor: '#FF4A43', shadowOpacity: 0.38, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 4 }, heroDiscountCompact: { top: 42, right: 7, paddingHorizontal: 6, paddingVertical: 4, borderRadius: 6 },
+  heroDiscountText: { fontSize: 11, fontWeight: '900', color: '#FFFFFF' }, heroDiscountTextCompact: { fontSize: 7.5 },
+  heroCopy: { zIndex: 5, position: 'absolute', left: 12, right: 12, bottom: 57 }, heroCopyCompact: { left: 8, right: 8, bottom: 24 },
+  heroTitle: { fontSize: 21, lineHeight: 24, fontWeight: '900', color: c.textInverse, letterSpacing: -0.35, textShadowColor: 'rgba(0,0,0,0.92)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 6 }, heroTitleCompact: { fontSize: 12.5, lineHeight: 15 },
+  heroDescription: { marginTop: 3, fontSize: 11, lineHeight: 15, color: 'rgba(255,255,255,0.9)', fontWeight: '600', textShadowColor: 'rgba(0,0,0,0.95)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 }, heroDescriptionCompact: { marginTop: 0, fontSize: 7.5, lineHeight: 9 },
+  heroFooter: { zIndex: 5, position: 'absolute', left: 12, right: 10, bottom: 9, minHeight: 39, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 5 },
+  heroFooterCompact: { left: 8, right: 8, bottom: 4, minHeight: 18 },
+  heroPriceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
+  heroPrice: { fontSize: 20, lineHeight: 24, fontWeight: '900', color: c.primary, textShadowColor: 'rgba(0,0,0,0.85)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 5 }, heroPriceCompact: { fontSize: 11, lineHeight: 14 },
+  heroOriginal: { fontSize: 11, lineHeight: 15, fontWeight: '700', textDecorationLine: 'line-through', color: 'rgba(255,255,255,0.62)' }, heroOriginalCompact: { fontSize: 7.5, lineHeight: 9 },
+  viewOffer: { minHeight: 38, paddingHorizontal: 13, borderRadius: 21, flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: c.primary, borderWidth: 1, borderColor: c.primaryBright, shadowColor: c.primary, shadowOpacity: 0.38, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 4 }, viewOfferCompact: { display: 'none' },
+  viewOfferText: { fontSize: 12.5, fontWeight: '900', color: '#001418' },
+  card: { width: 286, backgroundColor: c.surface, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: c.border, shadowColor: c.shadowStrong, shadowOpacity: 1, shadowRadius: 12, shadowOffset: { width: 0, height: 7 }, elevation: 4 },
   compact: { width: 260 },
-  image: { width: '100%', height: 138, backgroundColor: theme.colors.surfaceAlt }, cardAvatar: { position: 'absolute', right: -8, bottom: -17 },
-  placeholder: { alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.primaryLight },
-  discount: { position: 'absolute', top: 12, left: 12, backgroundColor: theme.colors.primary, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 9 },
-  discountText: { color: theme.colors.textInverse, fontWeight: '900', fontSize: 12 },
+  image: { width: '100%', height: 138, backgroundColor: c.surfaceAlt }, cardAvatar: { position: 'absolute', right: -8, bottom: -17 },
+  placeholder: { alignItems: 'center', justifyContent: 'center', backgroundColor: c.primaryLight },
+  discount: { position: 'absolute', top: 12, left: 12, backgroundColor: c.primary, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 9 },
+  discountText: { color: c.textInverse, fontWeight: '900', fontSize: 12 },
   body: { padding: 14 },
-  title: { ...theme.typography.bodyBold, color: theme.colors.text, minHeight: 42 },
+  title: { ...theme.typography.bodyBold, color: c.text, minHeight: 42 },
   businessRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 5 },
-  business: { ...theme.typography.caption, color: theme.colors.textSecondary, fontWeight: '700', maxWidth: '85%' },
-  category: { ...theme.typography.tiny, color: theme.colors.textMuted, marginTop: 2 },
+  business: { ...theme.typography.caption, color: c.textSecondary, fontWeight: '700', maxWidth: '85%' },
+  category: { ...theme.typography.tiny, color: c.textMuted, marginTop: 2 },
   priceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 9 },
-  original: { ...theme.typography.caption, color: theme.colors.textMuted, textDecorationLine: 'line-through' },
-  price: { fontSize: 19, fontWeight: '900', color: theme.colors.text },
+  original: { ...theme.typography.caption, color: c.textMuted, textDecorationLine: 'line-through' },
+  price: { fontSize: 19, fontWeight: '900', color: c.text },
   metaRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
-  meta: { ...theme.typography.tiny, color: theme.colors.secondary, fontWeight: '700' },
-  expiry: { ...theme.typography.tiny, color: theme.colors.warning, fontWeight: '700' },
-  actions: { flexDirection: 'row', gap: 20, borderTopWidth: 1, borderTopColor: theme.colors.divider, marginTop: 11, paddingTop: 10 },
+  meta: { ...theme.typography.tiny, color: c.secondary, fontWeight: '700' },
+  expiry: { ...theme.typography.tiny, color: c.warning, fontWeight: '700' },
+  actions: { flexDirection: 'row', gap: 20, borderTopWidth: 1, borderTopColor: c.divider, marginTop: 11, paddingTop: 10 },
   action: { minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: 5 },
-  actionText: { ...theme.typography.caption, color: theme.colors.primary, fontWeight: '800' },
-});
+  actionText: { ...theme.typography.caption, color: c.primary, fontWeight: '800' },
+}));

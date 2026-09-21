@@ -61,6 +61,13 @@ module.exports = {
   googleWebClientId: process.env.GOOGLE_WEB_CLIENT_ID || '',
   facebookAppId: process.env.FACEBOOK_APP_ID || '',
   facebookAppSecret: process.env.FACEBOOK_APP_SECRET || '',
+  // Image storage. Same account/variables the website backend already uses.
+  cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME?.trim() || '',
+  cloudinaryApiKey: process.env.CLOUDINARY_API_KEY?.trim() || '',
+  cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET?.trim() || '',
+  // Plan purchases. The key id is public (sent to checkout); the secret never leaves the server.
+  razorpayKeyId: process.env.RAZORPAY_KEY_ID?.trim() || '',
+  razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET?.trim() || '',
 };
 
 module.exports.isRateLimitDisabled = isRateLimitDisabled;

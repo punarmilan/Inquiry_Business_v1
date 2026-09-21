@@ -443,6 +443,8 @@ const hardDeleteBusiness = asyncHandler(async (req, res) => {
 const listOffers = asyncHandler(async (req, res) => {
   const filter = {};
   if (req.query.cityId) filter.city = req.query.cityId;
+  if (req.query.search) filter.title = { $regex: req.query.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
+  if (req.query.search) filter.title = { $regex: req.query.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
   if (req.query.status === 'live') Object.assign(filter, { status: 'approved', isActive: true, startsAt: { $lte: new Date() }, expiresAt: { $gte: new Date() } });
   else if (req.query.status === 'expired') filter.expiresAt = { $lt: new Date() };
   else if (req.query.status === 'featured') filter.isFeatured = true;
@@ -601,9 +603,24 @@ const updatePlan = asyncHandler(async (req, res) => {
   if (!plan) throw new ApiError(404, 'Plan not found', 'PLAN_NOT_FOUND');
   res.json({ success: true, plan });
 });
+// Permanent delete. To hide a plan without losing anything, disable it instead
+// (PUT /plans/:id { isActive: false }). Payments keep a snapshot of the plan, but a
+// subscription must keep pointing at its plan, so a plan with history is never deleted.
 const deletePlan = asyncHandler(async (req, res) => {
-  const plan = await Plan.findByIdAndUpdate(req.params.id, { $set: { isActive: false } }, { new: true, runValidators: true });
+  const plan = await Plan.findById(req.params.id);
   if (!plan) throw new ApiError(404, 'Plan not found', 'PLAN_NOT_FOUND');
+  const [payments, subscriptions] = await Promise.all([
+    Payment.countDocuments({ plan: plan._id }),
+    Subscription.countDocuments({ plan: plan._id }),
+  ]);
+  if (payments || subscriptions) {
+    throw new ApiError(
+      409,
+      `This plan has ${payments} payment(s) and ${subscriptions} subscription(s), so it cannot be deleted. Disable it instead: it stays in history but is hidden from the app.`,
+      'PLAN_IN_USE'
+    );
+  }
+  await plan.deleteOne();
   res.json({ success: true, plan });
 });
 
@@ -741,6 +758,41 @@ const verifyPayment = asyncHandler(async (req, res) => {
   });
   res.json({ success: true, payment, subscription });
 });
+// Rejects a payment that is still waiting for verification (e.g. an order that was never
+// actually paid). The record is kept as "failed" with the reason; nothing is activated.
+const declinePayment = asyncHandler(async (req, res) => {
+  // Atomic on the status, so it cannot race with Verify.
+  const payment = await Payment.findOneAndUpdate(
+    { _id: req.params.id, status: 'pending_verification' },
+    { $set: { status: 'failed', failureReason: req.body.reason } },
+    { new: true }
+  );
+  if (!payment) throw new ApiError(404, 'Pending payment not found', 'PAYMENT_NOT_PENDING');
+  if (payment.type === 'service' && payment.booking) {
+    // Creating the order put the booking on "pending"; release it so the customer can pay again.
+    await ServiceBooking.updateOne({ _id: payment.booking, paymentStatus: 'pending' }, { $set: { paymentStatus: 'unpaid' } });
+  }
+  notifyUser({
+    userId: payment.user,
+    type: 'payment_update',
+    title: 'Payment declined',
+    body: `Your payment ${payment.orderId} was declined. ${req.body.reason}`.slice(0, 300),
+    data: { paymentId: payment._id.toString(), type: payment.type },
+  });
+  res.json({ success: true, payment });
+});
+// Payments are financial records: only one that was declined or failed (nothing was
+// activated) can be deleted. A pending payment has to be declined first.
+const deletePayment = asyncHandler(async (req, res) => {
+  const payment = await Payment.findById(req.params.id);
+  if (!payment) throw new ApiError(404, 'Payment not found', 'PAYMENT_NOT_FOUND');
+  if (payment.status !== 'failed' || (await Subscription.exists({ payment: payment._id }))) {
+    throw new ApiError(409, 'Only declined or failed payments can be deleted. Decline a pending payment first.', 'PAYMENT_NOT_DELETABLE');
+  }
+  const { deletedCount } = await Payment.deleteOne({ _id: payment._id, status: 'failed' });
+  if (!deletedCount) throw new ApiError(409, 'This payment changed while deleting. Please refresh and try again.', 'PAYMENT_NOT_DELETABLE');
+  res.json({ success: true, payment: { _id: payment._id } });
+});
 const refundPayment = asyncHandler(async (req, res) => {
   const payment = await Payment.findOne({ _id: req.params.id, status: 'verified' });
   if (!payment) throw new ApiError(404, 'Verified payment not found', 'PAYMENT_NOT_VERIFIED');
@@ -753,7 +805,7 @@ module.exports = {
   listCities, createCity, updateCity, deleteCity, listWorkers, listProviderApplications, approveProviderApplication, rejectProviderApplication, createWorker, createDemoWorkers, setDummyProviderNumbers, updateWorker, deleteWorker,
   listServiceCategories, createServiceCategory, updateServiceCategory, deleteServiceCategory, listBusinesses, moderateBusiness,
   listOffers, moderateOffer, listOfferTemplates, createOfferTemplate, updateOfferTemplate, deleteOfferTemplate, listTemplateStickers, createTemplateSticker, updateTemplateSticker, deleteTemplateSticker, uploadTemplateAsset, getTemplateAsset, deleteTemplateAsset, decodeTemplateAsset, listPlans, createPlan, updatePlan, deletePlan, listBookings, assignWorker, forwardBooking, updateBookingStatus,
-  listPayments, verifyPayment, refundPayment,
+  listPayments, verifyPayment, declinePayment, deletePayment, refundPayment,
 };
 module.exports.hardDeleteOffer = hardDeleteOffer;
 module.exports.hardDeleteBusiness = hardDeleteBusiness;

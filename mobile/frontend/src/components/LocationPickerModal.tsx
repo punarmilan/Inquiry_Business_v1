@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Modal, Platform, Pressable, ActivityIndicator, 
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import * as Location from 'expo-location';
-import { theme } from '../theme';
+import { theme, createThemedStyles } from '../theme';
 import { Button } from './Button';
 import { IconButton } from './IconButton';
 import { useApp } from '../context/AppContext';
@@ -291,10 +291,10 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background,
+    backgroundColor: c.background,
   },
   header: {
     flexDirection: 'row',
@@ -306,7 +306,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...theme.typography.h3,
-    color: theme.colors.text,
+    color: c.text,
   },
   mapWrap: {
     flex: 1,
@@ -324,11 +324,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.xs,
-    backgroundColor: theme.colors.surface,
+    backgroundColor: c.surface,
     borderRadius: theme.radius.pill,
     paddingHorizontal: theme.spacing.md,
     minHeight: 48,
-    shadowColor: theme.colors.shadow,
+    shadowColor: c.shadow,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 1,
     shadowRadius: 8,
@@ -337,12 +337,12 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     ...theme.typography.body,
-    color: theme.colors.text,
+    color: c.text,
   },
   searchErrorText: {
     ...theme.typography.caption,
-    color: theme.colors.danger,
-    backgroundColor: theme.colors.surface,
+    color: c.danger,
+    backgroundColor: c.surface,
     alignSelf: 'flex-start',
     marginTop: theme.spacing.xs,
     borderRadius: theme.radius.sm,
@@ -351,10 +351,10 @@ const styles = StyleSheet.create({
   },
   suggestionsPanel: {
     marginTop: theme.spacing.xs,
-    backgroundColor: theme.colors.surface,
+    backgroundColor: c.surface,
     borderRadius: theme.radius.md,
     overflow: 'hidden',
-    shadowColor: theme.colors.shadow,
+    shadowColor: c.shadow,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 1,
     shadowRadius: 8,
@@ -367,21 +367,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: theme.colors.divider,
+    borderTopColor: c.divider,
   },
   suggestionRowPressed: {
-    backgroundColor: theme.colors.surfaceAlt,
+    backgroundColor: c.surfaceAlt,
   },
   suggestionTextWrap: {
     flex: 1,
   },
   suggestionMainText: {
     ...theme.typography.body,
-    color: theme.colors.text,
+    color: c.text,
   },
   suggestionSecondaryText: {
     ...theme.typography.caption,
-    color: theme.colors.textMuted,
+    color: c.textMuted,
     marginTop: 1,
   },
   locateBtn: {
@@ -391,10 +391,10 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: theme.colors.surface,
+    backgroundColor: c.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: theme.colors.shadow,
+    shadowColor: c.shadow,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 1,
     shadowRadius: 8,
@@ -406,13 +406,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: theme.spacing.xs,
     paddingVertical: theme.spacing.sm,
-    backgroundColor: theme.colors.surfaceAlt,
+    backgroundColor: c.surfaceAlt,
   },
   coordText: {
     ...theme.typography.caption,
-    color: theme.colors.textSecondary,
+    color: c.textSecondary,
   },
   footer: {
     padding: theme.spacing.lg,
   },
-});
+}));

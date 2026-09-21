@@ -1,4 +1,4 @@
-import { API_BASE_URL } from './api';
+import { request } from './api';
 
 export interface OnboardingSlideFeature {
   icon?: string;
@@ -59,10 +59,8 @@ export interface RemoteSettings {
 
 export const fetchRemoteSettings = async (): Promise<RemoteSettings> => {
   try {
-    const res = await fetch(`${API_BASE_URL}/settings`);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || data.success === false) return {};
-    return (data.settings ?? {}) as RemoteSettings;
+    const data = await request<{ success: true; settings?: RemoteSettings }>('/settings');
+    return data.settings ?? {};
   } catch {
     return {};
   }

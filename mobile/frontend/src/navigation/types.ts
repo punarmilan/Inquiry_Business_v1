@@ -1,6 +1,7 @@
 import { NavigatorScreenParams } from '@react-navigation/native';
 import type { Offer } from '../types/hyperlocal';
 import type { OfferCardDesign } from '../config/offerCardDesigner';
+import type { PickedPoster } from '../services/posterUpload';
 
 export type ProfileEditSection = 'profile' | 'kyc' | 'wallet';
 
@@ -40,12 +41,14 @@ export type PostStackParamList = {
     initialDescription?: string;
     initialCategory?: string;
     initialImageUrls?: string[];
+    uploadedPoster?: PickedPoster;
   };
   OfferSubmitted: undefined;
 };
 
 export type OffersStackParamList = {
   OffersHome: undefined;
+  AllOffers: { latitude: number; longitude: number; cityId?: string; locality?: string };
   OfferDetails: { offerId: string; latitude?: number; longitude?: number };
   BusinessDetails: { businessId: string };
   BookingDetails: { bookingId: string };

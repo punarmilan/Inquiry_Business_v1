@@ -16,6 +16,7 @@ import { useApp } from '../../context/AppContext';
 import { SCREEN_1, SCREEN_2, SCREEN_3 } from './OnboardingScreen.assets';
 import type { OnboardingAsset } from './OnboardingScreen.assets';
 import { ONBOARDING_COLORS } from './OnboardingScreen.styles';
+import { createThemedStyles } from '../../theme';
 
 type Props = {
   width: number;
@@ -309,7 +310,7 @@ const SceneAsset: React.FC<{
   );
 };
 
-const createStyles = (scale: number) => StyleSheet.create({
+const createStyles = (scale: number) => createThemedStyles((c) => ({
   page: {
     flex: 1,
     overflow: 'hidden',
@@ -405,4 +406,4 @@ const createStyles = (scale: number) => StyleSheet.create({
   },
   skipText: { color: '#45616A', fontSize: 32 * scale, includeFontPadding: false },
   pressed: { opacity: 0.8 },
-});
+}));

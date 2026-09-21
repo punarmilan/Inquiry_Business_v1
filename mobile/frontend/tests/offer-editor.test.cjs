@@ -70,6 +70,12 @@ function saveContext(save) {
     creationId: { current: 'creation-test' }, title: 'Offer test', category: 'Test',
     activeTemplate: undefined, cardDesign: { templateId: 'custom', canvas: { elements: [] } },
     imageUrls: [], description: 'Details', Keyboard: { dismiss() {} },
+    // The saved design carries the editor's live layout state. Without these the
+    // handler throws before it ever reaches storage, and the failure test below
+    // would pass on a ReferenceError instead of a real storage failure.
+    textOffsets: { title: { x: 4, y: 6 }, description: { x: 0, y: 0 }, 'poster:headline': { x: 2, y: 3 } },
+    posterTextValues: { headline: 'Get 2 pizza' },
+    avatarOffset: { x: 7, y: 8 }, avatarScale: 1.25,
     setLoading(value) { calls.push(['loading', value]); },
     saveOfferDesignCreation: save,
     continueToDetails() { calls.push(['continue']); },
@@ -83,8 +89,20 @@ test('Save awaits existing storage before continuing and retains design', async 
   const { context, calls } = saveContext(async (user, creation) => { stored = { user, creation }; });
   await handler('saveCreation', context)();
   assert.equal(stored.user, 'user-test');
-  assert.equal(stored.creation.design, context.cardDesign);
+  assert.equal(stored.creation.id, 'creation-test');
+  assert.equal(stored.creation.templateId, 'custom');
   assert.ok(calls.some(call => call[0] === 'continue'));
+
+  // "Your creations" in the template library reopens this saved copy, so the
+  // editor's live layout has to travel with the design, not just the design itself.
+  const saved = stored.creation.design;
+  assert.equal(saved.templateId, context.cardDesign.templateId);
+  assert.equal(saved.customizations.titleOffsetX, 4);
+  assert.equal(saved.customizations.titleOffsetY, 6);
+  assert.equal(saved.customizations.avatarOffsetX, 7);
+  assert.equal(saved.customizations.avatarScale, 1.25);
+  assert.deepEqual(JSON.parse(saved.customizations.posterTextValues), { headline: 'Get 2 pizza' });
+  assert.deepEqual(JSON.parse(saved.customizations.posterTextOffsets), { 'poster:headline': { x: 2, y: 3 } });
 });
 
 test('storage failure keeps edits and allows retry without navigation', async () => {

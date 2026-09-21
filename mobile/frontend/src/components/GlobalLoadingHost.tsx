@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { setRequestLifecycleHandlers } from '../services/api';
 import { LogoLoader } from './LogoLoader';
+import { createThemedStyles } from '../theme';
 
 interface GlobalLoadingHostProps {
   active?: boolean;
@@ -77,7 +78,7 @@ export const GlobalLoadingHost: React.FC<GlobalLoadingHostProps> = ({ active = f
   );
 };
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   overlay: {
     position: 'absolute',
     top: 0,
@@ -90,4 +91,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255, 247, 241, 0.86)',
   },
-});
+}));

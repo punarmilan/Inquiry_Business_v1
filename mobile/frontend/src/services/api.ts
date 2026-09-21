@@ -62,6 +62,17 @@ const deriveApiBaseUrl = (): string => {
 
 export const API_BASE_URL = deriveApiBaseUrl();
 
+// Dev-only safety net: a device connected over USB can reach this machine via
+// `localhost` (through `adb reverse tcp:5000 tcp:5000`) even when the Wi-Fi
+// LAN route to the Metro-discovered host is broken — e.g. router AP/client
+// isolation, which lets the JS bundle load fine via Metro's own automatic
+// reverse tunnel on 8081 but leaves this custom API port unreachable over
+// Wi-Fi. Only ever engages for that LAN host in dev builds; production's
+// hardcoded HTTPS fallback URL is never affected.
+export const isLanDevHost = __DEV__ && /^http:\/\/\d{1,3}(\.\d{1,3}){3}:\d+$/.test(API_BASE_URL);
+export const LOCALHOST_API_BASE_URL = `http://localhost:${API_PORT}`;
+let useLocalhostFallback = false;
+
 export class ApiRequestError extends Error {
   status: number;
   code?: string;
@@ -82,6 +93,7 @@ interface RequestOptions {
   body?: unknown;
   accessToken?: string;
   query?: object;
+  silent?: boolean;
 }
 
 const toQueryString = (query?: RequestOptions['query']) => {
@@ -137,17 +149,33 @@ export const setRequestLifecycleHandlers = (handlers: {
 // refresh (see refreshAccessToken below) rotated it mid-request.
 export const getAuthTokens = () => currentTokens;
 
+const buildUrl = (base: string, path: string, query?: RequestOptions['query']) => `${base}${path}${toQueryString(query)}`;
+
 const rawFetch = async (path: string, options: RequestOptions) => {
-  const res = await fetch(`${API_BASE_URL}${path}${toQueryString(options.query)}`, {
+  const init = {
     method: options.method ?? 'GET',
     headers: {
       'Content-Type': 'application/json',
       ...(options.accessToken ? { Authorization: `Bearer ${options.accessToken}` } : {}),
     },
     body: options.body ? JSON.stringify(options.body) : undefined,
-  });
-  const data = await res.json().catch(() => ({}));
-  return { res, data };
+  };
+  const primaryBase = useLocalhostFallback ? LOCALHOST_API_BASE_URL : API_BASE_URL;
+  try {
+    const res = await fetch(buildUrl(primaryBase, path, options.query), init);
+    const data = await res.json().catch(() => ({}));
+    return { res, data };
+  } catch (error) {
+    if (!isLanDevHost || useLocalhostFallback) throw error;
+    // The LAN host is unreachable at the network level (fetch throws rather than
+    // resolving to a response) — retry once via localhost in case a USB
+    // `adb reverse` tunnel covers it, and remember it so later calls skip
+    // straight there instead of eating a failed connection every time.
+    const res = await fetch(buildUrl(LOCALHOST_API_BASE_URL, path, options.query), init);
+    const data = await res.json().catch(() => ({}));
+    useLocalhostFallback = true;
+    return { res, data };
+  }
 };
 
 const refreshAccessToken = async (): Promise<TokenPair> => {
@@ -203,8 +231,8 @@ const parseRetryAfterSeconds = (header: string | null | undefined, details: unkn
     : undefined;
 };
 
-async function request<T>(path: string, options: RequestOptions = {}, isRetry = false): Promise<T> {
-  if (!isRetry) onRequestStart?.();
+export async function request<T>(path: string, options: RequestOptions = {}, isRetry = false): Promise<T> {
+  if (!isRetry && !options.silent) onRequestStart?.();
   try {
   const { res, data } = await rawFetch(path, options);
 
@@ -250,7 +278,7 @@ async function request<T>(path: string, options: RequestOptions = {}, isRetry = 
 
   return data as T;
   } finally {
-    if (!isRetry) onRequestEnd?.();
+    if (!isRetry && !options.silent) onRequestEnd?.();
   }
 }
 
@@ -993,6 +1021,12 @@ export const listNearbyOffers = (query: Coordinates & {
     { query }
   );
 
+export type HomeShowcaseBanner = { imageUrl: string; title: string; subtitle: string; buttonText: string };
+export const getHomeShowcase = (query: Coordinates & { cityId?: string; radiusKm?: number }) =>
+  request<{ success: true; configured: boolean; banner: HomeShowcaseBanner | null; trendingOffers: Offer[] }>(
+    '/offers/home-showcase', { query, silent: true }
+  );
+
 export const listOfferTemplates = (category?: string) =>
   request<{ success: true; data: OfferTemplate[] }>('/offer-templates', { query: category ? { category } : undefined });
 
@@ -1056,11 +1090,38 @@ export const listPlans = () => request<{ success: true; data: Plan[] }>('/plans'
 export const listMySubscriptions = (accessToken: string) =>
   request<{ success: true; data: Subscription[] }>('/subscriptions/mine', { accessToken });
 
-export const createSubscriptionOrder = (accessToken: string, planId: string, businessId: string) =>
-  request<{ success: true; payment: { _id: string; orderId: string; amount: number; status: string }; paymentInstructions: { mode: string; message: string } }>(
-    '/payments/subscription-orders',
-    { method: 'POST', accessToken, body: { planId, businessId } }
-  );
+// Absolute URL for a backend path, on whichever host the app is currently using
+// (needed to open a backend-served page, e.g. Razorpay checkout, in the browser).
+export const apiUrl = (path: string) => buildUrl(useLocalhostFallback ? LOCALHOST_API_BASE_URL : API_BASE_URL, path);
+
+export interface SubscriptionOrderResponse {
+  success: true;
+  payment: { _id: string; orderId: string; amount: number; status: string };
+  // Present when the plan is paid online (Razorpay): open `checkout.path` in the browser.
+  checkout?: { path: string };
+  // Present when the backend falls back to the manual, admin-verified flow.
+  paymentInstructions?: { mode: string; message: string };
+}
+
+// The methods offered before checkout opens. Razorpay's checkout then shows only the chosen one.
+export type PaymentMethod = 'upi' | 'card' | 'netbanking';
+
+export const createSubscriptionOrder = (accessToken: string, planId: string, businessId: string, method?: PaymentMethod) =>
+  request<SubscriptionOrderResponse>('/payments/subscription-orders', {
+    method: 'POST',
+    accessToken,
+    body: { planId, businessId, ...(method ? { method } : {}) },
+  });
+
+// Asks the backend to confirm a Razorpay payment with Razorpay itself. Call it when
+// the user comes back from checkout; the backend activates the plan only if paid.
+export const syncPayment = (accessToken: string, paymentId: string) =>
+  request<{
+    success: true;
+    payment: { _id: string; orderId: string; amount: number; status: BackendPayment['status'] };
+    subscription: { _id: string; startsAt: string; endsAt: string } | null;
+    activated: boolean;
+  }>(`/payments/${paymentId}/sync`, { method: 'POST', accessToken });
 
 export const createServicePaymentOrder = (accessToken: string, bookingId: string) =>
   request<{ success: true; payment: { _id: string; orderId: string; amount: number; status: string } }>(

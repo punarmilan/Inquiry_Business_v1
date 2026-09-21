@@ -8,7 +8,7 @@ import { listMyBookings } from '../../services/api';
 import type { ServiceBooking } from '../../types/hyperlocal';
 import type { ServicesStackParamList } from '../../navigation/types';
 import { useApp } from '../../context/AppContext';
-import { theme } from '../../theme';
+import { theme, createThemedStyles } from '../../theme';
 
 type Props = NativeStackScreenProps<ServicesStackParamList, 'MyBookings'>;
 const statusColor: Record<string, string> = { requested: theme.colors.warning, confirmed: theme.colors.secondary, assigned: theme.colors.verified, in_progress: theme.colors.primary, completed: theme.colors.success, cancelled: theme.colors.danger };
@@ -38,26 +38,26 @@ export const MyBookingsScreen: React.FC<Props> = ({ navigation }) => {
   </ScrollView></ScreenContainer>;
 };
 
-const styles = StyleSheet.create({
-  top: { height: 58, backgroundColor: theme.colors.surface, flexDirection: 'row', alignItems: 'center' },
+const styles = createThemedStyles((c) => ({
+  top: { height: 58, backgroundColor: c.surface, flexDirection: 'row', alignItems: 'center' },
   back: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center' },
-  title: { ...theme.typography.h3, color: theme.colors.text },
+  title: { ...theme.typography.h3, color: c.text },
   content: { padding: 18, paddingBottom: 110, gap: 12 },
-  card: { backgroundColor: theme.colors.surface, borderRadius: 18, padding: 15, borderWidth: 1, borderColor: theme.colors.border },
+  card: { backgroundColor: c.surface, borderRadius: 18, padding: 15, borderWidth: 1, borderColor: c.border },
   row: { flexDirection: 'row', alignItems: 'center', gap: 11 },
   flex: { flex: 1 },
-  icon: { width: 46, height: 46, borderRadius: 14, backgroundColor: theme.colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
-  name: { ...theme.typography.bodyBold, color: theme.colors.text },
-  number: { ...theme.typography.tiny, color: theme.colors.textMuted, marginTop: 2 },
+  icon: { width: 46, height: 46, borderRadius: 14, backgroundColor: c.primaryLight, alignItems: 'center', justifyContent: 'center' },
+  name: { ...theme.typography.bodyBold, color: c.text },
+  number: { ...theme.typography.tiny, color: c.textMuted, marginTop: 2 },
   badge: { paddingHorizontal: 9, paddingVertical: 6, borderRadius: 99 },
   badgeText: { fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
-  meta: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 14, borderTopWidth: 1, borderTopColor: theme.colors.divider, paddingTop: 11 },
-  metaText: { ...theme.typography.caption, color: theme.colors.textSecondary },
-  worker: { ...theme.typography.caption, color: theme.colors.secondary, fontWeight: '700', marginTop: 9 },
-  waiting: { ...theme.typography.caption, color: theme.colors.warning, fontWeight: '700', marginTop: 9 },
-  ratingRequired: { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: theme.colors.accentLight, borderRadius: 12, padding: 10, marginTop: 12 },
-  ratingRequiredText: { flex: 1, ...theme.typography.tiny, color: theme.colors.accentDark, fontWeight: '900' },
+  meta: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 14, borderTopWidth: 1, borderTopColor: c.divider, paddingTop: 11 },
+  metaText: { ...theme.typography.caption, color: c.textSecondary },
+  worker: { ...theme.typography.caption, color: c.secondary, fontWeight: '700', marginTop: 9 },
+  waiting: { ...theme.typography.caption, color: c.warning, fontWeight: '700', marginTop: 9 },
+  ratingRequired: { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: c.accentLight, borderRadius: 12, padding: 10, marginTop: 12 },
+  ratingRequiredText: { flex: 1, ...theme.typography.tiny, color: c.accentDark, fontWeight: '900' },
   empty: { alignItems: 'center', padding: 50 },
-  emptyTitle: { ...theme.typography.h3, color: theme.colors.text, marginTop: 10 },
-  emptyText: { ...theme.typography.body, color: theme.colors.textSecondary, marginTop: 5, textAlign: 'center' },
-});
+  emptyTitle: { ...theme.typography.h3, color: c.text, marginTop: 10 },
+  emptyText: { ...theme.typography.body, color: c.textSecondary, marginTop: 5, textAlign: 'center' },
+}));

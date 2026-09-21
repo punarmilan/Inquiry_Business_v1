@@ -4,7 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { theme } from '../../theme';
+import { theme, createThemedStyles } from '../../theme';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { IconButton } from '../../components/IconButton';
 import { Button } from '../../components/Button';
@@ -246,7 +246,7 @@ export const LiveLocationScreen: React.FC<Props> = ({ route, navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   container: {
     paddingTop: 0,
   },
@@ -259,7 +259,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...theme.typography.h2,
-    color: theme.colors.text,
+    color: c.text,
   },
   distanceBanner: {
     flexDirection: 'row',
@@ -267,14 +267,14 @@ const styles = StyleSheet.create({
     gap: theme.spacing.xs,
     marginHorizontal: theme.spacing.lg,
     marginBottom: theme.spacing.sm,
-    backgroundColor: theme.colors.primaryLight,
+    backgroundColor: c.primaryLight,
     borderRadius: theme.radius.md,
     paddingHorizontal: theme.spacing.sm,
     paddingVertical: theme.spacing.xs,
   },
   distanceText: {
     ...theme.typography.caption,
-    color: theme.colors.primaryDark,
+    color: c.primaryDark,
     fontWeight: '700',
     flex: 1,
   },
@@ -287,8 +287,8 @@ const styles = StyleSheet.create({
   footer: {
     padding: theme.spacing.lg,
     borderTopWidth: 1,
-    borderTopColor: theme.colors.divider,
-    backgroundColor: theme.colors.surface,
+    borderTopColor: c.divider,
+    backgroundColor: c.surface,
     gap: theme.spacing.sm,
   },
   statusRow: {
@@ -298,12 +298,12 @@ const styles = StyleSheet.create({
   },
   statusText: {
     ...theme.typography.body,
-    color: theme.colors.textSecondary,
+    color: c.textSecondary,
     flex: 1,
   },
   hintText: {
     ...theme.typography.caption,
-    color: theme.colors.textMuted,
+    color: c.textMuted,
     textAlign: 'center',
   },
-});
+}));

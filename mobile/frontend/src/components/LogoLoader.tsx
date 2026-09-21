@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, View, ViewStyle, StyleProp } from 'react-native';
-import { theme } from '../theme';
+import { theme, createThemedStyles } from '../theme';
 import { AnimatedInfinityMark } from './AnimatedInfinityMark';
 
 interface LogoLoaderProps {
@@ -50,7 +50,7 @@ export const LogoLoader: React.FC<LogoLoaderProps> = ({ size = 44, style }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   wrap: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -58,8 +58,8 @@ const styles = StyleSheet.create({
   ring: {
     position: 'absolute',
     borderWidth: 3,
-    borderColor: theme.colors.primaryLight,
-    borderTopColor: theme.colors.primary,
+    borderColor: c.primaryLight,
+    borderTopColor: c.primary,
     borderRightColor: 'rgba(244, 91, 24, 0.25)',
   },
-});
+}));

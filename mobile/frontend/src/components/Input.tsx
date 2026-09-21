@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, TextInputProps } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { theme } from '../theme';
+import { theme, createThemedStyles } from '../theme';
 
 interface InputProps extends TextInputProps {
   label?: string;
@@ -49,14 +49,14 @@ export const Input: React.FC<InputProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   wrapper: {
     alignSelf: 'stretch',
     marginBottom: theme.spacing.md,
   },
   label: {
     ...theme.typography.bodyBold,
-    color: theme.colors.text,
+    color: c.text,
     marginBottom: theme.spacing.xs,
   },
   inputRow: {
@@ -64,13 +64,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     minHeight: 52,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: c.border,
     borderRadius: theme.radius.md,
     paddingHorizontal: theme.spacing.md,
-    backgroundColor: theme.colors.surface,
+    backgroundColor: c.surface,
   },
   inputRowError: {
-    borderColor: theme.colors.danger,
+    borderColor: c.danger,
   },
   icon: {
     marginRight: theme.spacing.xs,
@@ -78,7 +78,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     ...theme.typography.body,
-    color: theme.colors.text,
+    color: c.text,
     paddingVertical: theme.spacing.sm,
   },
   rightIconBtn: {
@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
   },
   error: {
     ...theme.typography.caption,
-    color: theme.colors.danger,
+    color: c.danger,
     marginTop: 4,
   },
-});
+}));

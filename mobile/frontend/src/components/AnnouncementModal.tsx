@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Modal, Image, Linking, Pressable } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { theme } from '../theme';
+import { theme, createThemedStyles } from '../theme';
 import { Button } from './Button';
 import { LoginAnnouncement } from '../services/settings';
 
@@ -47,10 +47,10 @@ export const AnnouncementModal: React.FC<AnnouncementModalProps> = ({ visible, a
   );
 };
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   overlay: {
     flex: 1,
-    backgroundColor: theme.colors.overlay,
+    backgroundColor: c.overlay,
     alignItems: 'center',
     justifyContent: 'center',
     padding: theme.spacing.lg,
@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 380,
     borderRadius: theme.radius.xl,
-    backgroundColor: theme.colors.surface,
+    backgroundColor: c.surface,
     overflow: 'hidden',
   },
   closeButton: {
@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: theme.colors.surface,
+    backgroundColor: c.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -84,14 +84,14 @@ const styles = StyleSheet.create({
   },
   title: {
     ...theme.typography.h3,
-    color: theme.colors.text,
+    color: c.text,
   },
   text: {
     ...theme.typography.body,
-    color: theme.colors.textSecondary,
+    color: c.textSecondary,
     marginTop: theme.spacing.xs,
   },
   button: {
     marginTop: theme.spacing.lg,
   },
-});
+}));

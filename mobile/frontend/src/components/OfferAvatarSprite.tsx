@@ -1,6 +1,7 @@
 import React from 'react';
 import { Image, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import type { OfferAvatar } from '../config/offerCardDesigner';
+import { createThemedStyles } from '../theme';
 
 export const OfferAvatarSprite: React.FC<{
   avatar: OfferAvatar;
@@ -24,7 +25,7 @@ export const OfferAvatarSprite: React.FC<{
   </View>
 );
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   clip: { overflow: 'hidden' },
   sheet: { position: 'absolute' },
-});
+}));

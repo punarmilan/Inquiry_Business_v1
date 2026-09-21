@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Image, Text, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { theme } from '../theme';
+import { theme, createThemedStyles } from '../theme';
 
 interface AvatarProps {
   uri?: string;
@@ -44,22 +44,22 @@ export const Avatar: React.FC<AvatarProps> = ({ uri, name, size = 44, verified }
   );
 };
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   image: {
-    backgroundColor: theme.colors.surfaceAlt,
+    backgroundColor: c.surfaceAlt,
   },
   fallback: {
-    backgroundColor: theme.colors.primaryLight,
+    backgroundColor: c.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   initials: {
-    color: theme.colors.primaryDark,
+    color: c.primaryDark,
     fontWeight: '800',
   },
   badge: {
     position: 'absolute',
-    backgroundColor: theme.colors.surface,
+    backgroundColor: c.surface,
     borderRadius: 999,
   },
-});
+}));

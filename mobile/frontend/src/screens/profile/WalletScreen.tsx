@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, FlatList, ActivityIndicator, Modal, RefreshCont
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
-import { theme } from '../../theme';
+import { theme, createThemedStyles } from '../../theme';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { IconButton } from '../../components/IconButton';
 import { Button } from '../../components/Button';
@@ -220,7 +220,7 @@ const TransactionRow: React.FC<{ transaction: WalletTransaction }> = ({ transact
   );
 };
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -230,23 +230,23 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...theme.typography.h2,
-    color: theme.colors.text,
+    color: c.text,
   },
   balanceCard: {
     marginHorizontal: theme.spacing.lg,
     marginTop: theme.spacing.sm,
     borderRadius: theme.radius.xl,
-    backgroundColor: theme.colors.primary,
+    backgroundColor: c.primary,
     padding: theme.spacing.lg,
   },
   balanceLabel: {
     ...theme.typography.caption,
-    color: theme.colors.textInverse,
+    color: c.textInverse,
     opacity: 0.85,
   },
   balanceValue: {
     ...theme.typography.h1,
-    color: theme.colors.textInverse,
+    color: c.textInverse,
     marginTop: 4,
   },
   balanceActions: {
@@ -256,11 +256,11 @@ const styles = StyleSheet.create({
   },
   balanceBtn: {
     flex: 1,
-    backgroundColor: theme.colors.textInverse,
+    backgroundColor: c.textInverse,
   },
   historyTitle: {
     ...theme.typography.bodyBold,
-    color: theme.colors.text,
+    color: c.text,
     marginTop: theme.spacing.lg,
     marginHorizontal: theme.spacing.lg,
     marginBottom: theme.spacing.xs,
@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     ...theme.typography.body,
-    color: theme.colors.textMuted,
+    color: c.textMuted,
     textAlign: 'center',
     paddingHorizontal: theme.spacing.xl,
   },
@@ -285,12 +285,12 @@ const styles = StyleSheet.create({
   txnRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.surface,
+    backgroundColor: c.surface,
     borderRadius: theme.radius.lg,
     padding: theme.spacing.sm,
     marginBottom: theme.spacing.sm,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: c.border,
   },
   txnIcon: {
     width: 40,
@@ -305,11 +305,11 @@ const styles = StyleSheet.create({
   },
   txnTitle: {
     ...theme.typography.bodyBold,
-    color: theme.colors.text,
+    color: c.text,
   },
   txnDate: {
     ...theme.typography.tiny,
-    color: theme.colors.textMuted,
+    color: c.textMuted,
     marginTop: 2,
   },
   txnAmountWrap: {
@@ -320,12 +320,12 @@ const styles = StyleSheet.create({
   },
   txnStatus: {
     ...theme.typography.tiny,
-    color: theme.colors.textMuted,
+    color: c.textMuted,
     marginTop: 2,
   },
   overlay: {
     flex: 1,
-    backgroundColor: theme.colors.overlay,
+    backgroundColor: c.overlay,
     alignItems: 'center',
     justifyContent: 'center',
     padding: theme.spacing.lg,
@@ -334,16 +334,16 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 380,
     borderRadius: theme.radius.xl,
-    backgroundColor: theme.colors.surface,
+    backgroundColor: c.surface,
     padding: theme.spacing.lg,
   },
   modalTitle: {
     ...theme.typography.h3,
-    color: theme.colors.text,
+    color: c.text,
   },
   modalSubtitle: {
     ...theme.typography.caption,
-    color: theme.colors.textSecondary,
+    color: c.textSecondary,
     marginTop: 4,
     marginBottom: theme.spacing.md,
   },
@@ -355,4 +355,4 @@ const styles = StyleSheet.create({
   modalBtn: {
     flex: 1,
   },
-});
+}));

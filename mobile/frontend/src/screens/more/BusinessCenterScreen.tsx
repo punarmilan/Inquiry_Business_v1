@@ -8,7 +8,8 @@ import { ScreenContainer } from '../../components/ScreenContainer';
 import { useApp } from '../../context/AppContext';
 import type { MoreStackParamList } from '../../navigation/types';
 import type { Business } from '../../types/hyperlocal';
-import { theme } from '../../theme';
+import { theme, createThemedStyles } from '../../theme';
+import { formatPlanDate, subscriptionPlanName } from '../../utils/subscription';
 
 type Props = NativeStackScreenProps<MoreStackParamList, 'BusinessCenter'>;
 
@@ -114,7 +115,11 @@ export const BusinessCenterScreen: React.FC<Props> = ({ navigation }) => {
                   {approved ? (
                     <View style={styles.planRow}>
                       <MaterialCommunityIcons name="crown-outline" size={18} color={activePlan ? theme.colors.accentDark : theme.colors.textMuted} />
-                      <Text style={styles.planText}>{activePlan ? 'Active plan' : 'No active plan — choose a plan before posting'}</Text>
+                      <Text style={styles.planText}>
+                        {activePlan && business.activeSubscription
+                          ? `${subscriptionPlanName(business.activeSubscription) || 'Active plan'} · valid until ${formatPlanDate(business.activeSubscription.endsAt)}`
+                          : 'No active plan — choose a plan before posting'}
+                      </Text>
                     </View>
                   ) : null}
 
@@ -146,39 +151,39 @@ export const BusinessCenterScreen: React.FC<Props> = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  top: { minHeight: 70, flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.surface, borderBottomWidth: 1, borderBottomColor: theme.colors.divider },
+const styles = createThemedStyles((c) => ({
+  top: { minHeight: 70, flexDirection: 'row', alignItems: 'center', backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.divider },
   back: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center' },
   flex: { flex: 1 },
-  title: { ...theme.typography.h3, color: theme.colors.text },
-  subtitle: { ...theme.typography.tiny, color: theme.colors.textSecondary, marginTop: 2 },
+  title: { ...theme.typography.h3, color: c.text },
+  subtitle: { ...theme.typography.tiny, color: c.textSecondary, marginTop: 2 },
   content: { padding: 16, paddingBottom: 110, gap: 14 },
-  hero: { flexDirection: 'row', alignItems: 'center', gap: 13, padding: 18, borderRadius: 21, backgroundColor: theme.colors.primary, shadowColor: theme.colors.shadowStrong, shadowOpacity: 0.2, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 4 },
+  hero: { flexDirection: 'row', alignItems: 'center', gap: 13, padding: 18, borderRadius: 21, backgroundColor: c.primary, shadowColor: c.shadowStrong, shadowOpacity: 0.2, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 4 },
   heroIcon: { width: 58, height: 58, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.18)' },
-  heroTitle: { ...theme.typography.h3, color: theme.colors.textInverse },
+  heroTitle: { ...theme.typography.h3, color: c.textInverse },
   heroText: { ...theme.typography.caption, color: 'rgba(255,255,255,0.86)', lineHeight: 18, marginTop: 4 },
-  sectionTitle: { ...theme.typography.bodyBold, color: theme.colors.text, marginTop: 4 },
-  stepsCard: { backgroundColor: theme.colors.surface, borderRadius: 18, paddingHorizontal: 14, borderWidth: 1, borderColor: theme.colors.border },
-  step: { flexDirection: 'row', gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: theme.colors.divider },
+  sectionTitle: { ...theme.typography.bodyBold, color: c.text, marginTop: 4 },
+  stepsCard: { backgroundColor: c.surface, borderRadius: 18, paddingHorizontal: 14, borderWidth: 1, borderColor: c.border },
+  step: { flexDirection: 'row', gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: c.divider },
   stepLast: { borderBottomWidth: 0 },
-  stepIcon: { width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.primaryLight },
-  stepTitle: { ...theme.typography.bodyBold, color: theme.colors.text },
-  stepText: { ...theme.typography.caption, color: theme.colors.textSecondary, lineHeight: 17, marginTop: 3 },
-  businessCard: { backgroundColor: theme.colors.surface, borderRadius: 18, padding: 14, borderWidth: 1, borderColor: theme.colors.border, gap: 11, shadowColor: theme.colors.shadow, shadowOpacity: 1, shadowRadius: 9, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  stepIcon: { width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: c.primaryLight },
+  stepTitle: { ...theme.typography.bodyBold, color: c.text },
+  stepText: { ...theme.typography.caption, color: c.textSecondary, lineHeight: 17, marginTop: 3 },
+  businessCard: { backgroundColor: c.surface, borderRadius: 18, padding: 14, borderWidth: 1, borderColor: c.border, gap: 11, shadowColor: c.shadow, shadowOpacity: 1, shadowRadius: 9, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
   businessHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  businessIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.primaryLight },
-  businessName: { ...theme.typography.bodyBold, color: theme.colors.text },
-  businessCategory: { ...theme.typography.caption, color: theme.colors.textSecondary, marginTop: 2 },
+  businessIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: c.primaryLight },
+  businessName: { ...theme.typography.bodyBold, color: c.text },
+  businessCategory: { ...theme.typography.caption, color: c.textSecondary, marginTop: 2 },
   status: { ...theme.typography.tiny, fontWeight: '900' },
-  businessNote: { ...theme.typography.caption, color: theme.colors.textSecondary, lineHeight: 18 },
-  dangerText: { color: theme.colors.danger },
-  planRow: { flexDirection: 'row', alignItems: 'center', gap: 7, padding: 10, borderRadius: 12, backgroundColor: theme.colors.background },
-  planText: { flex: 1, ...theme.typography.caption, color: theme.colors.textSecondary },
+  businessNote: { ...theme.typography.caption, color: c.textSecondary, lineHeight: 18 },
+  dangerText: { color: c.danger },
+  planRow: { flexDirection: 'row', alignItems: 'center', gap: 7, padding: 10, borderRadius: 12, backgroundColor: c.background },
+  planText: { flex: 1, ...theme.typography.caption, color: c.textSecondary },
   actions: { flexDirection: 'row', gap: 9 },
   actionButton: { flex: 1 },
-  startCard: { alignItems: 'center', backgroundColor: theme.colors.surface, borderRadius: 18, padding: 20, borderWidth: 1, borderColor: theme.colors.border, gap: 9 },
-  startTitle: { ...theme.typography.h3, color: theme.colors.text, textAlign: 'center' },
-  startText: { ...theme.typography.caption, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 18, marginBottom: 4 },
-  infoCard: { flexDirection: 'row', gap: 9, padding: 13, borderRadius: 15, backgroundColor: theme.colors.secondaryLight },
-  infoText: { flex: 1, ...theme.typography.caption, color: theme.colors.textSecondary, lineHeight: 18 },
-});
+  startCard: { alignItems: 'center', backgroundColor: c.surface, borderRadius: 18, padding: 20, borderWidth: 1, borderColor: c.border, gap: 9 },
+  startTitle: { ...theme.typography.h3, color: c.text, textAlign: 'center' },
+  startText: { ...theme.typography.caption, color: c.textSecondary, textAlign: 'center', lineHeight: 18, marginBottom: 4 },
+  infoCard: { flexDirection: 'row', gap: 9, padding: 13, borderRadius: 15, backgroundColor: c.secondaryLight },
+  infoText: { flex: 1, ...theme.typography.caption, color: c.textSecondary, lineHeight: 18 },
+}));

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, Text, StyleSheet, ActivityIndicator, View, ViewStyle, StyleProp } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { theme } from '../theme';
+import { theme, createThemedStyles } from '../theme';
 
 interface ButtonProps {
   label: string;
@@ -69,7 +69,7 @@ export const Button: React.FC<ButtonProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((c) => ({
   base: {
     minHeight: theme.MIN_TAP_TARGET,
     borderRadius: theme.radius.lg,
@@ -82,16 +82,16 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   primary: {
-    backgroundColor: theme.colors.primary,
-    shadowColor: theme.colors.primary,
+    backgroundColor: c.primary,
+    shadowColor: c.primary,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.36,
     shadowRadius: 14,
     elevation: 5,
   },
   secondary: {
-    backgroundColor: theme.colors.secondary,
-    shadowColor: theme.colors.secondary,
+    backgroundColor: c.secondary,
+    shadowColor: c.secondary,
     shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
   outline: {
     backgroundColor: 'transparent',
     borderWidth: 2,
-    borderColor: theme.colors.primary,
+    borderColor: c.primary,
   },
   ghost: {
     backgroundColor: 'transparent',
@@ -132,11 +132,11 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 999,
     backgroundColor: 'rgba(255,255,255,0.16)',
   },
-});
+}));
 
-const textStyles = StyleSheet.create({
-  primary: { color: theme.colors.textInverse },
-  secondary: { color: theme.colors.textInverse },
-  outline: { color: theme.colors.primary },
-  ghost: { color: theme.colors.primary },
-});
+const textStyles = createThemedStyles((c) => ({
+  primary: { color: c.textInverse },
+  secondary: { color: c.textInverse },
+  outline: { color: c.primary },
+  ghost: { color: c.primary },
+}));

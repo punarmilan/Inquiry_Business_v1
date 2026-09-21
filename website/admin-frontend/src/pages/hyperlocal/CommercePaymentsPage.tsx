@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { usePaymentsList, useVerifyPayment, useRefundPayment } from '@/hooks/useHyperlocal';
+import { usePaymentsList, useVerifyPayment, useRefundPayment, useDeclinePayment, useDeletePayment } from '@/hooks/useHyperlocal';
 import type { PaymentRecord } from '@/api/hyperlocal';
 
 const STATUS_TABS = ['pending_verification', 'verified', 'refunded', 'failed'];
@@ -24,12 +24,17 @@ export const CommercePaymentsPage = () => {
   const [page, setPage] = useState(1);
   const [verifyTarget, setVerifyTarget] = useState<PaymentRecord | null>(null);
   const [refundTarget, setRefundTarget] = useState<PaymentRecord | null>(null);
+  const [declineTarget, setDeclineTarget] = useState<PaymentRecord | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<PaymentRecord | null>(null);
   const [providerPaymentId, setProviderPaymentId] = useState('');
   const [refundReason, setRefundReason] = useState('');
+  const [declineReason, setDeclineReason] = useState('');
 
   const { data, isLoading } = usePaymentsList({ status, page, limit: 20 });
   const verifyPayment = useVerifyPayment();
   const refundPayment = useRefundPayment();
+  const declinePayment = useDeclinePayment();
+  const deletePayment = useDeletePayment();
 
   const closeVerify = () => {
     setVerifyTarget(null);
@@ -38,6 +43,10 @@ export const CommercePaymentsPage = () => {
   const closeRefund = () => {
     setRefundTarget(null);
     setRefundReason('');
+  };
+  const closeDecline = () => {
+    setDeclineTarget(null);
+    setDeclineReason('');
   };
 
   const columns: ColumnDef<PaymentRecord>[] = [
@@ -57,7 +66,18 @@ export const CommercePaymentsPage = () => {
       header: 'User',
       cell: ({ row }) => row.original.user?.name || row.original.user?.phone || '—',
     },
-    { id: 'status', header: 'Status', cell: ({ row }) => <StatusBadge status={row.original.status} /> },
+    {
+      id: 'status',
+      header: 'Status',
+      cell: ({ row }) => (
+        <div className="space-y-1">
+          <StatusBadge status={row.original.status} />
+          {row.original.status === 'failed' && row.original.failureReason ? (
+            <p className="max-w-[220px] text-xs text-muted-foreground">{row.original.failureReason}</p>
+          ) : null}
+        </div>
+      ),
+    },
     {
       id: 'createdAt',
       header: 'Created',
@@ -71,13 +91,23 @@ export const CommercePaymentsPage = () => {
         return (
           <div className="flex justify-end gap-2">
             {payment.status === 'pending_verification' && (
-              <Button size="sm" onClick={() => setVerifyTarget(payment)}>
-                Verify
-              </Button>
+              <>
+                <Button size="sm" variant="outline" className="text-destructive" onClick={() => setDeclineTarget(payment)}>
+                  Decline
+                </Button>
+                <Button size="sm" onClick={() => setVerifyTarget(payment)}>
+                  Verify
+                </Button>
+              </>
             )}
             {payment.status === 'verified' && (
               <Button size="sm" variant="destructive" onClick={() => setRefundTarget(payment)}>
                 Refund
+              </Button>
+            )}
+            {payment.status === 'failed' && (
+              <Button size="sm" variant="destructive" onClick={() => setDeleteTarget(payment)}>
+                Delete
               </Button>
             )}
           </div>
@@ -155,6 +185,80 @@ export const CommercePaymentsPage = () => {
               }
             >
               {verifyPayment.isPending ? 'Please wait…' : 'Verify payment'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!declineTarget} onOpenChange={(open) => !open && closeDecline()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Decline payment {declineTarget?.orderId}?</DialogTitle>
+            <DialogDescription>
+              Use this for an order that was never paid or cannot be verified. It is moved to Failed with your reason,
+              nothing is activated, and the customer is notified. You can delete it afterwards from the Failed tab.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            placeholder="Reason (shown to the customer)"
+            value={declineReason}
+            onChange={(e) => setDeclineReason(e.target.value)}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={closeDecline}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={declineReason.trim().length < 3 || declinePayment.isPending}
+              onClick={() =>
+                declineTarget &&
+                declinePayment.mutate(
+                  { id: declineTarget._id, reason: declineReason.trim() },
+                  {
+                    onSuccess: () => {
+                      toast.success('Payment declined.');
+                      closeDecline();
+                    },
+                    onError: (e: any) => toast.error(e.response?.data?.error?.message || 'Could not decline the payment.'),
+                  }
+                )
+              }
+            >
+              {declinePayment.isPending ? 'Please wait…' : 'Decline payment'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete payment {deleteTarget?.orderId}?</DialogTitle>
+            <DialogDescription>
+              This permanently removes the declined/failed payment record. It cannot be undone. Verified and refunded
+              payments are kept for your records and cannot be deleted.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deletePayment.isPending}
+              onClick={() =>
+                deleteTarget &&
+                deletePayment.mutate(deleteTarget._id, {
+                  onSuccess: () => {
+                    toast.success('Payment deleted.');
+                    setDeleteTarget(null);
+                  },
+                  onError: (e: any) => toast.error(e.response?.data?.error?.message || 'Could not delete the payment.'),
+                })
+              }
+            >
+              {deletePayment.isPending ? 'Please wait…' : 'Delete payment'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -19,7 +19,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { theme } from '../../theme';
+import { theme, createThemedStyles } from '../../theme';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { GoogleMark } from '../../components/GoogleMark';
 import { useApp } from '../../context/AppContext';
@@ -750,7 +750,7 @@ const createStyles = (width: number, height: number, topInset: number, bottomIns
     socialSize,
   };
 
-  const sheet = StyleSheet.create({
+  const sheet = createThemedStyles((c) => ({
     backgroundImage: {
       width: '100%',
       height: '128%',
@@ -882,7 +882,7 @@ const createStyles = (width: number, height: number, topInset: number, bottomIns
     },
     errorText: {
       flex: 1,
-      color: theme.colors.danger,
+      color: c.danger,
       fontSize: Math.round(clamp(11.5 * scale, 10, 12)),
       lineHeight: Math.round(clamp(15 * scale, 13, 16)),
       fontWeight: '600',
@@ -1130,12 +1130,12 @@ const createStyles = (width: number, height: number, topInset: number, bottomIns
       minHeight: socialSize,
     },
 
-  });
+  }));
 
   return { ...sheet, metrics };
 };
 
-const baseStyles = StyleSheet.create({
+const baseStyles = createThemedStyles((c) => ({
   flex: {
     flex: 1,
   },
@@ -1170,4 +1170,4 @@ const baseStyles = StyleSheet.create({
   flagGreen: {
     backgroundColor: '#138808',
   },
-});
+}));
