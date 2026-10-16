@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const ExcelJS = require('exceljs');
+const JSZip = require('jszip');
 const { HEADERS, MAX_IMPORT_BYTES, MAX_IMPORT_ROWS, createProviderImporter, readProviderWorkbook, createProviderTemplate } = require('../src/services/providerImportService');
 
 const CITY = '507f1f77bcf86cd799439011';
@@ -20,6 +21,19 @@ const workbookBuffer = async (rows, headers = HEADERS, { instructionsFirst = fal
   sheet.addRow(headers);
   sheet.addRows(rows);
   return Buffer.from(await workbook.xlsx.writeBuffer());
+};
+
+const namespacedWorkbook = async (buffer, { parts = /^(?:workbook|styles|sharedStrings|worksheets\/sheet\d+|tables\/table\d+)\.xml$/, cdata = false } = {}) => {
+  const zip = await JSZip.loadAsync(buffer);
+  for (const entry of Object.values(zip.files)) {
+    if (entry.dir || !entry.name.startsWith('xl/') || !parts.test(entry.name.slice(3))) continue;
+    let xml = await entry.async('string');
+    xml = xml.replace('xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"', 'xmlns:m="http://schemas.openxmlformats.org/spreadsheetml/2006/main"');
+    xml = xml.replace(/<(\/?)([A-Za-z][\w.-]*)(?=[\s/>])/g, '<$1m:$2');
+    if (cdata && entry.name === 'xl/sharedStrings.xml') xml = xml.replace('Example &lt;m:worker&gt; &amp; Tools', '<![CDATA[Example <m:worker> & Tools]]>');
+    zip.file(entry.name, xml);
+  }
+  return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
 };
 
 const fakeModels = ({ cities = baseCities, categories = baseCategories, existing = [] } = {}) => {
@@ -130,6 +144,49 @@ test('named Import Providers sheet is used; columns may be reordered and optiona
   assert.equal(result.created, 1);
   assert.equal(state.records[0].whatsapp, '');
   assert.deepEqual(state.records[0].serviceAreas, []);
+});
+
+test('valid namespace-prefixed XLSX files preserve headers, sheet relationships, cell text and cached formula values', async () => {
+  const state = fakeModels();
+  const buffer = await namespacedWorkbook(await workbookBuffer([
+    providerRow('Example <m:worker> & Tools'),
+    providerRow('Cached phone', { formula: '1+1', result: 9876500002 }),
+  ], HEADERS, { instructionsFirst: true }), { cdata: true });
+  const original = Buffer.from(buffer);
+  const result = await createProviderImporter(state.models)(buffer);
+  assert.deepEqual([result.created, result.failed], [2, 0]);
+  assert.equal(state.records[0].name, 'Example <m:worker> & Tools');
+  assert.equal(state.records[1].phone, '+919876500002');
+  assert.deepEqual(buffer, original, 'the uploaded workbook is never rewritten on disk or in place');
+});
+
+test('prefixed worksheet/style parts in an unprefixed workbook retain date validation', async () => {
+  const state = fakeModels();
+  const buffer = await namespacedWorkbook(await workbookBuffer([providerRow('Date phone', new Date()), providerRow('Good phone', '9876500002')]), { parts: /^(?:styles|worksheets\/sheet\d+)\.xml$/ });
+  const result = await createProviderImporter(state.models)(buffer);
+  assert.deepEqual([result.created, result.failed], [1, 1]);
+  assert.match(result.rows[0].message, /date/);
+});
+
+test('a namespace-prefixed empty import sheet reports missing provider rows rather than an unreadable workbook', async () => {
+  await assert.rejects(readProviderWorkbook(await namespacedWorkbook(await createProviderTemplate())), (error) => error.code === 'IMPORT_ROWS_EMPTY');
+});
+
+test('absolute Excel table links on supporting sheets do not block provider cell imports', async () => {
+  const workbook = new ExcelJS.Workbook();
+  const importSheet = workbook.addWorksheet('Import Providers');
+  importSheet.addRows([HEADERS, providerRow()]);
+  const sourceSheet = workbook.addWorksheet('Sources');
+  sourceSheet.addTable({ name: 'SourcesTable', ref: 'A1', headerRow: true, columns: [{ name: 'Source' }], rows: [['Reference']] });
+  const zip = await JSZip.loadAsync(await workbook.xlsx.writeBuffer());
+  const relationship = 'xl/worksheets/_rels/sheet2.xml.rels';
+  zip.file(relationship, (await zip.file(relationship).async('string')).replace('../tables/table1.xml', '/xl/tables/table1.xml'));
+  for (const buffer of [await zip.generateAsync({ type: 'nodebuffer' }), await namespacedWorkbook(await zip.generateAsync({ type: 'nodebuffer' }))]) {
+    const state = fakeModels();
+    const result = await createProviderImporter(state.models)(buffer);
+    assert.equal(result.created, 1);
+    assert.equal(state.records[0].phone, '+919876500001');
+  }
 });
 
 test('blank rows are ignored and a malformed duplicate does not prevent a later valid row being added', async () => {

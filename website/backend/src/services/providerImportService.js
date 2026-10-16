@@ -3,6 +3,7 @@ const City = require('../models/City');
 const ServiceCategory = require('../models/ServiceCategory');
 const Worker = require('../models/Worker');
 const ApiError = require('../utils/ApiError');
+const loadExcelWorkbook = require('../utils/loadExcelWorkbook');
 const { workerCreate } = require('../validators/hyperlocal.validator');
 
 const HEADERS = ['Provider Name', 'Phone', 'WhatsApp', 'City / Location', 'Service Categories', 'Service Areas'];
@@ -33,8 +34,8 @@ const cellText = (cell, header) => {
 const readProviderWorkbook = async (buffer) => {
   if (!Buffer.isBuffer(buffer) || !buffer.length) throw new ApiError(422, 'Choose an Excel .xlsx file to import.', 'IMPORT_FILE_REQUIRED');
   if (buffer.length > MAX_IMPORT_BYTES) throw new ApiError(413, 'Excel files must be 25 MB or smaller.', 'IMPORT_FILE_TOO_LARGE');
-  const workbook = new ExcelJS.Workbook();
-  try { await workbook.xlsx.load(buffer); }
+  let workbook;
+  try { workbook = await loadExcelWorkbook(buffer); }
   catch { throw new ApiError(422, 'This file could not be read. Upload a valid, unencrypted Excel .xlsx workbook.', 'IMPORT_FILE_INVALID'); }
   const sheet = workbook.worksheets.find((item) => normalise(item.name) === 'importproviders') || workbook.worksheets[0];
   if (!sheet) throw new ApiError(422, 'The workbook has no worksheets.', 'IMPORT_SHEET_EMPTY');
