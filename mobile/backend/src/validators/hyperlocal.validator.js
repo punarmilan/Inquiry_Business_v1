@@ -143,7 +143,24 @@ const createPaymentOrderSchema = Joi.object({
   }),
 });
 const createServicePaymentOrderSchema = Joi.object({
-  body: Joi.object({ bookingId: objectId.required() }),
+  body: Joi.object({
+    bookingId: objectId.required(),
+    // Chosen in the app before checkout opens; checkout then shows only this method.
+    method: Joi.string().valid(...PAYMENT_METHODS),
+  }),
+});
+const retryPaymentSchema = Joi.object({
+  params: cityIdParams,
+  body: Joi.object({ method: Joi.string().valid(...PAYMENT_METHODS) }),
+});
+// Fields returned by RazorpayCheckout.open() on the native SDK's success promise.
+const razorpayVerifySchema = Joi.object({
+  params: cityIdParams,
+  body: Joi.object({
+    razorpayOrderId: Joi.string().trim().required(),
+    razorpayPaymentId: Joi.string().trim().required(),
+    razorpaySignature: Joi.string().trim().required(),
+  }),
 });
 
 const listServiceCategoriesSchema = Joi.object({ query: Joi.object({ cityId: objectId.required() }) });
@@ -205,6 +222,8 @@ module.exports = {
   analyticsSchema,
   createPaymentOrderSchema,
   createServicePaymentOrderSchema,
+  retryPaymentSchema,
+  razorpayVerifySchema,
   listServiceCategoriesSchema,
   listProvidersSchema,
   createBookingSchema,

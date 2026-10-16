@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, Trash, CaretDown, CaretRight } from '@phosphor-icons/react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -255,7 +255,7 @@ export const SettingsPage = () => {
                           className="flex w-full items-center justify-between p-3 text-left"
                         >
                           <span className="flex items-center gap-2 text-sm font-semibold">
-                            {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                            {isOpen ? <CaretDown className="h-4 w-4" /> : <CaretRight className="h-4 w-4" />}
                             Slide {slideIndex + 1}
                             {slide.title ? `: ${slide.title}` : ''}
                           </span>
@@ -274,7 +274,7 @@ export const SettingsPage = () => {
                             }}
                             className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash className="h-4 w-4" />
                           </span>
                         </button>
 
@@ -359,7 +359,7 @@ export const SettingsPage = () => {
                                     onChange={(e) => updateFeature(slideIndex, featureIndex, { body: e.target.value })}
                                   />
                                   <Button variant="ghost" size="sm" onClick={() => removeFeature(slideIndex, featureIndex)}>
-                                    <Trash2 className="h-4 w-4" />
+<Trash className="h-4 w-4" />
                                   </Button>
                                 </div>
                               ))}

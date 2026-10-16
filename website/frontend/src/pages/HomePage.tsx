@@ -1,72 +1,25 @@
-import { ArrowLeftRight, MapPin, Play, QrCode, ScanQrCode, Timer } from 'lucide-react';
+import { ArrowLeftRight, MapPin, Timer } from 'lucide-react';
 import FeatureGrid from '../components/FeatureGrid';
 import InstallSection from '../components/InstallSection';
-import PhonePreview from '../components/PhonePreview';
 import SectionHeading from '../components/SectionHeading';
 import ServiceGrid from '../components/ServiceGrid';
 import VisualStorySection from '../components/VisualStorySection';
 import WorkflowPanel from '../components/WorkflowPanel';
-import { PLAY_STORE_URL } from '../constants';
 import { employerSteps, liveJobs, stats, trustItems, workerSteps } from '../data/siteData';
 import AnimatedHero from '../components/AnimatedHero';
 import type { NavigationHandler } from '../types';
 import DiscoveryExperience from '../components/DiscoveryExperience';
-import { useEffect, useRef } from 'react';
-import '../experience.css';
 
 type HomePageProps = {
   navigate: NavigationHandler;
 };
 
 function HomePage({ navigate }: HomePageProps) {
-  const experience = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const root = experience.current;
-    if (!root || !('IntersectionObserver' in window)) return;
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('isVisible');
-          observer.unobserve(entry.target);
-        }
-      });
-    }, { threshold: 0.08 });
-    root.querySelectorAll(':scope > section').forEach((section) => {
-      section.classList.add('revealSection');
-      observer.observe(section);
-    });
-    return () => observer.disconnect();
-  }, []);
   return (
     <>
-      <section className="heroSection" aria-labelledby="hero-title">
-        <AnimatedHero />
-        <div className="heroInner">
-          <div className="heroCopy">
-            <p className="eyebrow heroPill">Hyperlocal offers and trusted services</p>
-            <h1 id="hero-title">InquiryExperts</h1>
-            <p className="heroTagline">
-              Discover nearby offers.
-              <br />
-              Book trusted services.
-              <span>All in one app.</span>
-            </p>
-            <p className="heroLead">Approved business offers within 10 KM and company-managed local professionals.</p>
+      <AnimatedHero navigate={navigate} />
 
-            <div className="heroActions" aria-label="Download InquiryExperts">
-              <a className="primaryAction" href={PLAY_STORE_URL} target="_blank" rel="noreferrer">
-                <Play size={18} aria-hidden="true" />
-                Open Play Store
-              </a>
-              <a className="secondaryAction" href="/download" onClick={(event) => navigate(event, '/download')}>
-                <ScanQrCode size={18} aria-hidden="true" />
-                Scan QR
-              </a>
-            </div>
-          </div>
-        </div>
-      </section>
-
+      <div className="statsBand">
       <section className="statsRibbon" aria-label="InquiryExperts summary">
         {stats.map(({ icon: Icon, title, body }) => (
           <div className="statItem" key={title}>
@@ -80,8 +33,9 @@ function HomePage({ navigate }: HomePageProps) {
           </div>
         ))}
       </section>
+      </div>
 
-      <div className="homeExperience" ref={experience}>
+      <div className="homeExperience">
       <DiscoveryExperience navigate={navigate} />
       <VisualStorySection />
 
@@ -127,6 +81,7 @@ function HomePage({ navigate }: HomePageProps) {
             </article>
           ))}
         </div>
+        <p className="sampleNote">Illustrative app listings. Offers, prices and availability vary by location.</p>
       </section>
 
       <section className="serviceBand">
@@ -159,39 +114,7 @@ function HomePage({ navigate }: HomePageProps) {
         <a className="experienceLink" href="/features" onClick={(event) => navigate(event, '/features')}>Explore every feature <span aria-hidden="true">↗</span></a>
       </section>
 
-      <section className="appPreview" aria-label="InquiryExperts app preview">
-        <PhonePreview />
-
-        <div className="previewCopy">
-          <p className="eyebrow">Mobile first</p>
-          <h2>Install once. Discover and book from the app.</h2>
-          <p>Scan or open Play Store, then use the app for offers, services, chat, and booking tracking.</p>
-          <div className="previewActions">
-            <a className="primaryAction" href={PLAY_STORE_URL} target="_blank" rel="noreferrer">
-              <Play size={18} aria-hidden="true" />
-              Open Play Store
-            </a>
-            <a className="secondaryAction darkText" href="/download" onClick={(event) => navigate(event, '/download')}>
-              <QrCode size={18} aria-hidden="true" />
-              Scan QR Code
-            </a>
-          </div>
-        </div>
-      </section>
-
-      <section className="finalCta">
-        <div>
-          <p className="eyebrow">Start today</p>
-          <h2>Discover nearby offers. Book trusted local services.</h2>
-        </div>
-        <a className="primaryAction" href={PLAY_STORE_URL} target="_blank" rel="noreferrer">
-          <Play size={18} aria-hidden="true" />
-          Open Play Store
-        </a>
-      </section>
-
       <InstallSection />
-      <footer className="experienceFooter"><strong>Inquiry<span>Experts</span></strong><p>A little closer. A lot more possible.</p><a href="#top">Back to top ↑</a></footer>
       </div>
     </>
   );

@@ -7,6 +7,7 @@ const routes = require('./routes');
 const env = require('./config/env');
 const { globalLimiter } = require('./middleware/rateLimiters');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
+const { razorpayWebhook } = require('./controllers/webhookController');
 
 const app = express();
 
@@ -22,6 +23,12 @@ app.set('trust proxy', env.trustProxy);
 app.use(helmet());
 app.use(cors(corsOptions));
 app.use(compression());
+
+// Needs the exact raw request bytes to verify X-Razorpay-Signature, so this is
+// registered before express.json() consumes/parses the body — a JSON-parsed
+// and re-stringified body would not byte-for-byte match what Razorpay signed.
+app.post('/payments/webhook', express.raw({ type: 'application/json' }), razorpayWebhook);
+
 // Profile/KYC photos are submitted as base64 data URIs (no separate upload endpoint),
 // and a single KYC submission can bundle several images (Aadhaar + selfie + category docs).
 app.use(express.json({ limit: '15mb' }));

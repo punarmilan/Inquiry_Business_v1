@@ -30,8 +30,8 @@ const STATUS_STYLES: Record<string, string> = {
   in_progress: 'border border-primary/20 bg-primary/10 text-primary hover:bg-primary/10',
 };
 
-export const StatusBadge = ({ status }: { status: string }) => (
-  <Badge variant="secondary" className={cn('font-semibold capitalize shadow-none', STATUS_STYLES[status])}>
+export const StatusBadge = ({ status, className }: { status: string; className?: string }) => (
+  <Badge variant="secondary" className={cn('font-semibold capitalize shadow-none', STATUS_STYLES[status], className)}>
     {status}
   </Badge>
 );

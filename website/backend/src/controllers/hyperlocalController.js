@@ -182,7 +182,20 @@ const listWorkers = asyncHandler(async (req, res) => {
   const filter = {};
   if (req.query.cityId) filter.city = req.query.cityId;
   if (req.query.status) filter.verificationStatus = req.query.status;
-  res.json({ success: true, ...(await paginated({ model: Worker, filter, query: req.query, populate: ['city', 'categories', 'user'] })) });
+  if (typeof req.query.isActive === 'boolean') filter.isActive = req.query.isActive;
+  if (req.query.search?.trim()) {
+    const pattern = new RegExp(req.query.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    const [cities, categories] = await Promise.all([
+      City.find({ name: pattern }).select('_id').lean(),
+      ServiceCategory.find({ name: pattern }).select('_id').lean(),
+    ]);
+    filter.$or = [
+      { name: pattern }, { phone: pattern }, { whatsapp: pattern },
+      { city: { $in: cities.map((city) => city._id) } },
+      { categories: { $in: categories.map((category) => category._id) } },
+    ];
+  }
+  res.json({ success: true, ...(await paginated({ model: Worker, filter, query: req.query, populate: ['city', 'categories', 'user'], sort: { createdAt: -1, _id: -1 } })) });
 });
 const listProviderApplications = asyncHandler(async (req, res) => {
   const filter = {};
@@ -263,80 +276,6 @@ const createWorker = asyncHandler(async (req, res) => {
   });
   return res.status(201).json({ success: true, worker: await worker.populate(['city', 'categories']) });
 });
-const createDemoWorkers = asyncHandler(async (req, res) => {
-  const city = await City.findById(req.body.cityId).select('_id name isActive servicesEnabled');
-  if (!city?.isActive || !city.servicesEnabled) throw new ApiError(422, 'Worker city must have services enabled', 'WORKER_CITY_UNAVAILABLE');
-
-  const categoryFilter = req.body.categoryIds?.length
-    ? { _id: { $in: req.body.categoryIds }, isActive: true }
-    : { isActive: true };
-  const categories = await ServiceCategory.find(categoryFilter).sort({ sortOrder: 1, name: 1 }).select('_id name slug');
-  if (!categories.length) throw new ApiError(422, 'Add active service categories before creating demo providers', 'DEMO_CATEGORY_REQUIRED');
-
-  const demoKeyPrefix = `demo-directory:${city._id}:`;
-  const existing = await Worker.find({ city: city._id, internalNotes: { $regex: `^${demoKeyPrefix}` } })
-    .select('+internalNotes phone')
-    .lean();
-  const existingKeys = new Set(existing.map((worker) => worker.internalNotes));
-  const existingPhones = new Set(existing.map((worker) => worker.phone));
-  const citySeed = Number.parseInt(String(city._id).slice(-6), 16) % 10000;
-  const operations = [];
-  let requested = 0;
-
-  categories.forEach((category, categoryIndex) => {
-    for (let slot = 1; slot <= 8; slot += 1) {
-      requested += 1;
-      const key = `${demoKeyPrefix}${category._id}:${slot}`;
-      if (existingKeys.has(key)) continue;
-      const sequence = categoryIndex * 8 + slot;
-      let localPhone = `98${String(citySeed).padStart(4, '0')}${String(sequence).padStart(4, '0')}`;
-      if (existingPhones.has(`+91${localPhone}`)) {
-        localPhone = `98${String(citySeed).padStart(4, '0')}${String(sequence + 5000).padStart(4, '0')}`;
-      }
-      const phone = `+91${localPhone}`;
-      existingPhones.add(phone);
-      operations.push({
-        updateOne: {
-          filter: { internalNotes: key },
-          update: {
-            $setOnInsert: {
-              name: `${category.name} Demo ${slot}`,
-              phone,
-              whatsapp: phone,
-              categories: [category._id],
-              city: city._id,
-              serviceAreas: [],
-              experienceYears: 3 + (slot % 5),
-              ratingAverage: 4.2 + (slot % 5) / 10,
-              ratingCount: 12 + slot,
-              completedBookings: 20 + slot,
-              availability: 'available',
-              isActive: true,
-              verificationStatus: 'verified',
-              internalNotes: key,
-            },
-          },
-          upsert: true,
-        },
-      });
-    }
-  });
-
-  const result = operations.length ? await Worker.bulkWrite(operations, { ordered: false }) : { upsertedCount: 0 };
-  res.status(201).json({ success: true, requested, created: result.upsertedCount || 0, skipped: requested - (result.upsertedCount || 0) });
-});
-const setDummyProviderNumbers = asyncHandler(async (_req, res) => {
-  const workers = await Worker.find().select('_id').sort({ createdAt: 1, _id: 1 }).lean();
-  if (!workers.length) return res.json({ success: true, updated: 0 });
-
-  await Worker.bulkWrite(workers.map((worker, index) => ({
-    updateOne: { filter: { _id: worker._id }, update: { $set: { phone: `__dummy_provider_${index}__` } } },
-  })));
-  await Worker.bulkWrite(workers.map((worker, index) => ({
-    updateOne: { filter: { _id: worker._id }, update: { $set: { phone: String(index).padStart(10, '0') } } },
-  })));
-  res.json({ success: true, updated: workers.length });
-});
 const updateWorker = asyncHandler(async (req, res) => {
   const worker = await Worker.findById(req.params.id).select('+internalNotes');
   if (!worker) throw new ApiError(404, 'Worker not found', 'WORKER_NOT_FOUND');
@@ -370,6 +309,29 @@ const deleteWorker = asyncHandler(async (req, res) => {
   if (!worker) throw new ApiError(404, 'Worker not found', 'WORKER_NOT_FOUND');
   if (worker.user) await User.updateOne({ _id: worker.user }, { $set: { isActive: false } });
   res.json({ success: true, worker });
+});
+const hardDeleteWorker = asyncHandler(async (req, res) => {
+  const worker = await Worker.findById(req.params.id);
+  if (!worker) throw new ApiError(404, 'Provider not found', 'WORKER_NOT_FOUND');
+  const linkedBooking = await ServiceBooking.exists({
+    $or: [{ worker: worker._id }, { 'dispatchedProviders.provider': worker._id }],
+  });
+  if (linkedBooking) {
+    throw new ApiError(409, 'This provider has booking history. Deactivate the provider to preserve booking and payment records.', 'WORKER_HAS_BOOKINGS');
+  }
+
+  // Assignment reserves a provider by setting availability to busy before it
+  // saves the booking. Refuse deletion if an assignment won that race.
+  const deleted = await Worker.findOneAndDelete({ _id: worker._id, availability: { $ne: 'busy' } });
+  if (!deleted) {
+    throw new ApiError(409, 'This provider is busy or has changed. Refresh the list and finish any assignment before deleting.', 'WORKER_DELETE_CONFLICT');
+  }
+  await Promise.all([
+    User.updateMany({ savedProviders: deleted._id }, { $pull: { savedProviders: deleted._id } }),
+    ProviderApplication.updateMany({ approvedWorker: deleted._id }, { $unset: { approvedWorker: '' } }),
+    ...(deleted.user ? [User.updateOne({ _id: deleted.user }, { $set: { isActive: false } })] : []),
+  ]);
+  res.json({ success: true, deletedId: req.params.id });
 });
 
 const listServiceCategories = asyncHandler(async (_req, res) =>
@@ -802,7 +764,7 @@ const refundPayment = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
-  listCities, createCity, updateCity, deleteCity, listWorkers, listProviderApplications, approveProviderApplication, rejectProviderApplication, createWorker, createDemoWorkers, setDummyProviderNumbers, updateWorker, deleteWorker,
+  listCities, createCity, updateCity, deleteCity, listWorkers, listProviderApplications, approveProviderApplication, rejectProviderApplication, createWorker, updateWorker, deleteWorker, hardDeleteWorker,
   listServiceCategories, createServiceCategory, updateServiceCategory, deleteServiceCategory, listBusinesses, moderateBusiness,
   listOffers, moderateOffer, listOfferTemplates, createOfferTemplate, updateOfferTemplate, deleteOfferTemplate, listTemplateStickers, createTemplateSticker, updateTemplateSticker, deleteTemplateSticker, uploadTemplateAsset, getTemplateAsset, deleteTemplateAsset, decodeTemplateAsset, listPlans, createPlan, updatePlan, deletePlan, listBookings, assignWorker, forwardBooking, updateBookingStatus,
   listPayments, verifyPayment, declinePayment, deletePayment, refundPayment,

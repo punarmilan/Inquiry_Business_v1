@@ -1,10 +1,10 @@
-import type { LucideIcon } from 'lucide-react';
+import type { Icon } from '@phosphor-icons/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface StatCardProps {
   label: string;
   value: string | number;
-  icon: LucideIcon;
+  icon: Icon;
   hint?: string;
 }
 

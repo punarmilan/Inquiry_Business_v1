@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import RazorpayCheckout from 'react-native-razorpay';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme, createThemedStyles } from '../theme';
 import { Button } from './Button';
 import { useApp } from '../context/AppContext';
-import { apiUrl, createSubscriptionOrder, syncPayment, type PaymentMethod } from '../services/api';
+import { createSubscriptionOrder, syncPayment, verifyRazorpayPayment, type PaymentMethod } from '../services/api';
 import type { Plan } from '../types/hyperlocal';
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
@@ -16,12 +17,14 @@ const METHODS: { id: PaymentMethod; title: string; subtitle: string; icon: IconN
   { id: 'netbanking', title: 'Netbanking', subtitle: 'All major Indian banks', icon: 'bank-outline' },
 ];
 
+// Matches mobile/backend/src/views/paymentPages.js's BRAND_COLOR.
+const BRAND_COLOR = '#F45B18';
+
 // select   - plan summary + payment method list (the first thing shown after tapping a plan)
-// awaiting - Razorpay's secure page is open in the browser; waiting for the user to come back
-// checking - asking the backend to confirm the payment with Razorpay
+// checking - Razorpay's native checkout is open (in-app), or the backend is confirming right after it closes
 // success / failed - outcome, decided only by the backend
 // manual   - backend has no online payments configured: order recorded, admin verifies later
-type Stage = 'select' | 'awaiting' | 'checking' | 'success' | 'failed' | 'manual';
+type Stage = 'select' | 'checking' | 'success' | 'failed' | 'manual';
 
 interface PlanPaymentSheetProps {
   visible: boolean;
@@ -40,7 +43,7 @@ interface PlanPaymentSheetProps {
 const formatDate = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 
 export const PlanPaymentSheet: React.FC<PlanPaymentSheetProps> = ({ visible, plan, businessId, businessName, replacing, onActivated, onClose, onDone }) => {
-  const { accessToken } = useApp();
+  const { accessToken, currentUser } = useApp();
   const insets = useSafeAreaInsets();
   // Kept in a ref so an inline callback from the parent does not re-create `confirm` every render.
   const onActivatedRef = useRef(onActivated);
@@ -50,9 +53,7 @@ export const PlanPaymentSheet: React.FC<PlanPaymentSheetProps> = ({ visible, pla
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [activeUntil, setActiveUntil] = useState<string | null>(null);
-  // The payment being paid in the browser, and when we handed over to it.
   const paymentId = useRef<string | null>(null);
-  const openedAt = useRef(0);
   const checkInFlight = useRef(false);
 
   // Each time the sheet opens it starts fresh on the payment method list.
@@ -66,14 +67,19 @@ export const PlanPaymentSheet: React.FC<PlanPaymentSheetProps> = ({ visible, pla
   }, [visible, plan?._id]);
 
   // The app never decides a payment succeeded: the plan is active only if the backend
-  // (which asks Razorpay directly) says so.
-  const confirm = useCallback(async () => {
+  // (which asks Razorpay directly) says so. With a `razorpayResult` in hand (fresh from
+  // RazorpayCheckout.open()), that's sent for real signature verification; without one
+  // (the manual "I've completed the payment" fallback), this just asks the backend
+  // what it already knows.
+  const confirm = useCallback(async (razorpayResult?: { razorpayOrderId: string; razorpayPaymentId: string; razorpaySignature: string }) => {
     const id = paymentId.current;
     if (!id || !accessToken || checkInFlight.current) return;
     checkInFlight.current = true;
     setStage('checking');
     try {
-      const result = await syncPayment(accessToken, id);
+      const result = razorpayResult
+        ? await verifyRazorpayPayment(accessToken, id, razorpayResult)
+        : await syncPayment(accessToken, id);
       if (result.activated) {
         paymentId.current = null;
         setActiveUntil(result.subscription?.endsAt ?? null);
@@ -91,37 +97,47 @@ export const PlanPaymentSheet: React.FC<PlanPaymentSheetProps> = ({ visible, pla
     }
   }, [accessToken]);
 
-  // Coming back from the browser (via "Return to the app" or by switching apps).
-  useEffect(() => {
-    if (!visible || stage !== 'awaiting') return;
-    const subscription = AppState.addEventListener('change', (state) => {
-      // Ignore the flicker while the browser is still opening.
-      if (state === 'active' && Date.now() - openedAt.current > 1500) confirm();
-    });
-    return () => subscription.remove();
-  }, [visible, stage, confirm]);
-
   const pay = async () => {
     if (!accessToken || !plan || busy) return;
     setBusy(true);
     setMessage('');
     try {
       const response = await createSubscriptionOrder(accessToken, plan._id, businessId, method);
-      if (!response.checkout) {
+      if (!response.razorpay) {
         setMessage(`Order ${response.payment.orderId} created for ₹${response.payment.amount}. Your plan activates once our team verifies the payment.`);
         setStage('manual');
         return;
       }
       paymentId.current = response.payment._id;
-      openedAt.current = Date.now();
+      // Opens Razorpay's native checkout — an in-app modal, no browser, no
+      // external app switch. UPI apps still open via the normal Android
+      // intent switch and return control straight back to this modal.
       try {
-        await Linking.openURL(apiUrl(response.checkout.path));
-      } catch {
-        paymentId.current = null;
-        setMessage('Could not open the payment page. Please check that a web browser is installed and try again.');
-        return;
+        const result = await RazorpayCheckout.open({
+          key: response.razorpay.keyId,
+          order_id: response.razorpay.orderId,
+          amount: String(Math.round(response.payment.amount * 100)),
+          currency: 'INR',
+          name: 'InquiryExperts',
+          description: `${plan.name} plan${businessName ? ` · ${businessName}` : ''}`,
+          prefill: {
+            name: currentUser?.name || undefined,
+            contact: currentUser?.phone || undefined,
+            email: currentUser?.email || undefined,
+          },
+          theme: { color: BRAND_COLOR },
+        });
+        await confirm({ razorpayOrderId: result.razorpay_order_id, razorpayPaymentId: result.razorpay_payment_id, razorpaySignature: result.razorpay_signature });
+      } catch (error: any) {
+        const description = String(error?.description || '').toLowerCase();
+        if (description.includes('cancel')) {
+          setMessage('Checkout was closed before the payment completed.');
+          setStage('failed');
+        } else {
+          // Not a clean cancel — double-check with the backend before calling it failed.
+          await confirm();
+        }
       }
-      setStage('awaiting');
     } catch (error: any) {
       setMessage(error?.message || 'Could not start the payment. Please try again.');
     } finally {
@@ -136,7 +152,6 @@ export const PlanPaymentSheet: React.FC<PlanPaymentSheetProps> = ({ visible, pla
 
   if (!plan) return null;
   const price = `₹${plan.price.toLocaleString('en-IN')}`;
-  const chosen = METHODS.find((option) => option.id === method) ?? METHODS[0];
 
   const renderState = (icon: IconName, tone: 'success' | 'warning' | 'info', title: string, text: string) => (
     <View style={styles.state}>
@@ -223,14 +238,6 @@ export const PlanPaymentSheet: React.FC<PlanPaymentSheetProps> = ({ visible, pla
               </>
             ) : null}
 
-            {stage === 'awaiting' ? (
-              <>
-                {renderState('open-in-new', 'info', 'Finish your payment in the browser', `We opened Razorpay's secure page for ${chosen.title}. When you are done, come back to this app.`)}
-                <Button label="I've completed the payment" onPress={confirm} fullWidth style={styles.cta} />
-                <Button label="Change payment method" variant="ghost" onPress={() => setStage('select')} fullWidth />
-              </>
-            ) : null}
-
             {stage === 'checking' ? (
               <View style={styles.state}>
                 <ActivityIndicator size="large" color={theme.colors.primary} />
@@ -254,7 +261,7 @@ export const PlanPaymentSheet: React.FC<PlanPaymentSheetProps> = ({ visible, pla
             {stage === 'failed' ? (
               <>
                 {renderState('alert-circle-outline', 'warning', 'Payment not completed', message)}
-                {paymentId.current ? <Button label="Check again" onPress={confirm} fullWidth style={styles.cta} /> : null}
+                {paymentId.current ? <Button label="Check again" onPress={() => confirm()} fullWidth style={styles.cta} /> : null}
                 <Button
                   label="Try another payment method"
                   variant={paymentId.current ? 'ghost' : 'primary'}

@@ -65,9 +65,11 @@ module.exports = {
   cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME?.trim() || '',
   cloudinaryApiKey: process.env.CLOUDINARY_API_KEY?.trim() || '',
   cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET?.trim() || '',
-  // Plan purchases. The key id is public (sent to checkout); the secret never leaves the server.
+  // Plan + service payments. The key id is public (sent to checkout); the secret never leaves the server.
   razorpayKeyId: process.env.RAZORPAY_KEY_ID?.trim() || '',
   razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET?.trim() || '',
+  // Signs the Razorpay webhook body (Dashboard-issued, separate from the API key secret).
+  razorpayWebhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET?.trim() || '',
 };
 
 module.exports.isRateLimitDisabled = isRateLimitDisabled;

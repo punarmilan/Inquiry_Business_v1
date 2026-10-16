@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ArrowLeft, BadgeCheck, CheckCircle2, ExternalLink, ShieldCheck, XCircle } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, CheckCircle, ArrowSquareOut, XCircle } from '@phosphor-icons/react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { Button } from '@/components/ui/button';
@@ -39,7 +39,7 @@ const DocumentRow = ({ label, url }: { label: string; url?: string }) => (
     {isWebUrl(url) ? (
       <Button variant="outline" size="sm" asChild>
         <a href={url} target="_blank" rel="noreferrer">
-          <ExternalLink className="mr-2 h-4 w-4" /> Open
+          <ArrowSquareOut className="mr-2 h-4 w-4" /> Open
         </a>
       </Button>
     ) : null}
@@ -164,7 +164,7 @@ export const UserDetailPage = () => {
           <CardContent>
             {user.aadhaarVerification.isVerified ? (
               <span className="inline-flex items-center gap-1 text-sm font-medium text-emerald-700">
-                <BadgeCheck className="h-4 w-4" /> Aadhaar Verified
+                <ShieldCheck className="h-4 w-4" /> Aadhaar Verified
               </span>
             ) : (
               <span className="text-sm text-muted-foreground">Not verified</span>
@@ -244,7 +244,7 @@ export const UserDetailPage = () => {
 
               <div className="flex flex-wrap gap-2">
                 <Button onClick={handleApproveKyc} disabled={approvalActionPending || kycStatus === 'verified'}>
-                  <CheckCircle2 className="mr-2 h-4 w-4" /> Approve KYC
+                  <CheckCircle className="mr-2 h-4 w-4" /> Approve KYC
                 </Button>
                 <Button
                   variant="destructive"
@@ -281,7 +281,7 @@ export const UserDetailPage = () => {
 
               <div className="flex flex-wrap gap-2">
                 <Button onClick={handleApproveWallet} disabled={approvalActionPending || walletStatus === 'verified'}>
-                  <CheckCircle2 className="mr-2 h-4 w-4" /> Approve Wallet
+                  <CheckCircle className="mr-2 h-4 w-4" /> Approve Wallet
                 </Button>
                 <Button
                   variant="destructive"

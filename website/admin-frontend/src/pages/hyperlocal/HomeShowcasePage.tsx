@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { ChevronDown, MoreHorizontal, Plus } from 'lucide-react';
+import { CaretDown, DotsThree, Plus } from '@phosphor-icons/react';
 import { OfferPosterPreview } from '@/components/hyperlocal/OfferPosterPreview';
 import { getHomeShowcase, listShowcasePosters, updateHomeShowcase, uploadTemplateAsset } from '@/api/hyperlocal';
 import type { HomeShowcase, OfferRecord } from '@/api/hyperlocal';
@@ -135,7 +135,7 @@ export const HomeShowcasePage = () => {
         <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{offer.title}</p><p className="truncate text-xs text-muted-foreground">{offer.business?.name || 'Business'} · {offer.city?.name || 'City'}</p>{!canSelectPoster(offer) && <p className="text-xs text-destructive">Unavailable — remove before publishing</p>}</div>
         <Button type="button" variant="ghost" size="sm" onClick={() => setPreviewOffer(offer)}>Preview</Button>
         <DropdownMenu>
-          <DropdownMenuTrigger asChild><Button type="button" variant="outline" size="icon" aria-label={`Actions for ${offer.title}`}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+          <DropdownMenuTrigger asChild><Button type="button" variant="outline" size="icon" aria-label={`Actions for ${offer.title}`}><DotsThree className="h-4 w-4" /></Button></DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem disabled={index === 0} onSelect={() => move(index, -1)}>Move up</DropdownMenuItem>
             <DropdownMenuItem disabled={index === selected.length - 1} onSelect={() => move(index, 1)}>Move down</DropdownMenuItem>
@@ -143,7 +143,7 @@ export const HomeShowcasePage = () => {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>)}</div> : <p className="rounded-lg border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">No posters selected yet. Add a published user poster to start.</p>}
-      {selected.length > 3 && <Button type="button" variant="ghost" size="sm" onClick={() => setShowAllSelected((value) => !value)} aria-expanded={showAllSelected}><ChevronDown className={`mr-2 h-4 w-4 transition-transform ${showAllSelected ? 'rotate-180' : ''}`} />{showAllSelected ? 'Show fewer posters' : `Show all ${selected.length} posters`}</Button>}
+      {selected.length > 3 && <Button type="button" variant="ghost" size="sm" onClick={() => setShowAllSelected((value) => !value)} aria-expanded={showAllSelected}><CaretDown className={`mr-2 h-4 w-4 transition-transform ${showAllSelected ? 'rotate-180' : ''}`} />{showAllSelected ? 'Show fewer posters' : `Show all ${selected.length} posters`}</Button>}
     </section> : <section className="space-y-5 rounded-xl border bg-card p-4 sm:p-5">
       <div><h2 className="text-lg font-semibold">Promo banner</h2><p className="text-sm text-muted-foreground">Edit the image and text shown above Trending Near You.</p></div>
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.8fr)]">

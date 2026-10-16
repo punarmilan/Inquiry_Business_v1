@@ -51,10 +51,22 @@ export const listProviderApplications = (params: object = {}) => client.get<Pagi
 export const approveProviderApplication = (id: string, password: string) => client.post(`${base}/provider-applications/${id}/approve`, { password }).then((r) => r.data.application as ProviderApplicationRecord);
 export const rejectProviderApplication = (id: string, reason: string) => client.post(`${base}/provider-applications/${id}/reject`, { reason }).then((r) => r.data.application as ProviderApplicationRecord);
 export const createWorker = (payload: unknown) => client.post(`${base}/workers`, payload).then((r) => r.data.worker);
-export const createDemoWorkers = (cityId: string, categoryIds: string[]) => client.post(`${base}/workers/demo`, { cityId, categoryIds }).then((r) => r.data as { requested: number; created: number; skipped: number });
-export const setDummyProviderNumbers = () => client.post(`${base}/workers/dummy-numbers`).then((r) => r.data as { updated: number });
+export interface ProviderImportResult {
+  total: number;
+  created: number;
+  skipped: number;
+  failed: number;
+  rows: { rowNumber: number; name: string; phone: string; status: 'created' | 'skipped' | 'error'; message: string }[];
+}
+export const importWorkers = (file: File) => {
+  const body = new FormData();
+  body.append('file', file);
+  return client.post<ProviderImportResult>(`${base}/workers/import`, body).then((response) => response.data);
+};
+export const downloadProviderImportTemplate = () => client.get<Blob>(`${base}/workers/import-template`, { responseType: 'blob' }).then((response) => response.data);
 export const updateWorker = (id: string, payload: unknown) => client.put(`${base}/workers/${id}`, payload).then((r) => r.data.worker);
 export const deleteWorker = (id: string) => client.delete(`${base}/workers/${id}`).then((r) => r.data.worker);
+export const hardDeleteWorker = (id: string) => client.delete(`${base}/workers/${id}/permanent`).then((r) => r.data.deletedId as string);
 export const listBusinesses = (params: object = {}) => client.get<Paginated<BusinessRecord>>(`${base}/businesses`, { params }).then((r) => r.data);
 export const moderateBusiness = (id: string, payload: unknown) => client.patch(`${base}/businesses/${id}/moderation`, payload).then((r) => r.data.business);
 export const hardDeleteBusiness = (id: string) => client.delete(`${base}/businesses/${id}`).then((r) => r.data.deletedId as string);

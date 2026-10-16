@@ -1,10 +1,12 @@
 import { createBrowserRouter } from 'react-router-dom';
 import { ProtectedRoute } from './ProtectedRoute';
 import { AppShell } from '@/components/layout/AppShell';
+import { RouteErrorPage } from '@/pages/RouteErrorPage';
 
 export const router = createBrowserRouter([
   {
     path: '/login',
+    errorElement: <RouteErrorPage />,
     lazy: async () => {
       const { LoginPage } = await import('@/pages/LoginPage');
       return { Component: LoginPage };
@@ -12,6 +14,7 @@ export const router = createBrowserRouter([
   },
   {
     element: <ProtectedRoute />,
+    errorElement: <RouteErrorPage />,
     children: [
       {
         element: <AppShell />,
@@ -35,6 +38,13 @@ export const router = createBrowserRouter([
             lazy: async () => {
               const { WorkersPage } = await import('@/pages/hyperlocal/WorkersPage');
               return { Component: WorkersPage };
+            },
+          },
+          {
+            path: '/provider-applications',
+            lazy: async () => {
+              const { ProviderApplicationsPage } = await import('@/pages/hyperlocal/ProviderApplicationsPage');
+              return { Component: ProviderApplicationsPage };
             },
           },
           {

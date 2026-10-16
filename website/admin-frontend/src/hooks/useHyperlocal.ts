@@ -72,13 +72,17 @@ export const useCreateWorker = () => {
   const qc = useQueryClient();
   return useMutation({ mutationFn: api.createWorker, onSuccess: () => qc.invalidateQueries({ queryKey: ['workers'] }) });
 };
-export const useCreateDemoWorkers = () => {
+export const useImportWorkers = () => {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: ({ cityId, categoryIds }: { cityId: string; categoryIds: string[] }) => api.createDemoWorkers(cityId, categoryIds), onSuccess: () => qc.invalidateQueries({ queryKey: ['workers'] }) });
-};
-export const useSetDummyProviderNumbers = () => {
-  const qc = useQueryClient();
-  return useMutation({ mutationFn: api.setDummyProviderNumbers, onSuccess: () => qc.invalidateQueries({ queryKey: ['workers'] }) });
+  return useMutation({
+    mutationFn: api.importWorkers,
+    retry: false,
+    onSettled: () => Promise.all([
+      qc.invalidateQueries({ queryKey: ['workers'] }),
+      qc.invalidateQueries({ queryKey: ['dashboard'] }),
+      qc.invalidateQueries({ queryKey: ['cities'] }),
+    ]),
+  });
 };
 export const useUpdateWorker = () => {
   const qc = useQueryClient();
@@ -89,7 +93,21 @@ export const useUpdateWorker = () => {
 };
 export const useDeleteWorker = () => {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: api.deleteWorker, onSuccess: () => qc.invalidateQueries({ queryKey: ['workers'] }) });
+  return useMutation({ mutationFn: api.deleteWorker, onSuccess: () => {
+    qc.invalidateQueries({ queryKey: ['workers'] });
+    qc.invalidateQueries({ queryKey: ['users'] });
+    qc.invalidateQueries({ queryKey: ['dashboard'] });
+  } });
+};
+export const useHardDeleteWorker = () => {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: api.hardDeleteWorker, onSuccess: () => {
+    qc.invalidateQueries({ queryKey: ['workers'] });
+    qc.invalidateQueries({ queryKey: ['users'] });
+    qc.invalidateQueries({ queryKey: ['provider-applications'] });
+    qc.invalidateQueries({ queryKey: ['dashboard'] });
+    qc.invalidateQueries({ queryKey: ['cities'] });
+  } });
 };
 
 // ---- Businesses ----

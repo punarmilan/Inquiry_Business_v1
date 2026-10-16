@@ -1,17 +1,6 @@
 import type { PageTitle } from '../types';
-
-type SectionHeadingProps = {
-  eyebrow: string;
-  title: PageTitle;
-};
-
-function SectionHeading({ eyebrow, title }: SectionHeadingProps) {
-  return (
-    <div className="sectionHead">
-      <p className="eyebrow">{eyebrow}</p>
-      <h2>{title}</h2>
-    </div>
-  );
+import { useGSAPReveal } from '../hooks/useGSAPReveal';
+export default function SectionHeading({ eyebrow, title }: { eyebrow: string; title: PageTitle }) {
+  const ref = useGSAPReveal<HTMLDivElement>();
+  return <div ref={ref} className="sectionHead"><p className="eyebrow">{eyebrow}</p><div className="headingMask"><h2 data-reveal>{title}</h2></div></div>;
 }
-
-export default SectionHeading;

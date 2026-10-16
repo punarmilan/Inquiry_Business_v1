@@ -10,7 +10,7 @@ const MIN_AMOUNT_PAISE = 100;
 // Razorpay's own instrument names, used to show only the chosen method.
 const PAYMENT_METHODS = ['upi', 'card', 'netbanking'];
 
-const defaultConfig = () => ({ keyId: env.razorpayKeyId, keySecret: env.razorpayKeySecret });
+const defaultConfig = () => ({ keyId: env.razorpayKeyId, keySecret: env.razorpayKeySecret, webhookSecret: env.razorpayWebhookSecret });
 
 const isConfigured = (config = defaultConfig()) => Boolean(config.keyId && config.keySecret);
 
@@ -66,6 +66,19 @@ const verifyPaymentSignature = ({ orderId, paymentId, signature }, config = defa
   return expected.length === received.length && crypto.timingSafeEqual(expected, received);
 };
 
+/**
+ * Razorpay signs the raw webhook body with a separate, Dashboard-issued secret
+ * (never the API key secret) as the `X-Razorpay-Signature` header =
+ * HMAC-SHA256(rawBody). Must run against the untouched request bytes, before
+ * any JSON parsing, or the signature will never match.
+ */
+const verifyWebhookSignature = ({ rawBody, signature }, config = defaultConfig()) => {
+  if (!config.webhookSecret || typeof signature !== 'string' || !Buffer.isBuffer(rawBody)) return false;
+  const expected = Buffer.from(crypto.createHmac('sha256', config.webhookSecret).update(rawBody).digest('hex'));
+  const received = Buffer.from(signature);
+  return expected.length === received.length && crypto.timingSafeEqual(expected, received);
+};
+
 module.exports = {
   MIN_AMOUNT_PAISE,
   PAYMENT_METHODS,
@@ -76,4 +89,5 @@ module.exports = {
   isConfigured,
   toPaise,
   verifyPaymentSignature,
+  verifyWebhookSignature,
 };

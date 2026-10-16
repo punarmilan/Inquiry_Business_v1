@@ -245,6 +245,52 @@ export interface DashboardStats {
   totalRevenue: number;
 }
 
+export type CompareWindow = 7 | 30 | 90;
+
+export interface DashboardStatsResponse {
+  stats: DashboardStats;
+  previous: DashboardStats;
+  compareDays: CompareWindow;
+  attention: {
+    pendingOffers: number;
+    pendingProviderApplications: number;
+    pendingReports: number;
+    pendingBusinessVerifications: number;
+  };
+}
+
+export interface PerformancePoint {
+  date: string;
+  users: number;
+  businesses: number;
+  revenue: number;
+}
+
+export type ActivityType = 'provider' | 'offer' | 'business' | 'subscription' | 'user';
+export type RecentOfferState = 'active' | 'pending' | 'rejected' | 'inactive' | 'expired' | 'scheduled';
+
+export interface DashboardInsights {
+  categoryDistribution: { total: number; categories: { category: string; count: number }[] };
+  topCities: { cityId: string; name: string; count: number; growth: number | null }[];
+  revenueLast7Days: { date: string; revenue: number }[];
+  recentOffers: { _id: string; title: string; category: string; businessName: string; imageUrl: string | null; state: RecentOfferState; createdAt: string }[];
+  recentActivity: { id: string; type: ActivityType; title: string; subtitle: string; at: string }[];
+}
+
+export interface SearchHit {
+  id: string;
+  label: string;
+  detail: string;
+}
+
+export interface GlobalSearchResults {
+  users: SearchHit[];
+  businesses: SearchHit[];
+  offers: SearchHit[];
+  providers: SearchHit[];
+  cities: SearchHit[];
+}
+
 export interface RevenueSeriesPoint {
   period: string;
   commission: number;

@@ -13,11 +13,21 @@ const paymentSchema = new mongoose.Schema(
     provider: { type: String, default: 'manual', trim: true, maxlength: 40 },
     providerOrderId: { type: String, trim: true, maxlength: 200, default: '' },
     providerPaymentId: { type: String, trim: true, maxlength: 200, default: '' },
-    status: { type: String, enum: ['created', 'pending_verification', 'verified', 'failed', 'refunded'], default: 'created', index: true },
+    status: {
+      type: String,
+      enum: ['created', 'pending_verification', 'verified', 'failed', 'refunded', 'cancelled', 'expired'],
+      default: 'created',
+      index: true,
+    },
     planSnapshot: { type: mongoose.Schema.Types.Mixed, default: null },
     verifiedAt: { type: Date, default: null },
     verifiedBy: { type: mongoose.Schema.Types.ObjectId, default: null },
     failureReason: { type: String, trim: true, maxlength: 500, default: '' },
+    // Refund-readiness only (schema, no refund execution wired up yet).
+    refundId: { type: String, trim: true, maxlength: 200, default: '' },
+    refundAmount: { type: Number, min: 0, default: null },
+    refundStatus: { type: String, enum: ['none', 'initiated', 'processed', 'failed'], default: 'none' },
+    refundedAt: { type: Date, default: null },
     metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
   },
   { timestamps: true }

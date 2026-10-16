@@ -9,6 +9,7 @@ const deleteById = Joi.object({ body: Joi.object({}), query: Joi.object({}), par
 const list = Joi.object({
   query: Joi.object({ ...pagination, status: Joi.string().trim().max(40), cityId: objectId, search: Joi.string().trim().max(120) }),
 });
+const workerList = list.keys({ query: list.extract('query').keys({ isActive: Joi.boolean() }) });
 const city = Joi.object({
   name: Joi.string().trim().min(2).max(100).required(), state: Joi.string().trim().min(2).max(100).required(),
   slug: Joi.string().trim().lowercase().pattern(/^[a-z0-9-]+$/).required(),
@@ -30,15 +31,6 @@ const worker = Joi.object({
 });
 const workerCreate = Joi.object({ body: worker });
 const workerUpdate = Joi.object({ params: idParams, body: worker.fork(Object.keys(worker.describe().keys), (s) => s.optional()).min(1) });
-const demoWorkersCreate = Joi.object({
-  body: Joi.object({
-    cityId: objectId.required(),
-    categoryIds: Joi.array().items(objectId).max(100),
-  }).required(),
-  query: Joi.object({}),
-  params: Joi.object({}),
-});
-const dummyProviderNumbers = Joi.object({ body: Joi.object({}), query: Joi.object({}), params: Joi.object({}) });
 
 const serviceCategory = Joi.object({
   name: Joi.string().trim().min(2).max(100).required(), slug: Joi.string().trim().lowercase().pattern(/^[a-z0-9-]+$/).required(),
@@ -209,7 +201,7 @@ const verifyPayment = Joi.object({
 const refundPayment = Joi.object({ params: idParams, body: Joi.object({ reason: Joi.string().trim().min(3).max(500).required() }) });
 const declinePayment = Joi.object({ params: idParams, body: Joi.object({ reason: Joi.string().trim().min(3).max(500).required() }) });
 module.exports = {
-  idParams, list, cityCreate, cityUpdate, workerCreate, workerUpdate, demoWorkersCreate, dummyProviderNumbers, categoryCreate, categoryUpdate,
+  idParams, list, workerList, cityCreate, cityUpdate, workerCreate, workerUpdate, categoryCreate, categoryUpdate,
   businessModerate, offerModerate, templateCreate, templateUpdate, templateAssetDelete, stickerCreate, stickerUpdate, planCreate, planUpdate, assignWorker, forwardBooking, bookingStatus, verifyPayment, declinePayment, refundPayment,
 };
 module.exports.deleteById = deleteById;

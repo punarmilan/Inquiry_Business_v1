@@ -52,6 +52,8 @@ export type OffersStackParamList = {
   OfferDetails: { offerId: string; latitude?: number; longitude?: number };
   BusinessDetails: { businessId: string };
   BookingDetails: { bookingId: string };
+  Payment: { bookingId: string };
+  PaymentSuccess: { paymentId: string; bookingId: string; amount: number; orderId: string; serviceName: string; providerName?: string };
   LiveLocation: LiveLocationParams;
   Notifications: undefined;
   ChatList: undefined;

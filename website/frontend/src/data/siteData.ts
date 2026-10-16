@@ -28,19 +28,31 @@ import {
   Wrench,
   Zap,
 } from 'lucide-react';
-import electricianWorker from '../../assets/electrician-worker.jpg';
-import heroWorker from '../../assets/home-hero-worker.png';
-import serviceCarpenter from '../../assets/services/carpenter.jpg';
-import serviceDriver from '../../assets/services/driver.jpg';
-import serviceLoading from '../../assets/services/loading.jpg';
-import servicePainter from '../../assets/services/painter.jpg';
-import servicePlumber from '../../assets/services/plumber.jpg';
-import serviceTeacher from '../../assets/services/teacher.jpg';
+import electricianWorker from '../../assets/optimized/electrician-worker-960.webp';
+import heroWorker from '../../assets/optimized/home-hero-worker-960.webp';
+import serviceCarpenter from '../../assets/optimized/carpenter-960.webp';
+import serviceDriver from '../../assets/optimized/driver-960.webp';
+import serviceLoading from '../../assets/optimized/loading-960.webp';
+import servicePainter from '../../assets/optimized/painter-960.webp';
+import servicePlumber from '../../assets/optimized/plumber-960.webp';
+import serviceTeacher from '../../assets/optimized/teacher-960.webp';
 import type { IconText, ServiceItem } from '../types';
+
+const thumbnailAssets = import.meta.glob('../../assets/optimized/*-480.webp', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
+const largeAssets = import.meta.glob('../../assets/optimized/*-960.webp', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
+const responsiveImages = Object.fromEntries(Object.entries(largeAssets).map(([path, image]) => [image, thumbnailAssets[path.replace('-960.webp', '-480.webp')] + ' 480w, ' + image + ' 960w']));
+export const imageSrcSet = (image?: string) => image ? responsiveImages[image] : undefined;
 
 export const appImages = {
   electricianWorker,
   heroWorker,
+};
+
+export const experienceCopy = {
+  hero: { eyebrow: 'YOUR NEIGHBOURHOOD. REIMAGINED.', lines: ['Your world.', 'A little closer.'], body: 'Discover approved offers within 10 KM. Book trusted local professionals. All in one app.', note: 'Nearby by design. Trusted by process.' },
+  discovery: { eyebrow: '01 / A WORLD WITHIN REACH', title: 'Small radius.\nEndless possibilities.', body: 'The best things aren’t always far away. Discover local offers and the right people for your everyday needs.' },
+  story: { eyebrow: '02 / REAL SKILLS. REAL PEACE OF MIND.', title: 'For the things\nyou can’t put off.', body: 'That repair. That fresh coat of paint. That extra helping hand. Find local professionals and keep every booking in one place.' },
+  install: { eyebrow: 'YOUR NEXT GOOD FIND STARTS HERE', title: 'A little closer.\nA lot more possible.', body: 'Nearby offers, trusted services and your local world. Take InquiryExperts with you.', action: 'Open Play Store' },
 };
 
 export const stats: IconText[] = [

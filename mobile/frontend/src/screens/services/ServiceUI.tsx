@@ -44,16 +44,16 @@ export const ServiceBackdrop = () => { const insets = useSafeAreaInsets(); retur
   <SkylineMasthead height={210} />
 </View>; };
 
-export const ServiceSearch = ({ value, onChangeText, placeholder }: { value: string; onChangeText: (text: string) => void; placeholder: string }) => <View style={ui.search}>
+export const ServiceSearch = ({ value, onChangeText, placeholder, plain = false }: { value: string; onChangeText: (text: string) => void; placeholder: string; plain?: boolean }) => <View style={[ui.search, plain && ui.plainSearch]}>
   <MaterialCommunityIcons name="magnify" size={27} color={serviceColors.muted} />
   <TextInput accessibilityLabel={placeholder} value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={serviceColors.muted} style={ui.searchInput} returnKeyType="search" />
   {value ? <Pressable onPress={() => onChangeText('')} accessibilityRole="button" accessibilityLabel="Clear search" hitSlop={10}><MaterialCommunityIcons name="close-circle" size={21} color={serviceColors.muted} /></Pressable> : null}
 </View>;
 
-export const ServiceHeader = ({ title, subtitle, onBack, icon = 'map-marker-radius', onAction, compact = false }: { title: string; subtitle?: string; onBack?: () => void; icon?: ServiceIconName; onAction?: () => void; compact?: boolean }) => <View style={ui.header}>
-  {onBack ? <Pressable accessibilityLabel="Go back" accessibilityRole="button" onPress={onBack} style={ui.back}><MaterialCommunityIcons name="arrow-left" size={27} color={serviceColors.text} /></Pressable> : <MaterialCommunityIcons name="map-marker" size={37} color={serviceColors.teal} />}
-  <View style={ui.headerCopy}><Text style={[ui.title, !onBack && { fontSize: 27 }, compact && { fontSize: 19, lineHeight: 24 }]} numberOfLines={2}>{title}</Text>{subtitle ? <Text style={[ui.subtitle, !onBack && ui.homeSubtitle]}>{subtitle}</Text> : null}</View>
-  {onAction ? <Pressable onPress={onAction} accessibilityLabel="Change location" accessibilityRole="button" style={ui.locationButton}><MaterialCommunityIcons name={icon} size={27} color={serviceColors.teal} /></Pressable> : null}
+export const ServiceHeader = ({ title, subtitle, onBack, icon = 'map-marker-radius', onAction, compact = false, plain = false }: { title: string; subtitle?: string; onBack?: () => void; icon?: ServiceIconName; onAction?: () => void; compact?: boolean; plain?: boolean }) => <View style={[ui.header, plain && ui.plainHeader]}>
+  {onBack ? <Pressable accessibilityLabel="Go back" accessibilityRole="button" onPress={onBack} style={ui.back}><MaterialCommunityIcons name="arrow-left" size={27} color={plain ? theme.colors.text : serviceColors.text} /></Pressable> : <MaterialCommunityIcons name="map-marker" size={37} color={serviceColors.teal} />}
+  <View style={ui.headerCopy}><Text style={[ui.title, !onBack && { fontSize: 27 }, compact && { fontSize: 19, lineHeight: 24 }, plain && ui.plainTitle]} numberOfLines={2}>{title}</Text>{subtitle ? <Text style={[ui.subtitle, !onBack && ui.homeSubtitle, plain && ui.plainSubtitle]}>{subtitle}</Text> : null}</View>
+  {onAction ? <Pressable onPress={onAction} accessibilityLabel="Change location" accessibilityRole="button" style={[ui.locationButton, plain && ui.plainLocationButton]}><MaterialCommunityIcons name={icon} size={27} color={plain ? theme.colors.text : serviceColors.teal} /></Pressable> : null}
 </View>;
 
 export const ServiceImage = ({ uri, style, fallback }: { uri?: string; style: React.ComponentProps<typeof Image>['style']; fallback: React.ReactNode }) => {
@@ -75,12 +75,17 @@ export const CoolingArtwork = ({ width = 90 }: { width?: number }) => <Svg width
 
 export const ui = createThemedStyles((c) => ({
   header: { minHeight: 85, paddingHorizontal: 18, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  plainHeader: { minHeight: 72, backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.divider },
   back: { minHeight: 44, width: 30, justifyContent: 'center' }, headerCopy: { flex: 1 },
   title: { fontSize: 23, lineHeight: 29, fontWeight: '800', color: serviceColors.text },
+  plainTitle: { color: c.text },
   subtitle: { fontSize: 16, fontWeight: '700', color: c.primaryDark, marginTop: 2 },
+  plainSubtitle: { fontSize: 14, fontWeight: '500', color: c.textSecondary },
   homeSubtitle: { fontSize: 12, lineHeight: 18, fontWeight: '400', color: c.textSecondary },
   locationButton: { height: 47, width: 47, borderRadius: 15, borderWidth: 1.5, borderColor: c.cardBorder, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center', shadowColor: c.shadowStrong, shadowOpacity: 0.17, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  plainLocationButton: { width: 42, height: 42, borderRadius: 21, borderWidth: 1, borderColor: c.border, shadowOpacity: 0, elevation: 0 },
   search: { minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 16, marginBottom: 18, paddingHorizontal: 16, backgroundColor: c.surface, borderRadius: 20, borderWidth: 1, borderColor: c.cardBorder, shadowColor: c.cardGlow, shadowOpacity: 1, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 2 },
+  plainSearch: { minHeight: 50, marginTop: 16, marginBottom: 16, borderColor: c.border, shadowOpacity: 0, elevation: 0 },
   searchInput: { flex: 1, fontSize: 14, color: serviceColors.text, paddingVertical: 15, minWidth: 0 },
   shadow: { shadowColor: c.cardGlow, shadowOpacity: 1, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
   sectionTitle: { fontSize: 23, lineHeight: 30, fontWeight: '800', color: serviceColors.text },

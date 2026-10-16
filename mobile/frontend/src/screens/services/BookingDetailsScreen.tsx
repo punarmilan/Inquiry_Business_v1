@@ -5,15 +5,15 @@ import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { Button } from '../../components/Button';
-import { cancelServiceBooking, createServicePaymentOrder, getServiceBooking, openBookingChat, rateServiceBooking } from '../../services/api';
+import { cancelServiceBooking, getServiceBooking, openBookingChat, rateServiceBooking } from '../../services/api';
 import type { ServiceBooking } from '../../types/hyperlocal';
-import type { ServicesStackParamList } from '../../navigation/types';
+import type { OffersStackParamList } from '../../navigation/types';
 import { useApp } from '../../context/AppContext';
 import { theme, createThemedStyles } from '../../theme';
 import { callPhoneNumber } from '../../utils/call';
 import { bookingChatUnavailableMessage, canUseBookingChat } from '../../utils/bookingChat';
 
-type Props = NativeStackScreenProps<ServicesStackParamList, 'BookingDetails'>;
+type Props = NativeStackScreenProps<OffersStackParamList, 'BookingDetails'>;
 const steps = ['requested', 'confirmed', 'assigned', 'in_progress', 'completed'];
 
 export const BookingDetailsScreen: React.FC<Props> = ({ route, navigation }) => {
@@ -94,7 +94,12 @@ export const BookingDetailsScreen: React.FC<Props> = ({ route, navigation }) => 
 
       {ratingRequired ? <View style={styles.ratingCard}><View style={styles.ratingHeader}><View style={styles.ratingIcon}><MaterialCommunityIcons name="star-check-outline" size={22} color={theme.colors.accentDark} /></View><View style={styles.flex}><Text style={styles.ratingTitle}>Rate this service</Text><Text style={styles.ratingHint}>Rating is required. Comment is optional.</Text></View></View><View style={styles.stars}>{[1, 2, 3, 4, 5].map((star) => <Pressable key={star} accessibilityRole="button" accessibilityLabel={`${star} star${star > 1 ? 's' : ''}`} onPress={() => setRatingStars(star)} style={styles.starButton}><MaterialCommunityIcons name={star <= ratingStars ? 'star' : 'star-outline'} size={38} color={star <= ratingStars ? theme.colors.accent : theme.colors.textMuted} /></Pressable>)}</View><TextInput value={ratingComment} onChangeText={setRatingComment} placeholder="Write a comment (optional)" placeholderTextColor={theme.colors.textMuted} multiline maxLength={1000} style={styles.commentInput} /><Button label={ratingStars ? 'Submit rating' : 'Select stars to continue'} onPress={submitRating} disabled={!ratingStars || ratingSubmitting} loading={ratingSubmitting} fullWidth /></View> : null}
       {booking.status === 'completed' && booking.rating?.ratedAt ? <View style={styles.ratedCard}><MaterialCommunityIcons name="check-circle" size={22} color={theme.colors.success} /><View style={styles.flex}><Text style={styles.ratedTitle}>Rating submitted</Text><Text style={styles.ratedText}>{booking.rating.stars}/5 stars{booking.rating.review ? `  •  ${booking.rating.review}` : ''}</Text></View></View> : null}
-      {booking.status === 'completed' && booking.paymentStatus !== 'paid' && !ratingRequired ? <Button label={booking.paymentStatus === 'pending' ? 'Payment Verification Pending' : 'Create Secure Payment Order'} disabled={booking.paymentStatus === 'pending'} onPress={() => accessToken && createServicePaymentOrder(accessToken, booking._id).then((result) => { Alert.alert('Payment order created', `Order ${result.payment.orderId} for \u20B9${result.payment.amount} requires secure server verification.`); load(); })} /> : null}
+      {booking.status === 'completed' && booking.paymentStatus !== 'paid' && !ratingRequired ? (
+        <Button
+          label={booking.paymentStatus === 'pending' ? 'Continue Payment' : `Pay \u20B9${(booking.finalPrice ?? booking.priceEstimate).toLocaleString('en-IN')}`}
+          onPress={() => navigation.navigate('Payment', { bookingId: booking._id })}
+        />
+      ) : null}
       {ratingRequired ? <View style={styles.paymentLocked}><MaterialCommunityIcons name="lock-outline" size={19} color={theme.colors.warning} /><Text style={styles.paymentLockedText}>Submit your rating to continue with payment.</Text></View> : null}
       {['requested', 'confirmed', 'assigned'].includes(booking.status) ? <Button label="Cancel Booking" variant="ghost" onPress={() => Alert.alert('Cancel booking?', 'This action cannot be undone.', [{ text: 'Keep booking' }, { text: 'Cancel booking', style: 'destructive', onPress: () => accessToken && cancelServiceBooking(accessToken, booking._id, 'Cancelled by customer').then(load) }])} /> : null}
     </ScrollView>

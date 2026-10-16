@@ -6,7 +6,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { IconButton } from '../../components/IconButton';
 import { useApp } from '../../context/AppContext';
-import { listMyPayments, type BackendPayment } from '../../services/api';
+import { listMyPayments, type BackendPayment, type PaymentMethod } from '../../services/api';
 import type { MoreStackParamList } from '../../navigation/types';
 import { theme, createThemedStyles } from '../../theme';
 
@@ -22,9 +22,41 @@ const typeLabel: Record<BackendPayment['type'], string> = {
 const statusLabel: Record<BackendPayment['status'], string> = {
   created: 'Awaiting payment',
   pending_verification: 'Pending verification',
-  verified: 'Verified',
+  verified: 'Paid',
   failed: 'Failed',
   refunded: 'Refunded',
+  cancelled: 'Cancelled',
+  expired: 'Expired',
+};
+
+const methodLabel: Record<PaymentMethod, string> = { upi: 'UPI', card: 'Card', netbanking: 'Netbanking' };
+
+const populatedField = (value: { name?: string } | string | undefined | null): string | undefined =>
+  value && typeof value === 'object' ? value.name : undefined;
+
+const PaymentRow = ({ item }: { item: BackendPayment }) => {
+  const booking = typeof item.booking === 'object' ? item.booking : undefined;
+  const categoryName = item.type === 'service' ? populatedField(booking?.category) : undefined;
+  const providerName = item.type === 'service' ? populatedField(booking?.worker) : undefined;
+  const method = item.metadata?.preferredMethod ? methodLabel[item.metadata.preferredMethod] : undefined;
+  const subtitle = [providerName, item.orderId].filter(Boolean).join(' · ');
+  const dateLine = [new Date(item.createdAt).toLocaleString('en-IN'), method].filter(Boolean).join(' · ');
+  return (
+    <View style={styles.row}>
+      <View style={styles.icon}>
+        <MaterialCommunityIcons name={item.type === 'refund' ? 'cash-refund' : 'credit-card-outline'} size={22} color={theme.colors.primary} />
+      </View>
+      <View style={styles.copy}>
+        <Text style={styles.type}>{categoryName || typeLabel[item.type]}</Text>
+        <Text style={styles.order}>{subtitle}</Text>
+        <Text style={styles.date}>{dateLine}</Text>
+      </View>
+      <View style={styles.amountWrap}>
+        <Text style={styles.amount}>₹{Number(item.amount || 0).toLocaleString('en-IN')}</Text>
+        <Text style={styles.status}>{statusLabel[item.status]}</Text>
+      </View>
+    </View>
+  );
 };
 
 export const PaymentsScreen: React.FC<Props> = ({ navigation }) => {
@@ -59,7 +91,7 @@ export const PaymentsScreen: React.FC<Props> = ({ navigation }) => {
         contentContainerStyle={styles.list}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} colors={[theme.colors.primary]} />}
         ListEmptyComponent={error ? <View style={styles.center}><MaterialCommunityIcons name="alert-circle-outline" size={46} color={theme.colors.danger} /><Text style={styles.emptyTitle}>Could not load payments.</Text><Text style={styles.errorText}>{error}</Text><Pressable onPress={load} style={styles.retry}><Text style={styles.retryText}>Retry</Text></Pressable></View> : <View style={styles.center}><MaterialCommunityIcons name="credit-card-outline" size={46} color={theme.colors.textMuted} /><Text style={styles.emptyTitle}>No payments yet.</Text></View>}
-        renderItem={({ item }) => <View style={styles.row}><View style={styles.icon}><MaterialCommunityIcons name={item.type === 'refund' ? 'cash-refund' : 'credit-card-outline'} size={22} color={theme.colors.primary} /></View><View style={styles.copy}><Text style={styles.type}>{typeLabel[item.type]}</Text><Text style={styles.order}>{item.orderId}</Text><Text style={styles.date}>{new Date(item.createdAt).toLocaleString('en-IN')}</Text></View><View style={styles.amountWrap}><Text style={styles.amount}>₹{Number(item.amount || 0).toLocaleString('en-IN')}</Text><Text style={styles.status}>{statusLabel[item.status]}</Text></View></View>}
+        renderItem={({ item }) => <PaymentRow item={item} />}
       />
     )}
   </ScreenContainer>;

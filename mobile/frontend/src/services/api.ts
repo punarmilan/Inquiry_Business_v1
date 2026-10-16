@@ -1094,40 +1094,77 @@ export const listMySubscriptions = (accessToken: string) =>
 // (needed to open a backend-served page, e.g. Razorpay checkout, in the browser).
 export const apiUrl = (path: string) => buildUrl(useLocalhostFallback ? LOCALHOST_API_BASE_URL : API_BASE_URL, path);
 
-export interface SubscriptionOrderResponse {
+// Shared shape for every endpoint that hands back a payable (or already-paid)
+// order: subscription-orders, service-orders, and retry.
+export interface PaymentOrderResponse {
   success: true;
-  payment: { _id: string; orderId: string; amount: number; status: string };
-  // Present when the plan is paid online (Razorpay): open `checkout.path` in the browser.
+  payment: { _id: string; orderId: string; amount: number; status: BackendPayment['status'] };
+  // Present when paid online (Razorpay): pass straight to RazorpayCheckout.open()
+  // (native, in-app — no browser). `key`/`order_id` map to this SDK's own field names.
+  razorpay?: { keyId: string; orderId: string };
+  // Hosted browser checkout page for this same order. Unused by the app today
+  // (kept only as a possible fallback) — prefer `razorpay` above.
   checkout?: { path: string };
   // Present when the backend falls back to the manual, admin-verified flow.
   paymentInstructions?: { mode: string; message: string };
+  // Present on a retry that discovered the payment had already cleared.
+  alreadyPaid?: boolean;
+}
+
+export interface SettlementResponse {
+  success: true;
+  payment: { _id: string; orderId: string; amount: number; status: BackendPayment['status'] };
+  subscription: { _id: string; startsAt: string; endsAt: string } | null;
+  booking?: { _id: string; paymentStatus: string } | null;
+  activated: boolean;
 }
 
 // The methods offered before checkout opens. Razorpay's checkout then shows only the chosen one.
 export type PaymentMethod = 'upi' | 'card' | 'netbanking';
 
 export const createSubscriptionOrder = (accessToken: string, planId: string, businessId: string, method?: PaymentMethod) =>
-  request<SubscriptionOrderResponse>('/payments/subscription-orders', {
+  request<PaymentOrderResponse>('/payments/subscription-orders', {
     method: 'POST',
     accessToken,
     body: { planId, businessId, ...(method ? { method } : {}) },
   });
 
 // Asks the backend to confirm a Razorpay payment with Razorpay itself. Call it when
-// the user comes back from checkout; the backend activates the plan only if paid.
+// the user comes back from checkout; the backend activates the plan/booking only if paid.
 export const syncPayment = (accessToken: string, paymentId: string) =>
-  request<{
-    success: true;
-    payment: { _id: string; orderId: string; amount: number; status: BackendPayment['status'] };
-    subscription: { _id: string; startsAt: string; endsAt: string } | null;
-    activated: boolean;
-  }>(`/payments/${paymentId}/sync`, { method: 'POST', accessToken });
+  request<SettlementResponse>(`/payments/${paymentId}/sync`, { method: 'POST', accessToken });
 
-export const createServicePaymentOrder = (accessToken: string, bookingId: string) =>
-  request<{ success: true; payment: { _id: string; orderId: string; amount: number; status: string } }>(
-    '/payments/service-orders',
-    { method: 'POST', accessToken, body: { bookingId } }
-  );
+// Called right after RazorpayCheckout.open() (native SDK) resolves successfully.
+// The three fields are only ever produced by Razorpay itself; the backend
+// independently re-verifies the signature and re-confirms with Razorpay before
+// marking anything paid — this is not a "trust the client" call.
+export const verifyRazorpayPayment = (
+  accessToken: string,
+  paymentId: string,
+  result: { razorpayOrderId: string; razorpayPaymentId: string; razorpaySignature: string }
+) =>
+  request<SettlementResponse>(`/payments/${paymentId}/razorpay-verify`, { method: 'POST', accessToken, body: result });
+
+export const createServicePaymentOrder = (accessToken: string, bookingId: string, method?: PaymentMethod) =>
+  request<PaymentOrderResponse>('/payments/service-orders', {
+    method: 'POST',
+    accessToken,
+    body: { bookingId, ...(method ? { method } : {}) },
+  });
+
+// Re-derives a fresh payable order from a failed/cancelled/expired payment's own
+// stored booking/plan — settles first (never re-charges a payment that actually
+// cleared), then, only if genuinely unpaid, closes out the old attempt and mints a new one.
+export const retryPayment = (accessToken: string, paymentId: string, method?: PaymentMethod) =>
+  request<PaymentOrderResponse>(`/payments/${paymentId}/retry`, {
+    method: 'POST',
+    accessToken,
+    body: method ? { method } : {},
+  });
+
+// Cheap, read-only status check (no gateway call) for pending-payment recovery on app open.
+export const getPaymentStatus = (accessToken: string, paymentId: string) =>
+  request<{ success: true; payment: BackendPayment }>(`/payments/${paymentId}/status`, { accessToken });
 
 export const listServiceCategories = (cityId: string) =>
   request<{ success: true; data: ServiceCategory[]; city?: City; availableAreas?: string[]; comingSoon: boolean; message?: string; availableCities?: City[] }>(
@@ -1141,11 +1178,15 @@ export interface BackendPayment {
   type: 'subscription' | 'service' | 'promotion' | 'refund';
   amount: number;
   currency: 'INR';
-  status: 'created' | 'pending_verification' | 'verified' | 'failed' | 'refunded';
+  status: 'created' | 'pending_verification' | 'verified' | 'failed' | 'refunded' | 'cancelled' | 'expired';
+  provider?: 'razorpay' | 'manual';
   createdAt: string;
+  verifiedAt?: string | null;
+  failureReason?: string;
+  metadata?: { preferredMethod?: PaymentMethod };
   plan?: { name?: string; code?: string } | string | null;
   business?: { name?: string } | string | null;
-  booking?: string | null;
+  booking?: { _id: string; bookingNumber?: string; category?: { name?: string } | string; worker?: { name?: string } | string } | string | null;
 }
 
 export const listMyPayments = (accessToken: string) =>

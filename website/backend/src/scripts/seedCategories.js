@@ -1,9 +1,6 @@
 const mongoose = require('mongoose');
 const env = require('../config/env');
 const Category = require('../models/Category');
-const Report = require('../models/Report');
-const User = require('../models/User');
-const Job = require('../models/Job');
 
 const DEFAULT_CATEGORIES = [
   { name: 'Helper', key: 'helper', groupKey: 'labor', groupName: 'Labor', icon: 'account-hard-hat-outline', color: '#F45B18', kycDocumentLabel: 'Helper Work ID', sortOrder: 0 },
@@ -35,43 +32,11 @@ const run = async () => {
   }
   console.log(`Seeded ${DEFAULT_CATEGORIES.length} categories (existing ones left untouched).`);
 
-  const existingReports = await Report.countDocuments();
-  if (existingReports === 0) {
-    const sampleUser = await User.findOne();
-    const sampleJob = await Job.findOne();
-
-    if (sampleUser) {
-      const demoReports = [];
-      if (sampleJob) {
-        demoReports.push({
-          targetType: 'job',
-          targetId: sampleJob._id,
-          reporterId: sampleUser._id,
-          reason: 'Suspicious pay rate / possible scam listing',
-          status: 'pending',
-        });
-      }
-      demoReports.push({
-        targetType: 'user',
-        targetId: sampleUser._id,
-        reporterId: sampleUser._id,
-        reason: 'Reported for inappropriate messages',
-        status: 'pending',
-      });
-      await Report.insertMany(demoReports);
-      console.log(`Seeded ${demoReports.length} demo reports.`);
-    } else {
-      console.log('No users found in the database yet — skipped demo report seeding.');
-    }
-  } else {
-    console.log('Reports already exist — skipped demo report seeding.');
-  }
-
   await mongoose.disconnect();
   process.exit(0);
 };
 
 run().catch((error) => {
-  console.error('Failed to seed demo data:', error);
+  console.error('Failed to seed categories:', error);
   process.exit(1);
 });

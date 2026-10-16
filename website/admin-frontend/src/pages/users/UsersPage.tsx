@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
-import { BadgeCheck } from 'lucide-react';
 import { toast } from 'sonner';
+import { ShieldCheck } from '@phosphor-icons/react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DataTable } from '@/components/shared/DataTable';
 import { StatusBadge } from '@/components/shared/StatusBadge';
@@ -59,7 +59,7 @@ export const UsersPage = () => {
       cell: ({ row }) =>
         row.original.aadhaarVerification.isVerified ? (
           <span className="inline-flex items-center gap-1 text-sm font-medium text-emerald-700">
-            <BadgeCheck className="h-4 w-4" /> Aadhaar Verified
+            <ShieldCheck className="h-4 w-4" /> Aadhaar Verified
           </span>
         ) : (
           <span className="text-sm text-muted-foreground">Not verified</span>

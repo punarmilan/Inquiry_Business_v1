@@ -32,11 +32,11 @@ export const ConfirmDialog = ({
   <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent>
       <DialogHeader>
-        <DialogTitle>{title}</DialogTitle>
+        <DialogTitle className="break-words pr-4">{title}</DialogTitle>
         <DialogDescription>{description}</DialogDescription>
       </DialogHeader>
       <DialogFooter>
-        <Button variant="outline" onClick={() => onOpenChange(false)}>
+        <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
           Cancel
         </Button>
         <Button variant={destructive ? 'destructive' : 'default'} onClick={onConfirm} disabled={loading}>

@@ -1,4 +1,7 @@
 import { BadgeCheck, MessageCircle, Play, Search } from 'lucide-react';
+import { imageSrcSet } from '../data/siteData';
+import { motion } from 'framer-motion';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { PLAY_STORE_URL } from '../constants';
 import type { IconText, NavigationHandler, ServiceItem } from '../types';
 
@@ -8,6 +11,7 @@ type ServiceDetailPageProps = {
 };
 
 function ServiceDetailPage({ service, navigate }: ServiceDetailPageProps) {
+  const reduced = useReducedMotion();
   const Icon = service.icon;
   const serviceName = service.title.toLowerCase();
   const detailCards: IconText[] = [
@@ -30,7 +34,7 @@ function ServiceDetailPage({ service, navigate }: ServiceDetailPageProps) {
 
   return (
     <>
-      <section className="serviceDetailHero">
+      <motion.section className="serviceDetailHero" initial={false} animate={reduced ? {} : { y: [10, 0] }} transition={{ duration: 0.45 }}>
         <div className="serviceDetailCopy">
           <a className="backLink" href="/services" onClick={(event) => navigate(event, '/services')}>
             Services
@@ -52,8 +56,8 @@ function ServiceDetailPage({ service, navigate }: ServiceDetailPageProps) {
           </div>
         </div>
 
-        {service.image && <img className="serviceDetailImage" src={service.image} alt={service.imageAlt || ''} />}
-      </section>
+        {service.image && <img className="serviceDetailImage" src={service.image} srcSet={imageSrcSet(service.image)} sizes="(max-width: 639px) 90vw, 45vw" alt={service.imageAlt || ''} />}
+      </motion.section>
 
       <section className="section serviceDetailCards" aria-label={`${service.title} service details`}>
         {detailCards.map(({ icon: DetailIcon, title, body }) => (
