@@ -13,11 +13,12 @@ interface ServiceCategorySelectProps {
   loading?: boolean;
   error?: boolean;
   onRetry?: () => void;
+  inline?: boolean;
 }
 
 const MAX_CATEGORIES = 20;
 
-export const ServiceCategorySelect = ({ id, categories, value, onChange, disabled, loading, error, onRetry }: ServiceCategorySelectProps) => {
+export const ServiceCategorySelect = ({ id, categories, value, onChange, disabled, loading, error, onRetry, inline = false }: ServiceCategorySelectProps) => {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
@@ -90,7 +91,7 @@ export const ServiceCategorySelect = ({ id, categories, value, onChange, disable
           <CaretDown aria-hidden="true" className={`shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
         </Button>
         {open && (
-          <div id={`${id}-popup`} role="dialog" aria-label="Choose service categories" className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-lg">
+          <div id={`${id}-popup`} role="dialog" aria-label="Choose service categories" className={`${inline ? 'relative' : 'absolute left-0 right-0 top-full z-50'} mt-2 overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-lg`}>
             <div className="relative border-b p-3">
               <MagnifyingGlass aria-hidden="true" className="pointer-events-none absolute left-6 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input

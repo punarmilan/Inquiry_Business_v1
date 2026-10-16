@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Trash, PencilSimple, Power } from '@phosphor-icons/react';
-import type { WorkerRecord } from '@/api/hyperlocal';
+import type { CategoryRecord, CityRecord, WorkerRecord } from '@/api/hyperlocal';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { SectionCard } from '@/components/shared/SectionCard';
 import { FormField } from '@/components/shared/FormField';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -34,9 +35,74 @@ const emptyForm = {
   serviceAreas: '',
 };
 
+const providerPayload = (form: typeof emptyForm) => {
+  if (!form.name.trim() || !form.phone.trim() || !form.cityId || !form.categoryIds.length) {
+    toast.error('Name, phone, location and category are required.');
+    return null;
+  }
+  return {
+    name: form.name.trim(),
+    phone: form.phone.trim(),
+    whatsapp: form.whatsapp.trim(),
+    cityId: form.cityId,
+    categoryIds: form.categoryIds,
+    serviceAreas: form.serviceAreas.split(',').map((area) => area.trim()).filter(Boolean),
+  };
+};
+
+const ProviderFields = ({ form, onChange, cities, categories, categoriesLoading, categoriesError, onRetryCategories, disabled, inDialog = false }: {
+  form: typeof emptyForm;
+  onChange: (form: typeof emptyForm) => void;
+  cities: CityRecord[];
+  categories: CategoryRecord[];
+  categoriesLoading: boolean;
+  categoriesError: boolean;
+  onRetryCategories: () => void;
+  disabled: boolean;
+  inDialog?: boolean;
+}) => (
+  <>
+    <div className="grid gap-3 sm:grid-cols-2">
+      <FormField label="Provider Name" required>
+        <Input placeholder="e.g. Rajesh Plumbing" value={form.name} onChange={(e) => onChange({ ...form, name: e.target.value })} />
+      </FormField>
+      <FormField label="Phone" required>
+        <Input type="tel" placeholder="+91 98765 43210" value={form.phone} onChange={(e) => onChange({ ...form, phone: e.target.value })} />
+      </FormField>
+      <FormField label="WhatsApp">
+        <Input type="tel" placeholder="+91 98765 43210 (optional)" value={form.whatsapp} onChange={(e) => onChange({ ...form, whatsapp: e.target.value })} />
+      </FormField>
+      <FormField label="City / Location" required>
+        <Select value={form.cityId} onValueChange={(cityId) => onChange({ ...form, cityId })} disabled={disabled}>
+          <SelectTrigger><SelectValue placeholder="Select location" /></SelectTrigger>
+          <SelectContent>
+            {cities.map((city) => <SelectItem key={city._id} value={city._id}>{city.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </FormField>
+    </div>
+    <ServiceCategorySelect
+      id={inDialog ? 'edit-provider-service-categories' : 'provider-service-categories'}
+      categories={categories}
+      value={form.categoryIds}
+      onChange={(categoryIds) => onChange({ ...form, categoryIds })}
+      disabled={disabled}
+      loading={categoriesLoading}
+      error={categoriesError}
+      onRetry={onRetryCategories}
+      inline={inDialog}
+    />
+    <FormField label="Service Areas" description="Comma-separated list (optional)">
+      <Input placeholder="Wakad, Baner, Aundh" value={form.serviceAreas} onChange={(e) => onChange({ ...form, serviceAreas: e.target.value })} />
+    </FormField>
+  </>
+);
+
 export const WorkersPage = () => {
   const [form, setForm] = useState(emptyForm);
+  const [editForm, setEditForm] = useState(emptyForm);
   const [editing, setEditing] = useState('');
+  const editButtonRef = useRef<HTMLButtonElement | null>(null);
   const [search, setSearch] = useSeededSearch();
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
@@ -65,40 +131,29 @@ export const WorkersPage = () => {
   }, [workers, page]);
 
   const handleCreate = () => {
-    if (!form.name.trim() || !form.phone.trim() || !form.cityId || !form.categoryIds.length) {
-      toast.error('Name, phone, location and category are required.');
-      return;
-    }
-    const payload = {
-      name: form.name.trim(),
-      phone: form.phone.trim(),
-      whatsapp: form.whatsapp.trim(),
-      cityId: form.cityId,
-      categoryIds: form.categoryIds,
-      serviceAreas: form.serviceAreas.split(',').map((area) => area.trim()).filter(Boolean),
-    };
-    if (editing) {
-      updateWorker.mutate(
-        { id: editing, payload },
-        {
-          onSuccess: () => { toast.success('Provider updated.'); setForm({ ...emptyForm }); setEditing(''); },
-          onError: (e: any) => toast.error(e.response?.data?.error?.message || 'Failed to update provider.'),
-        },
-      );
-    } else {
-      createWorker.mutate(
-        payload,
-        {
-          onSuccess: () => { toast.success('Provider added to the directory.'); setForm({ ...emptyForm }); },
-          onError: (e: any) => toast.error(e.response?.data?.error?.message || 'Failed to add provider.'),
-        },
-      );
-    }
+    if (saving || actionPending) return;
+    const payload = providerPayload(form);
+    if (!payload) return;
+    createWorker.mutate(payload, {
+      onSuccess: () => { toast.success('Provider added to the directory.'); setForm({ ...emptyForm }); },
+      onError: (e: any) => toast.error(e.response?.data?.error?.message || 'Failed to add provider.'),
+    });
   };
 
-  const edit = (provider: WorkerRecord) => {
+  const handleUpdate = () => {
+    if (!editing || saving || actionPending) return;
+    const payload = providerPayload(editForm);
+    if (!payload) return;
+    updateWorker.mutate({ id: editing, payload }, {
+      onSuccess: () => { toast.success('Provider updated.'); reset(); },
+      onError: (e: any) => toast.error(e.response?.data?.error?.message || 'Failed to update provider.'),
+    });
+  };
+
+  const edit = (provider: WorkerRecord, button: HTMLButtonElement) => {
+    editButtonRef.current = button;
     setEditing(provider._id);
-    setForm({
+    setEditForm({
       name: provider.name,
       phone: provider.phone,
       whatsapp: provider.whatsapp || '',
@@ -106,12 +161,11 @@ export const WorkersPage = () => {
       categoryIds: provider.categories?.map((category) => category._id) || [],
       serviceAreas: provider.serviceAreas?.join(', ') || '',
     });
-    document.getElementById('provider-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const reset = () => {
     setEditing('');
-    setForm(emptyForm);
+    setEditForm(emptyForm);
   };
 
   const saving = createWorker.isPending || updateWorker.isPending;
@@ -137,50 +191,23 @@ export const WorkersPage = () => {
 
       <ProviderExcelImport disabled={saving || actionPending} onImported={() => { setPage(1); setSearch(''); setStatusFilter(''); }} />
 
-      <SectionCard id="provider-form" title={editing ? 'Edit Provider' : 'Add Provider'} collapsible defaultOpen={!editing}>
+      <SectionCard id="provider-form" title="Add Provider" collapsible defaultOpen>
         <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); handleCreate(); }}>
-          <div className="grid gap-3 md:grid-cols-2">
-            <FormField label="Provider Name" required>
-              <Input placeholder="e.g. Rajesh Plumbing" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-            </FormField>
-            <FormField label="Phone" required>
-              <Input type="tel" placeholder="+91 98765 43210" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-            </FormField>
-            <FormField label="WhatsApp">
-              <Input type="tel" placeholder="+91 98765 43210 (optional)" value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} />
-            </FormField>
-            <FormField label="City / Location" required>
-              <Select value={form.cityId} onValueChange={(value) => setForm({ ...form, cityId: value })}>
-                <SelectTrigger><SelectValue placeholder="Select location" /></SelectTrigger>
-                <SelectContent>
-                  {serviceCities.map((city) => (
-                    <SelectItem key={city._id} value={city._id}>{city.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </FormField>
-          </div>
-
-          <ServiceCategorySelect
-            id="provider-service-categories"
+          <ProviderFields
+            form={form}
+            onChange={setForm}
+            cities={serviceCities}
             categories={categories || []}
-            value={form.categoryIds}
-            onChange={(categoryIds) => setForm((current) => ({ ...current, categoryIds }))}
+            categoriesLoading={categoriesLoading}
+            categoriesError={categoriesError}
+            onRetryCategories={() => void refetchCategories()}
             disabled={saving || actionPending}
-            loading={categoriesLoading}
-            error={categoriesError}
-            onRetry={() => void refetchCategories()}
           />
-
-          <FormField label="Service Areas" description="Comma-separated list (optional)">
-            <Input placeholder="Wakad, Baner, Aundh" value={form.serviceAreas} onChange={(e) => setForm({ ...form, serviceAreas: e.target.value })} />
-          </FormField>
 
           <div className="flex flex-wrap gap-2 border-t pt-3">
             <Button type="submit" disabled={saving || actionPending}>
-              {saving ? 'Saving…' : editing ? 'Update Provider' : 'Add Provider'}
+              {createWorker.isPending ? 'Saving…' : 'Add Provider'}
             </Button>
-            {editing && <Button type="button" variant="outline" onClick={reset} disabled={saving}>Cancel</Button>}
           </div>
         </form>
       </SectionCard>
@@ -225,7 +252,7 @@ export const WorkersPage = () => {
                   tags={provider.serviceAreas?.slice(0, 3) || []}
                   actions={
                     <div className="flex flex-wrap gap-2">
-                      <Button type="button" variant="outline" className="min-h-11" onClick={() => edit(provider)} disabled={saving || actionPending} aria-label={`Edit ${provider.name}`}>
+                      <Button type="button" variant="outline" className="min-h-11" onClick={(event) => edit(provider, event.currentTarget)} disabled={saving || actionPending} aria-label={`Edit ${provider.name}`}>
                         <PencilSimple aria-hidden="true" /> Edit
                       </Button>
                       <Button type="button" variant="outline" className="min-h-11" onClick={() => setActionTarget({ provider, kind: 'deactivate' })} disabled={!provider.isActive || saving || actionPending} aria-label={`Deactivate ${provider.name}`}>
@@ -259,6 +286,40 @@ export const WorkersPage = () => {
           </nav>
         )}
       </SectionCard>
+      <Dialog open={!!editing} onOpenChange={(open) => { if (!open && !updateWorker.isPending) reset(); }}>
+        <DialogContent
+          className="flex max-h-[calc(100dvh_-_2rem)] w-[calc(100%_-_2rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0"
+          onEscapeKeyDown={(event) => { if (document.getElementById('edit-provider-service-categories-popup')) event.preventDefault(); }}
+          onCloseAutoFocus={(event) => { event.preventDefault(); editButtonRef.current?.focus(); }}
+        >
+          <DialogHeader className="shrink-0 border-b p-4 pr-12 text-left sm:p-6 sm:pr-12">
+            <DialogTitle>Edit Provider</DialogTitle>
+            <DialogDescription>Update contact details, location and services.</DialogDescription>
+          </DialogHeader>
+          <form className="flex min-h-0 flex-col" onSubmit={(event) => { event.preventDefault(); handleUpdate(); }} aria-busy={updateWorker.isPending}>
+            <fieldset className="min-h-0 min-w-0 space-y-3 overflow-y-auto p-4 sm:p-6" disabled={updateWorker.isPending}>
+              <legend className="sr-only">Provider details</legend>
+              <ProviderFields
+                form={editForm}
+                onChange={setEditForm}
+                cities={serviceCities}
+                categories={categories || []}
+                categoriesLoading={categoriesLoading}
+                categoriesError={categoriesError}
+                onRetryCategories={() => void refetchCategories()}
+                disabled={saving || actionPending}
+                inDialog
+              />
+            </fieldset>
+            <DialogFooter className="shrink-0 gap-2 border-t p-4 sm:p-6">
+              <Button type="button" variant="outline" className="min-h-11" onClick={reset} disabled={updateWorker.isPending}>Cancel</Button>
+              <Button type="submit" className="min-h-11" disabled={saving || actionPending}>
+                {updateWorker.isPending ? 'Saving…' : 'Update Provider'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
       <ConfirmDialog
         open={!!actionTarget}
         onOpenChange={(open) => { if (!open && !actionPending) setActionTarget(null); }}
