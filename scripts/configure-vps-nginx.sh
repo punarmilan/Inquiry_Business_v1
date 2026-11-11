@@ -10,8 +10,33 @@ mapfile -t config_files < <(
 )
 
 if [ "${#config_files[@]}" -eq 0 ]; then
-  echo "No Nginx server block for the InquiryExperts domains was found."
-  exit 1
+  echo "No existing Nginx server block found. Creating /etc/nginx/conf.d/inquiryexperts.conf..."
+  sudo mkdir -p /etc/nginx/conf.d
+  sudo tee /etc/nginx/conf.d/inquiryexperts.conf > /dev/null <<'EOF'
+server {
+    listen 80;
+    server_name inquiry.business www.inquiry.business admin.inquiry.business web-api.inquiry.business app-api.inquiry.business smartdial.online www.smartdial.online admin.smartdial.online api.smartdial.online app.smartdial.online;
+
+    location / {
+        proxy_pass http://127.0.0.1:8088;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+EOF
+  if ! sudo nginx -t; then
+    echo "Nginx validation failed for generated config."
+    exit 1
+  fi
+  sudo systemctl reload nginx
+  echo "Created /etc/nginx/conf.d/inquiryexperts.conf and reloaded Nginx."
+  exit 0
 fi
 
 changed=0
