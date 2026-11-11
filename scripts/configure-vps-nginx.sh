@@ -4,6 +4,14 @@ set -euo pipefail
 backup_dir="/var/backups/inquiryexperts-nginx/$(date -u +%Y%m%d%H%M%S)"
 sudo mkdir -p "$backup_dir"
 
+reload_or_restart_nginx() {
+  if sudo systemctl is-active --quiet nginx; then
+    sudo systemctl reload nginx
+  else
+    sudo systemctl restart nginx
+  fi
+}
+
 mapfile -t config_files < <(
   sudo grep -RIlE 'server_name[^;]*(inquiry\.business|smartdial\.online)' \
     /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null || true
@@ -34,8 +42,8 @@ EOF
     echo "Nginx validation failed for generated config."
     exit 1
   fi
-  sudo systemctl reload nginx
-  echo "Created /etc/nginx/conf.d/inquiryexperts.conf and reloaded Nginx."
+  reload_or_restart_nginx
+  echo "Created /etc/nginx/conf.d/inquiryexperts.conf and started/reloaded Nginx."
   exit 0
 fi
 
@@ -143,5 +151,5 @@ if ! sudo nginx -t; then
   exit 1
 fi
 
-sudo systemctl reload nginx
-echo "Nginx reloaded; backups saved in $backup_dir"
+reload_or_restart_nginx
+echo "Nginx started/reloaded; backups saved in $backup_dir"
