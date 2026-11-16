@@ -4,6 +4,8 @@ import { Bell, Bookmark, ChevronRight, CreditCard, Crown, FileText, Languages, L
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { DynamicRenderer } from '../../components/DynamicRenderer';
+import { useUIPage } from '../../hooks/useUIPage';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import type { MoreStackParamList } from '../../navigation/types';
 import { useApp } from '../../context/AppContext';
@@ -13,6 +15,7 @@ import { tabBarScrollProps } from '../../navigation/hideTabBarOnScroll';
 type Props = NativeStackScreenProps<MoreStackParamList, 'MoreHome'>;
 type MoreItem = { key: string; label: string; icon: LucideIcon; route?: keyof MoreStackParamList; params?: Record<string, string> };
 export const MoreScreen: React.FC<Props> = ({ navigation }) => {
+  const appearance = useUIPage('more');
   const { businesses, hasApprovedBusiness, refreshBusinesses, t } = useApp();
   const tabBarHeight = useBottomTabBarHeight();
 
@@ -53,27 +56,28 @@ export const MoreScreen: React.FC<Props> = ({ navigation }) => {
   }, [businesses, hasApprovedBusiness, t]);
 
   const renderItems = (group: MoreItem[]) => group.map((item, index) =>
-    <Pressable key={item.key} accessibilityRole="button" accessibilityLabel={item.label} onPress={() => item.route && (navigation as any).navigate(item.route, item.params)} style={({ pressed }) => [styles.item, index === group.length - 1 && styles.lastItem, pressed && styles.pressed]}>
-      <View style={styles.icon}><item.icon size={24} color={theme.colors.text} strokeWidth={1.75} /></View>
+    <Pressable key={item.key} accessibilityRole="button" accessibilityLabel={item.label} onPress={() => item.route && (navigation as any).navigate(item.route, item.params)} style={({ pressed }) => [styles.item, appearance.option('menuVariant') === 'separated' && { marginVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border }, index === group.length - 1 && styles.lastItem, pressed && styles.pressed]}>
+      <View style={styles.icon}><item.icon size={24} color={appearance.iconColor} strokeWidth={1.75} /></View>
       <View style={styles.flex}><Text style={styles.label}>{item.label}</Text></View>
       <ChevronRight size={21} color={theme.colors.textMuted} strokeWidth={1.75} />
     </Pressable>
   );
 
   return (
-    <ScreenContainer>
-      <View style={styles.header}>
-        <Text style={styles.title}>{t('moreTitle')}</Text>
+    <ScreenContainer dynamicBackgroundColor={appearance.backgroundColor}>
+      <View style={[styles.header, appearance.header]}>
+        <Text style={[styles.title, appearance.title]}>{t('moreTitle')}</Text>
       </View>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + 32 }]}
+        contentContainerStyle={[styles.content, appearance.content, { paddingBottom: tabBarHeight + 32 }]}
         scrollIndicatorInsets={{ bottom: tabBarHeight + 32 }}
         {...tabBarScrollProps}
       >
-        <View style={styles.optionGroup}>
+        <DynamicRenderer pageKey="more" slot="beforeContent" />
+        <View style={[styles.optionGroup, appearance.card]}>
           <Pressable accessibilityRole="button" onPress={() => navigation.navigate('BusinessCenter')} style={({ pressed }) => [styles.item, styles.businessRow, businessItems.length === 0 && styles.lastItem, pressed && styles.pressed]}>
-            <View style={styles.icon}><Store size={24} color={theme.colors.text} strokeWidth={1.75} /></View>
+            <View style={styles.icon}><Store size={24} color={appearance.iconColor} strokeWidth={1.75} /></View>
             <View style={styles.flex}>
               <Text style={styles.label}>{hasApprovedBusiness ? t('manageBusiness') : t('promoteBusiness')}</Text>
               <Text numberOfLines={2} style={styles.subtitle}>{businessSubtitle}</Text>
@@ -82,8 +86,9 @@ export const MoreScreen: React.FC<Props> = ({ navigation }) => {
           </Pressable>
           {renderItems(businessItems)}
         </View>
-        <View style={styles.optionGroup}>{renderItems(activityItems)}</View>
-        <View style={styles.optionGroup}>{renderItems(settingsItems)}</View>
+        <View style={[styles.optionGroup, appearance.card]}>{renderItems(activityItems)}</View>
+        <View style={[styles.optionGroup, appearance.card]}>{renderItems(settingsItems)}</View>
+        <DynamicRenderer pageKey="more" slot="afterContent" />
       </ScrollView>
     </ScreenContainer>
   );

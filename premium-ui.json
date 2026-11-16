@@ -1,0 +1,17 @@
+{
+  "profile": "product-admin",
+  "sourceRoots": ["website/admin-frontend/src"],
+  "locale": "en-IN",
+  "canonicalMap": "UX-CONTRACT.md",
+  "requiredCapabilities": ["Select/Listbox", "Form", "Scrollbar", "Toast", "CRUD"],
+  "ownership": { "Select/Listbox": "native", "Date": "native" },
+  "requiredCommands": ["unit", "e2e"],
+  "commands": {
+    "unit": "npm --prefix website/admin-frontend run test:ui",
+    "e2e": "npm --prefix website/admin-frontend run test:visual"
+  },
+  "evidence": {
+    "crudFullFlow": "website/admin-frontend/scripts/visual-editor.e2e.cjs",
+    "failurePaths": "website/admin-frontend/scripts/visual-editor.e2e.cjs"
+  }
+}

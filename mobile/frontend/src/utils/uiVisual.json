@@ -1,0 +1,6 @@
+{
+  "icons": ["Gift", "Flame", "Sparkles", "Heart", "Star", "ShoppingBag", "Store", "Tag", "MapPin", "Phone", "Bell", "Percent", "CheckCircle", "Calendar", "PartyPopper", "Sun"],
+  "imageMaxBytes": 2097152,
+  "imageMaxDimension": 2048,
+  "maxAssets": 128
+}

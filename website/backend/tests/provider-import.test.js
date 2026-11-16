@@ -36,13 +36,35 @@ const namespacedWorkbook = async (buffer, { parts = /^(?:workbook|styles|sharedS
   return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
 };
 
-const fakeModels = ({ cities = baseCities, categories = baseCategories, existing = [] } = {}) => {
-  const calls = { lookups: [], operations: [], bulkOptions: [] };
+const fakeModels = ({ cities = baseCities, categories = baseCategories, existing = [], resolvedCities = [] } = {}) => {
+  const calls = { lookups: [], operations: [], bulkOptions: [], cityWrites: [], geocodes: [] };
   const records = [...existing];
+  const cityRecords = cities.map((city) => ({ ...city, localities: [...(city.localities || [])] }));
   const lookup = (data) => ({ find(filter) {
     calls.lookups.push(filter);
     return { select: () => ({ lean: async () => data.filter((row) => Object.entries(filter).every(([key, value]) => row[key] === value)) }) };
   } });
+  const CityModel = {
+    ...lookup(cityRecords),
+    async findOne(filter) { return cityRecords.find((city) => city.slug === filter.slug); },
+    async findOneAndUpdate(filter, update, options) {
+      calls.cityWrites.push({ filter, update, options });
+      if (update.$setOnInsert) {
+        let record = cityRecords.find((city) => city.slug === filter.slug);
+        if (!record) { record = { ...update.$setOnInsert }; cityRecords.push(record); }
+        return record;
+      }
+      const record = cityRecords.find((city) => String(city._id) === String(filter._id) && city.isActive && city.servicesEnabled);
+      if (!record) return null;
+      const areas = update[0].$set.localities.$reduce.input.$concatArrays[1].$literal;
+      const merged = [...record.localities];
+      for (const area of areas) if (!merged.some((value) => value.toLocaleLowerCase('en-IN') === area.toLocaleLowerCase('en-IN'))) merged.push(area);
+      if (merged.length > 500) return null;
+      const previous = { ...record, localities: [...record.localities] };
+      record.localities = merged;
+      return options.new ? record : previous;
+    },
+  };
   const WorkerModel = {
     find(filter) { return { select: () => ({ lean: async () => records.filter((row) => filter.phone.$in.includes(row.phone)) }) }; },
     async bulkWrite(operations, options) {
@@ -59,7 +81,12 @@ const fakeModels = ({ cities = baseCities, categories = baseCategories, existing
       return { upsertedIds };
     },
   };
-  return { calls, records, models: { CityModel: lookup(cities), CategoryModel: lookup(categories), WorkerModel } };
+  return { calls, records, cityRecords, models: { CityModel, CategoryModel: lookup(categories), WorkerModel, resolveCityLocation: async (name) => {
+    calls.geocodes.push(name);
+    const city = resolvedCities.find((city) => city.input === name);
+    if (!city) throw new Error(`City "${name}" could not be located.`);
+    return city;
+  } } };
 };
 
 test('imports the supplied six-column format, numeric phones, optional WhatsApp and multiple categories/areas', async () => {
@@ -81,7 +108,7 @@ test('imports the supplied six-column format, numeric phones, optional WhatsApp 
   assert.equal(state.records[1].verificationStatus, 'verified');
   assert.equal(state.records[1].availability, 'available');
   assert.ok(!Object.hasOwn(state.records[1], 'user'), 'import creates directory entries without login accounts');
-  assert.deepEqual(state.calls.lookups, [{ isActive: true, servicesEnabled: true }, { isActive: true }]);
+  assert.deepEqual(state.calls.lookups, [{}, { isActive: true }]);
 });
 
 test('duplicates in the workbook and existing local/country-code numbers are skipped without updating existing providers', async () => {
@@ -98,6 +125,97 @@ test('duplicates in the workbook and existing local/country-code numbers are ski
   const again = await importer(buffer);
   assert.deepEqual([again.created, again.skipped, again.failed], [0, 3, 0]);
   assert.equal(state.records.length, 2);
+});
+
+const resolvedPune = { input: 'Pune', name: 'Pune', state: 'Maharashtra', center: { type: 'Point', coordinates: [73.8567, 18.5204] } };
+
+test('missing cities are created once with real location data and their service areas are added automatically', async () => {
+  const state = fakeModels({ cities: [], resolvedCities: [resolvedPune] });
+  const importer = createProviderImporter(state.models);
+  const buffer = await workbookBuffer([
+    providerRow('Provider One', '9876500001', 'Carpenter', 'Pune', '', 'Wakad, Baner'),
+    providerRow('Provider Two', '9876500002', 'Carpenter', ' PUNE ', '', 'wakad, Ravet'),
+  ]);
+  const result = await importer(buffer);
+  assert.deepEqual([result.created, result.failed, result.citiesCreated, result.areasCreated], [2, 0, 1, 3]);
+  assert.equal(state.calls.geocodes.length, 1);
+  assert.equal(state.cityRecords.length, 1);
+  const city = state.cityRecords[0];
+  assert.equal(city.name, 'Pune');
+  assert.equal(city.state, 'Maharashtra');
+  assert.deepEqual(city.center, resolvedPune.center);
+  assert.equal(city.servicesEnabled, true);
+  assert.equal(city.isActive, true);
+  assert.equal(city.offersEnabled, false);
+  assert.equal(city.serviceRadiusKm, 10);
+  assert.deepEqual(city.localities, ['wakad', 'Baner', 'Ravet']);
+  assert.ok(state.records.every((worker) => String(worker.city) === String(city._id)));
+  const writeCount = state.calls.cityWrites.length;
+  const again = await importer(buffer);
+  assert.deepEqual([again.created, again.skipped, again.citiesCreated, again.areasCreated], [0, 2, 0, 0]);
+  assert.equal(state.calls.cityWrites.length, writeCount);
+});
+
+test('existing city areas and images are preserved while new areas are added without case duplicates', async () => {
+  const images = [{ name: 'Wakad', imageUrl: 'https://example.com/wakad.jpg' }];
+  const state = fakeModels({ cities: [{ ...baseCities[0], localities: ['Wakad'], localityImages: images }] });
+  const result = await createProviderImporter(state.models)(await workbookBuffer([providerRow('Provider', '9876500001', 'Carpenter', 'Pimpri-Chinchwad', '', 'WAKAD,  New   Area, new area')]));
+  assert.deepEqual([result.created, result.citiesCreated, result.areasCreated], [1, 0, 1]);
+  assert.deepEqual(state.cityRecords[0].localities, ['Wakad', 'new area']);
+  assert.deepEqual(state.cityRecords[0].localityImages, images);
+  assert.equal(state.calls.geocodes.length, 0);
+});
+
+test('invalid rows and existing phone numbers create no cities or areas and do not call Maps', async () => {
+  const state = fakeModels({ cities: [], existing: [{ phone: '+919876500003' }], resolvedCities: [resolvedPune] });
+  const result = await createProviderImporter(state.models)(await workbookBuffer([
+    providerRow('Bad phone', 'bad', 'Carpenter', 'Pune'),
+    providerRow('Bad category', '9876500002', 'Missing category', 'Pune'),
+    providerRow('Existing provider', '9876500003', 'Carpenter', 'Pune'),
+  ]));
+  assert.deepEqual([result.failed, result.skipped, result.citiesCreated, result.areasCreated], [2, 1, 0, 0]);
+  assert.equal(state.calls.cityWrites.length, 0);
+  assert.equal(state.calls.geocodes.length, 0);
+});
+
+test('failed city lookups are cached within a file and do not create partial location records', async () => {
+  const state = fakeModels({ cities: [] });
+  const result = await createProviderImporter(state.models)(await workbookBuffer([providerRow('First', '9876500001', 'Carpenter', 'Missing city'), providerRow('Second', '9876500002', 'Carpenter', 'Missing city')]));
+  assert.equal(result.failed, 2);
+  assert.equal(state.calls.geocodes.length, 1);
+  assert.equal(state.cityRecords.length, 0);
+  assert.equal(state.calls.operations.length, 0);
+});
+
+test('a new city is not created when the category is restricted to other cities', async () => {
+  const state = fakeModels({ cities: [], resolvedCities: [resolvedPune] });
+  const result = await createProviderImporter(state.models)(await workbookBuffer([providerRow('Restricted', '9876500001', 'Furniture & Interior Work', 'Pune')]));
+  assert.equal(result.failed, 1);
+  assert.match(result.rows[0].message, /not available in Pune/);
+  assert.equal(state.calls.cityWrites.length, 0);
+});
+
+test('city area capacity is checked before providers are inserted', async () => {
+  const state = fakeModels({ cities: [{ ...baseCities[0], localities: Array.from({ length: 500 }, (_, index) => `Area ${index}`) }] });
+  const result = await createProviderImporter(state.models)(await workbookBuffer([providerRow()]));
+  assert.equal(result.failed, 1);
+  assert.match(result.rows[0].message, /500 areas/);
+  assert.equal(state.calls.operations.length, 0);
+  assert.equal(state.cityRecords[0].localities.length, 500);
+});
+
+test('simultaneous imports reuse the same city and preserve both area additions', async () => {
+  const state = fakeModels({ cities: [], resolvedCities: [resolvedPune] });
+  const importer = createProviderImporter(state.models);
+  const results = await Promise.all([
+    importer(await workbookBuffer([providerRow('First', '9876500001', 'Carpenter', 'Pune', '', 'Wakad')])),
+    importer(await workbookBuffer([providerRow('Second', '9876500002', 'Carpenter', 'Pune', '', 'Baner')])),
+  ]);
+  assert.equal(state.cityRecords.length, 1);
+  assert.equal(state.records.length, 2);
+  assert.ok(state.records.every((record) => String(record.city) === String(state.cityRecords[0]._id)));
+  assert.deepEqual(new Set(state.cityRecords[0].localities), new Set(['Wakad', 'Baner']));
+  assert.equal(results.reduce((sum, result) => sum + result.citiesCreated, 0), 1);
 });
 
 test('valid rows are added while invalid names, phones, WhatsApp, cities and categories report exact Excel row numbers', async () => {
@@ -277,7 +395,7 @@ test('concurrent duplicate upserts and individual write failures preserve accura
 test('interrupted writes explain safe retry rather than claiming nothing was imported', async () => {
   const state = fakeModels();
   state.models.WorkerModel.bulkWrite = async () => { throw new Error('Connection lost'); };
-  await assert.rejects(createProviderImporter(state.models)(await workbookBuffer([providerRow()])), (error) => error.statusCode === 503 && error.code === 'IMPORT_INTERRUPTED' && /Some providers may have been added/.test(error.message));
+  await assert.rejects(createProviderImporter(state.models)(await workbookBuffer([providerRow()])), (error) => error.statusCode === 503 && error.code === 'IMPORT_INTERRUPTED' && /Some providers or locations may have been added/.test(error.message));
 });
 
 test('downloadable template preserves the exact six headers, text phone columns, and contains no demo providers', async () => {

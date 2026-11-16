@@ -5,7 +5,6 @@ import Slider from '@react-native-community/slider';
 import { StatusBar } from 'expo-status-bar';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScreenContainer } from '../../components/ScreenContainer';
-import { SkylineMasthead } from '../../components/NeonUI';
 import { PosterLayers } from '../../components/OfferCard';
 import { CityPickerModal } from '../../components/CityPickerModal';
 import { useHyperlocalLocation } from '../../hooks/useHyperlocalLocation';
@@ -165,7 +164,6 @@ export const AllOffersScreen: React.FC<Props> = ({ navigation, route }) => {
   return (
     <ScreenContainer edges={['top', 'left', 'right']} backgroundColor={theme.colors.background}>
       <StatusBar style={themeMode === 'dark' ? 'light' : 'dark'} />
-      <SkylineMasthead height={200} />
       <View style={styles.header}>
         <Pressable onPress={navigation.goBack} style={styles.back} accessibilityLabel="Go back" accessibilityRole="button">
           <MaterialCommunityIcons name="arrow-left" size={24} color={theme.colors.text} />

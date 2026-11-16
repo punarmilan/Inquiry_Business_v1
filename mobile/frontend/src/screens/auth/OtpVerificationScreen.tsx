@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, TextInput, Pressable } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { theme, createThemedStyles } from '../../theme';
+import { DynamicRenderer } from '../../components/DynamicRenderer';
+import { useUIPage } from '../../hooks/useUIPage';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { Button } from '../../components/Button';
 import { IconButton } from '../../components/IconButton';
@@ -15,6 +17,7 @@ const OTP_LENGTH = 4;
 const RESEND_COOLDOWN = 30;
 
 export const OtpVerificationScreen: React.FC<Props> = ({ navigation, route }) => {
+  const appearance = useUIPage('otp');
   const { t, authIdentifierValue, authIdentifierType, confirmOtp, requestOtp, remoteSettings } = useApp();
   const [demoOtp, setDemoOtp] = useState(route.params.demoOtp);
   const [otp, setOtp] = useState('');
@@ -94,16 +97,17 @@ export const OtpVerificationScreen: React.FC<Props> = ({ navigation, route }) =>
   const cooldownLabel = `0:${String(cooldown).padStart(2, '0')}`;
 
   return (
-    <ScreenContainer>
-      <View style={styles.header}>
+    <ScreenContainer dynamicBackgroundColor={appearance.backgroundColor}>
+      <View style={[styles.header, appearance.header]}>
         <IconButton name="arrow-left" accessibilityLabel={t('back')} onPress={() => navigation.goBack()} />
       </View>
 
-      <View style={styles.body}>
+      <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.body, appearance.content, appearance.card, appearance.option('formVariant') === 'outlined' && { borderWidth: 1, borderColor: theme.colors.primary, borderRadius: 16 }]}>
+        <DynamicRenderer pageKey="otp" slot="beforeContent" />
         <View style={styles.iconCircle}>
-          <MaterialCommunityIcons name="message-text-outline" size={36} color={theme.colors.primary} />
+          <MaterialCommunityIcons name="message-text-outline" size={36} color={appearance.option('iconTone') !== 'default' ? appearance.iconColor : theme.colors.primary} />
         </View>
-        <Text style={styles.title}>{title}</Text>
+        <Text style={[styles.title, appearance.title]}>{title}</Text>
         <Text style={styles.subtitle}>
           {otpSentToLabel} {authIdentifierValue || '+91 XXXXX XXXXX'}
         </Text>
@@ -144,7 +148,8 @@ export const OtpVerificationScreen: React.FC<Props> = ({ navigation, route }) =>
             <Text style={styles.resendText}>{resendLabel}</Text>
           </Pressable>
         )}
-      </View>
+        <DynamicRenderer pageKey="otp" slot="afterContent" />
+      </ScrollView>
 
       <View style={styles.footer}>
         <Button

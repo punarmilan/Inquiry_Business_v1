@@ -4,6 +4,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { findOfferAvatar, isPosterUploadOffer, resolveDynamicValue, resolveOfferFontFamily, resolveOfferLineHeight, resolveTemplateElementValue, resolveTemplateImageValue } from '../config/offerCardDesigner';
 import { OfferAvatarSprite } from './OfferAvatarSprite';
+import { useApp } from '../context/AppContext';
+import { UIHomeMedia } from './UIHomeMedia';
+import type { UIHomeCard } from '../types/dynamicUI';
 import { theme, createThemedStyles } from '../theme';
 import type { Offer, Business, OfferTemplateCanvas, OfferTemplateElement } from '../types/hyperlocal';
 
@@ -189,8 +192,11 @@ export const OfferCard: React.FC<{
   onSave?: () => void;
   saved?: boolean;
   compact?: boolean;
-  variant?: 'standard' | 'hero';
-}> = ({ offer, onPress, onSave, saved = false, compact, variant = 'standard' }) => {
+  variant?: 'standard' | 'hero' | 'discovery' | 'neighbourhood';
+  height?: number;
+  homeMedia?: UIHomeCard;
+}> = ({ offer, onPress, onSave, saved = false, compact, variant = 'standard', height, homeMedia }) => {
+  const { t } = useApp();
   const business = (offer.businessDocument || offer.business) as Business;
   const selectedAvatar = offer.cardDesign?.avatarId ? findOfferAvatar(offer.cardDesign.avatarId) : null;
   const titleOffsetX = Number(offer.cardDesign?.customizations?.titleOffsetX || 0);
@@ -201,15 +207,61 @@ export const OfferCard: React.FC<{
   // or discount, so it never gets the summary overlays.
   const isPoster = isPosterUploadOffer(offer);
 
+  // Discovery summarizes structured offers; uploaded posters keep their artwork.
+  // Detail and compact poster views continue to render the full saved canvas.
+  const discoveryPhoto = heroPhotoUrl || posterCanvas?.elements
+    .filter(element => element.type === 'image' && (element.field || element.key) !== 'businessLogo')
+    .map(element => posterImage(offer, element)).find(Boolean) || offer.cardDesign?.previewUrl;
+  if (variant === 'neighbourhood') {
+    return <Pressable accessibilityRole="button" accessibilityLabel={`${business?.name || offer.title}, ${offer.title}`} onPress={onPress}
+      style={({ pressed }) => [styles.neighbourhoodCard, { height: height ?? 116 }, pressed && styles.pressed]}>
+      <View style={styles.neighbourhoodPhotoWrap}>
+        {homeMedia && homeMedia.props.media !== 'none' ? <UIHomeMedia card={homeMedia} style={{ width: '100%', height: '100%' }} fallback={discoveryPhoto ? <Image source={{ uri: discoveryPhoto }} style={styles.neighbourhoodPhoto} resizeMode="cover" /> : <MaterialCommunityIcons name={heroIcon(offer.category)} size={28} color={theme.colors.primary} />} />
+          : discoveryPhoto ? <Image source={{ uri: discoveryPhoto }} style={styles.neighbourhoodPhoto} resizeMode="cover" /> : <MaterialCommunityIcons name={heroIcon(offer.category)} size={28} color={theme.colors.primary} />}
+      </View>
+      <View style={styles.neighbourhoodBody}>
+        <View style={styles.neighbourhoodCategory}><Text numberOfLines={1} style={styles.neighbourhoodCategoryText}>{offer.category}</Text></View>
+        <Text numberOfLines={1} style={styles.neighbourhoodTitle}>{business?.name || offer.title}</Text>
+        <Text numberOfLines={1} style={styles.neighbourhoodSubtitle}>{isPoster ? offer.title : `${Math.round(offer.discountPercentage)}% OFF`}</Text>
+        <View style={styles.neighbourhoodFooter}>
+          <MaterialCommunityIcons name="map-marker-outline" size={11} color={theme.colors.textSecondary} />
+          <Text numberOfLines={1} style={styles.neighbourhoodDistance}>{offer.distanceKm != null ? `${offer.distanceKm.toLocaleString('en-IN', { maximumFractionDigits: 1 })} km` : offer.locality}</Text>
+          <View style={styles.neighbourhoodArrow}><MaterialCommunityIcons name="chevron-right" size={15} color={theme.colors.text} /></View>
+        </View>
+      </View>
+      {onSave ? <Pressable accessibilityRole="button" accessibilityLabel={t(saved ? 'unsaveOffer' : 'saveOffer')} accessibilityState={{ selected: saved }}
+        hitSlop={5} onPress={event => { event.stopPropagation(); onSave(); }} style={styles.neighbourhoodSave}>
+        <MaterialCommunityIcons name={saved ? 'heart' : 'heart-outline'} size={15} color={saved ? theme.colors.danger : '#FFFFFF'} />
+      </Pressable> : null}
+    </Pressable>;
+  }
+  if (variant === 'discovery' && !isPoster) {
+    return <Pressable accessibilityRole="button" accessibilityLabel={offer.title} onPress={onPress}
+      style={({ pressed }) => [styles.discoveryCard, { height: height ?? 200 }, pressed && styles.pressed]}>
+      <View style={styles.discoveryPhotoWrap}>
+        {discoveryPhoto ? <Image source={{ uri: discoveryPhoto }} style={styles.discoveryPhoto} resizeMode="cover" />
+          : selectedAvatar ? <OfferAvatarSprite avatar={selectedAvatar} size={120} /> : <MaterialCommunityIcons name={heroIcon(offer.category)} size={50} color={theme.colors.primary} />}
+        <View style={styles.discoveryDiscount}><Text style={styles.discoveryDiscountText}>{Math.round(offer.discountPercentage)}% OFF</Text></View>
+      </View>
+      <View style={styles.discoveryBody}>
+        <Text numberOfLines={1} style={styles.discoveryEyebrow}>{offer.category}</Text>
+        <Text numberOfLines={1} style={styles.discoveryTitle}>{offer.title.replace(/\s+/g, ' ').trim()}</Text>
+        <View style={styles.discoveryPrices}><Text style={styles.discoveryPrice}>{`₹ ${offer.offerPrice.toLocaleString('en-IN')}`}</Text><Text style={styles.discoveryOriginal}>{`₹ ${offer.originalPrice.toLocaleString('en-IN')}`}</Text></View>
+        <View style={styles.discoveryFooter}><MaterialCommunityIcons name="storefront-outline" size={14} color={theme.colors.textSecondary} /><Text numberOfLines={1} style={styles.discoveryBusiness}>{business?.name || offer.locality || offer.category}</Text>{offer.distanceKm != null ? <><MaterialCommunityIcons name="map-marker-outline" size={11} color={theme.colors.textSecondary} /><Text style={styles.discoveryDistance}>{offer.distanceKm.toLocaleString('en-IN', { maximumFractionDigits: 1 })} km</Text></> : null}</View>
+      </View>
+      {onSave ? <Pressable accessibilityRole="button" accessibilityLabel={saved ? 'Unsave offer' : 'Save offer'} hitSlop={8} onPress={event => { event.stopPropagation(); onSave(); }} style={styles.discoverySave}><MaterialCommunityIcons name={saved ? 'heart' : 'heart-outline'} size={22} color={saved ? theme.colors.danger : '#FFFFFF'} /></Pressable> : null}
+    </Pressable>;
+  }
+
   const posterRatio = posterCanvas && posterCanvas.width > 0 && posterCanvas.height > 0
     ? posterCanvas.width / posterCanvas.height
     : 0;
 
   // The saved canvas is the user's poster. Fit it within the carousel slot;
   // never layer an unrelated offer summary over a finished template.
-  if (variant === 'hero' && ((posterCanvas && posterRatio > 0 && Array.isArray(posterCanvas.elements)) || (isPoster && offer.imageUrls?.[0]))) {
+  if ((variant === 'hero' || variant === 'discovery') && ((posterCanvas && posterRatio > 0 && Array.isArray(posterCanvas.elements)) || (isPoster && offer.imageUrls?.[0]))) {
     return (
-      <Pressable onPress={onPress} style={({ pressed }) => [styles.posterCard, { backgroundColor: posterCanvas?.background?.color || posterCanvas?.backgroundColor || '#071E20' }, compact && styles.posterCardCompact, pressed && styles.pressed]}>
+      <Pressable accessibilityRole="button" accessibilityLabel={offer.title} onPress={onPress} style={({ pressed }) => [styles.posterCard, { backgroundColor: posterCanvas?.background?.color || posterCanvas?.backgroundColor || '#071E20' }, compact && styles.posterCardCompact, height != null && { height }, pressed && styles.pressed]}>
         <PosterHeroArtwork offer={offer} canvas={posterCanvas} />
         {onSave ? <Pressable accessibilityRole="button" accessibilityLabel={saved ? 'Unsave offer' : 'Save offer'} hitSlop={8} onPress={(event) => { event.stopPropagation(); onSave(); }} style={[styles.posterSave, compact && styles.posterSaveCompact]}>
           <MaterialCommunityIcons name={saved ? 'heart' : 'heart-outline'} size={compact ? 17 : 21} color={saved ? theme.colors.danger : '#FFFFFF'} />
@@ -220,7 +272,7 @@ export const OfferCard: React.FC<{
 
   if (variant === 'hero') {
     return (
-      <Pressable onPress={onPress} style={({ pressed }) => [styles.heroCard, compact && styles.heroCardCompact, pressed && styles.pressed]}>
+      <Pressable accessibilityRole="button" accessibilityLabel={offer.title} onPress={onPress} style={({ pressed }) => [styles.heroCard, compact && styles.heroCardCompact, height != null && { height }, pressed && styles.pressed]}>
         <LinearGradient colors={heroPalette(offer)} style={[styles.heroGradient, compact && styles.heroGradientCompact]}>
           {heroPhotoUrl ? (
             <Image source={{ uri: heroPhotoUrl }} style={[styles.heroPhoto, compact && styles.heroPhotoCompact]} resizeMode="cover" />
@@ -310,6 +362,33 @@ export const OfferCard: React.FC<{
 };
 
 const styles = createThemedStyles((c) => ({
+  neighbourhoodCard: { borderRadius: 12, borderWidth: 1, borderColor: c.cardBorder, backgroundColor: c.surface, overflow: 'hidden', shadowColor: c.cardGlow, shadowOpacity: 0.65, shadowRadius: 3, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+  neighbourhoodPhotoWrap: { height: 53, backgroundColor: c.primaryLight, alignItems: 'center', justifyContent: 'center' },
+  neighbourhoodPhoto: { width: '100%', height: '100%' },
+  neighbourhoodBody: { flex: 1, paddingHorizontal: 6, paddingBottom: 5 },
+  neighbourhoodCategory: { alignSelf: 'flex-start', maxWidth: '100%', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 9, backgroundColor: c.primaryLight, marginTop: -7, marginBottom: 3 },
+  neighbourhoodCategoryText: { fontSize: 7, lineHeight: 10, color: c.primaryDark, fontWeight: '600' },
+  neighbourhoodTitle: { color: c.text, fontSize: 10, lineHeight: 14, fontWeight: '700' },
+  neighbourhoodSubtitle: { color: c.textSecondary, fontSize: 8, lineHeight: 12, marginTop: 1 },
+  neighbourhoodFooter: { flexDirection: 'row', alignItems: 'center', marginTop: 'auto', gap: 2 },
+  neighbourhoodDistance: { flex: 1, color: c.textSecondary, fontSize: 7, lineHeight: 11 },
+  neighbourhoodArrow: { width: 17, height: 17, borderRadius: 9, backgroundColor: c.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
+  neighbourhoodSave: { position: 'absolute', top: 4, right: 4, width: 21, height: 21, borderRadius: 11, backgroundColor: 'rgba(20,25,29,0.65)', alignItems: 'center', justifyContent: 'center' },
+  discoveryCard: { width: '100%', borderRadius: 14, borderWidth: 1, borderColor: c.cardBorder, backgroundColor: c.discoverySurface, overflow: 'hidden' },
+  discoveryPhotoWrap: { flex: 1, marginHorizontal: 25, position: 'relative', alignItems: 'center', justifyContent: 'center', backgroundColor: c.surfaceAlt, borderBottomLeftRadius: 7, borderBottomRightRadius: 7 },
+  discoveryPhoto: { width: '100%', height: '100%', borderBottomLeftRadius: 7, borderBottomRightRadius: 7 },
+  discoveryDiscount: { position: 'absolute', right: -7, bottom: 9, paddingHorizontal: 7, paddingVertical: 5, borderRadius: 9, backgroundColor: '#98345E' },
+  discoveryDiscountText: { color: '#FFFFFF', fontSize: 10, fontWeight: '800' },
+  discoveryBody: { paddingHorizontal: 12, paddingTop: 7, paddingBottom: 8, gap: 3 },
+  discoveryEyebrow: { color: '#AF5064', fontSize: 8, fontWeight: '700', letterSpacing: 0.5 },
+  discoveryTitle: { color: c.text, fontSize: 12, lineHeight: 16, fontWeight: '800' },
+  discoveryPrices: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  discoveryPrice: { color: c.primary, fontSize: 15, fontWeight: '800' },
+  discoveryOriginal: { color: c.textMuted, fontSize: 9, textDecorationLine: 'line-through' },
+  discoveryFooter: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  discoveryBusiness: { flex: 1, color: c.textSecondary, fontSize: 8 },
+  discoveryDistance: { color: c.textSecondary, fontSize: 8 },
+  discoverySave: { position: 'absolute', top: 7, right: 7, width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(25,25,25,0.62)' },
   pressed: { opacity: 0.9 },
   posterSurface: { flex: 1, width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }, posterBackground: { ...StyleSheet.absoluteFill }, posterText: { includeFontPadding: false, textAlignVertical: 'center' }, posterAvatar: { position: 'absolute', right: 12, bottom: 12, zIndex: 20 },
   posterCard: { width: '100%', height: 218, overflow: 'hidden', backgroundColor: c.surfaceAlt, borderRadius: 20, borderWidth: 1.5, borderColor: c.cardBorder, shadowColor: c.cardGlow, shadowOpacity: 1, shadowRadius: 14, shadowOffset: { width: 0, height: 5 }, elevation: 5 }, posterCardCompact: { width: '100%', height: 105, borderRadius: 16 },

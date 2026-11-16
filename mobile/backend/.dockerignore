@@ -1,0 +1,9 @@
+# Keep local credentials and host-installed dependencies out of image contexts.
+.env
+.env.*
+!.env.example
+node_modules
+.git
+*.log
+coverage
+dist

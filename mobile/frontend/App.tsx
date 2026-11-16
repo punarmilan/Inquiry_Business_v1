@@ -7,6 +7,8 @@ import { AppProvider } from './src/context/AppContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { BrandedLaunchScreen } from './src/components/BrandedLaunchScreen';
 import { ThemedStatusBar } from './src/components/ThemedStatusBar';
+import { UIConfigProvider } from './src/context/UIConfigProvider';
+import { DynamicThemeProvider } from './src/context/DynamicThemeProvider';
 
 const BRANDED_LAUNCH_DURATION_MS = 2400;
 
@@ -28,12 +30,16 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AppProvider>
-          <ThemedStatusBar hidden={showBrandedLaunch} forceLight={showBrandedLaunch} />
-          {showBrandedLaunch ? (
-            <BrandedLaunchScreen onReady={handleBrandedLaunchReady} />
-          ) : (
-            <RootNavigator />
-          )}
+          <UIConfigProvider>
+            <DynamicThemeProvider>
+              <ThemedStatusBar hidden={showBrandedLaunch} forceLight={showBrandedLaunch} />
+              {showBrandedLaunch ? (
+                <BrandedLaunchScreen onReady={handleBrandedLaunchReady} />
+              ) : (
+                <RootNavigator />
+              )}
+            </DynamicThemeProvider>
+          </UIConfigProvider>
         </AppProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

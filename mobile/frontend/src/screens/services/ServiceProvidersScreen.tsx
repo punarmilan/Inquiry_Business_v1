@@ -4,6 +4,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { DynamicRenderer } from '../../components/DynamicRenderer';
+import { useUIPage } from '../../hooks/useUIPage';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { listServiceProviders } from '../../services/api';
 import type { ServiceProvider } from '../../types/hyperlocal';
@@ -22,6 +24,7 @@ export const ServiceProvidersScreen: React.FC<Props> = ({ route, navigation }) =
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const appearance = useUIPage('serviceProviders');
   const insets = useSafeAreaInsets();
   const { cityId, categoryId, categoryName, locality } = route.params;
   const load = useCallback(async () => {
@@ -50,28 +53,30 @@ export const ServiceProvidersScreen: React.FC<Props> = ({ route, navigation }) =
   };
   const cooling = /\bac\b|air condition/i.test(categoryName);
 
-  return <ScreenContainer>
-    <ServiceHeader title={categoryName} subtitle={locality} onBack={navigation.goBack} compact plain />
-    <ServiceSearch value={search} onChangeText={setSearch} placeholder="Search providers" plain />
-    <FlatList data={visible} keyExtractor={(item) => item._id} contentContainerStyle={[styles.content, { paddingBottom: 90 + insets.bottom }]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" refreshing={loading} onRefresh={load}
+  return <ScreenContainer dynamicBackgroundColor={appearance.backgroundColor}>
+    <ServiceHeader iconColor={appearance.option('iconTone') !== 'default' ? appearance.iconColor : undefined} style={appearance.header} titleStyle={appearance.title} locationStyle={appearance.selector} title={categoryName} subtitle={locality} onBack={navigation.goBack} compact plain />
+    <ServiceSearch style={appearance.selector} value={search} onChangeText={setSearch} placeholder="Search providers" plain />
+    <FlatList data={visible} keyExtractor={(item) => item._id} contentContainerStyle={[styles.content, appearance.content, { paddingBottom: 90 + insets.bottom }]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" refreshing={loading} onRefresh={load}
       ListHeaderComponent={<>
+        <DynamicRenderer pageKey="serviceProviders" slot="beforeContent" />
         <View style={styles.banner}>
           <View style={styles.bannerIcon}><MaterialCommunityIcons name="shield-check-outline" size={26} color={theme.colors.text} /></View>
           <View style={styles.bannerCopy}><Text style={styles.bannerTitle}>{cooling ? 'Stay Cool, Stay Comfortable' : 'Find help, close to home'}</Text><Text style={styles.bannerText}>{cooling ? 'Local AC service professionals' : categoryName + ' providers'} in your area</Text></View>
         </View>
         {error ? <View style={ui.empty}><Text style={ui.emptyText}>{error}</Text><Pressable onPress={load} style={ui.pill}><Text style={ui.pillText}>Retry</Text></Pressable></View> : null}
       </>}
-      renderItem={({ item }) => <ProviderCard provider={item} categoryName={categoryName} locality={locality} onCall={() => void call(item)} onWhatsapp={() => void whatsapp(item)} onShare={() => void share(item)} />}
-      ListEmptyComponent={loading ? <ActivityIndicator color={colors.teal} style={{ marginTop: 30 }} /> : !error ? <View style={ui.empty}><MaterialCommunityIcons name="account-search-outline" size={46} color={colors.teal} /><Text style={styles.emptyTitle}>No provider found</Text><Text style={ui.emptyText}>{search ? 'Try another name or area.' : 'Providers for this service will appear here when added.'}</Text></View> : null}
+      renderItem={({ item }) => <ProviderCard appearance={appearance} provider={item} categoryName={categoryName} locality={locality} onCall={() => void call(item)} onWhatsapp={() => void whatsapp(item)} onShare={() => void share(item)} />}
+      ListFooterComponent={<DynamicRenderer pageKey="serviceProviders" slot="afterContent" />}
+      ListEmptyComponent={loading ? <ActivityIndicator color={colors.teal} style={{ marginTop: 30 }} /> : !error ? <View style={ui.empty}><MaterialCommunityIcons name="account-search-outline" size={46} color={colors.teal} /><Text style={styles.emptyTitle}>No provider found</Text><Text style={ui.emptyText}>{appearance.copy('emptyMessage', search ? 'Try another name or area.' : 'Providers for this service will appear here when added.')}</Text></View> : null}
     />
   </ScreenContainer>;
 };
 
-const ProviderCard = ({ provider, categoryName, locality, onCall, onWhatsapp, onShare }: { provider: ServiceProvider; categoryName: string; locality: string; onCall: () => void; onWhatsapp: () => void; onShare: () => void }) => {
+const ProviderCard = ({ provider, categoryName, locality, onCall, onWhatsapp, onShare, appearance }: { appearance: ReturnType<typeof useUIPage>; provider: ServiceProvider; categoryName: string; locality: string; onCall: () => void; onWhatsapp: () => void; onShare: () => void }) => {
   const initials = provider.name.split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0]).join('').toUpperCase();
   const rated = Number.isFinite(provider.ratingAverage) && provider.ratingCount > 0;
   const available = provider.availability === 'available';
-  return <View style={styles.card}>
+  return <View style={[styles.card, appearance.card, appearance.option('providerVariant') === 'compact' && { padding: 10 }]}>
     <View style={styles.identity}>
       <View>
         <ServiceImage uri={provider.photoUrl} style={styles.photo} fallback={<View style={[styles.photo, styles.initialsCircle]}><Text style={styles.initials}>{initials}</Text></View>} />

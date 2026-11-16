@@ -5,6 +5,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { DynamicRenderer } from '../../components/DynamicRenderer';
+import { useUIPage } from '../../hooks/useUIPage';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { CityPickerModal } from '../../components/CityPickerModal';
 import { useHyperlocalLocation } from '../../hooks/useHyperlocalLocation';
@@ -27,6 +29,7 @@ export const ServicesHomeScreen: React.FC<Props> = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [opening, setOpening] = useState('');
+  const appearance = useUIPage('servicesHome');
   const insets = useSafeAreaInsets();
   const { refreshStoredLocation } = locationState;
   const refresh = useCallback(async () => {
@@ -66,13 +69,14 @@ export const ServicesHomeScreen: React.FC<Props> = ({ navigation }) => {
     } catch { Alert.alert('Could not select area', 'Please try again.'); }
     finally { setOpening(''); }
   };
-  const card = (area: string, recent = false) => <AreaCard key={(recent ? 'recent-' : 'all-') + city?._id + area} area={area} city={city!} recent={recent} loading={opening === area} onPress={() => void openArea(area)} />;
+  const card = (area: string, recent = false) => <AreaCard key={(recent ? 'recent-' : 'all-') + city?._id + area} area={area} city={city!} recent={recent} appearance={appearance} loading={opening === area} onPress={() => void openArea(area)} />;
 
-  return <ScreenContainer backgroundColor={colors.background}>
-    <ServiceBackdrop />
-    <ServiceHeader title="Select Area" icon="crosshairs-gps" onAction={() => locationState.setPickerVisible(true)} />
-    <ServiceSearch value={search} onChangeText={setSearch} placeholder="Search by area, locality or city" />
-    {locationState.loadingLocation && !city ? <ActivityIndicator color={colors.teal} style={{ marginTop: 35 }} /> : <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 90 + insets.bottom }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.teal} colors={[colors.teal]} />} {...tabBarScrollProps}>
+  return <ScreenContainer backgroundColor={colors.background} dynamicBackgroundColor={appearance.backgroundColor}>
+    <ServiceBackdrop backgroundColor={appearance.backgroundColor} />
+    <ServiceHeader iconColor={appearance.option('iconTone') !== 'default' ? appearance.iconColor : undefined} style={appearance.header} titleStyle={appearance.title} locationStyle={appearance.selector} title="Select Area" icon="crosshairs-gps" onAction={() => locationState.setPickerVisible(true)} />
+    <ServiceSearch style={appearance.selector} value={search} onChangeText={setSearch} placeholder="Search by area, locality or city" />
+    {locationState.loadingLocation && !city ? <ActivityIndicator color={colors.teal} style={{ marginTop: 35 }} /> : <ScrollView contentContainerStyle={[styles.content, appearance.content, { paddingBottom: 90 + insets.bottom }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.teal} colors={[colors.teal]} />} {...tabBarScrollProps}>
+      <DynamicRenderer pageKey="servicesHome" slot="beforeContent" />
       {error ? <Text style={ui.emptyText}>{error}</Text> : null}
       {city && recentAreas.length > 0 ? <>
         <View style={styles.sectionRow}><Text style={ui.sectionTitle}>Recent</Text><Pressable accessibilityRole="button" onPress={() => setShowAllRecent(!showAllRecent)} style={ui.pill}><Text style={ui.pillText}>{showAllRecent ? 'Show less' : 'See all'}</Text><MaterialCommunityIcons name={showAllRecent ? 'chevron-up' : 'chevron-right'} size={20} color={colors.darkTeal} /></Pressable></View>
@@ -80,15 +84,16 @@ export const ServicesHomeScreen: React.FC<Props> = ({ navigation }) => {
       </> : null}
       <View style={[styles.sectionRow, recentAreas.length > 0 && { marginTop: 10 }]}><Text style={ui.sectionTitle}>All</Text><Pressable accessibilityRole="button" accessibilityLabel={descending ? 'Sort areas A to Z' : 'Sort areas Z to A'} style={ui.pill} onPress={() => setDescending(!descending)}><MaterialCommunityIcons name="sort-alphabetical-ascending" size={19} color={colors.darkTeal} /><Text style={ui.pillText}>{descending ? 'Sort Z–A' : 'Sort A–Z'}</Text></Pressable></View>
       {city ? visibleAreas.map((area) => card(area)) : null}
-      {!visibleAreas.length ? <View style={ui.empty}><MaterialCommunityIcons name="map-marker-off-outline" size={42} color={colors.teal} /><Text style={ui.emptyText}>{city ? 'No areas match your search.' : 'Choose a city to view service areas.'}</Text>{!city ? <Pressable style={ui.pill} onPress={() => locationState.setPickerVisible(true)}><Text style={ui.pillText}>Choose city</Text></Pressable> : null}</View> : null}
+      {!visibleAreas.length ? <View style={ui.empty}><MaterialCommunityIcons name="map-marker-off-outline" size={42} color={colors.teal} /><Text style={ui.emptyText}>{appearance.copy('emptyMessage', city ? 'No areas match your search.' : 'Choose a city to view service areas.')}</Text>{!city ? <Pressable style={ui.pill} onPress={() => locationState.setPickerVisible(true)}><Text style={ui.pillText}>Choose city</Text></Pressable> : null}</View> : null}
+      <DynamicRenderer pageKey="servicesHome" slot="afterContent" />
     </ScrollView>}
     <CityPickerModal visible={locationState.pickerVisible} cities={cities.filter((item) => item.servicesEnabled)} onSelect={async (nextCity, locality) => { await locationState.chooseManual(nextCity, locality); setSearch(''); setShowAllRecent(false); }} onUseCurrentLocation={() => locationState.detect({ force: true })} currentLocationLoading={locationState.loadingLocation} currentLocationError={locationState.locationError} onClose={() => locationState.setPickerVisible(false)} />
   </ScreenContainer>;
 };
 
-const AreaCard = ({ area, city, recent, loading, onPress }: { area: string; city: City; recent: boolean; loading: boolean; onPress: () => void }) => {
+const AreaCard = ({ area, city, recent, loading, onPress, appearance }: { appearance: ReturnType<typeof useUIPage>; area: string; city: City; recent: boolean; loading: boolean; onPress: () => void }) => {
   const uri = city.localityImages?.find((item) => normalize(item.name) === normalize(area))?.imageUrl;
-  return <Pressable accessibilityRole="button" accessibilityLabel={'View services in ' + area + ', ' + city.name} onPress={onPress} disabled={loading} style={({ pressed }) => [styles.card, ui.shadow, pressed && ui.pressed]}>
+  return <Pressable accessibilityRole="button" accessibilityLabel={'View services in ' + area + ', ' + city.name} onPress={onPress} disabled={loading} style={({ pressed }) => [styles.card, ui.shadow, appearance.card, pressed && ui.pressed]}>
     <View style={[styles.cardClip, recent && { aspectRatio: 2.4 }]}>
       <ServiceImage uri={uri} style={StyleSheet.absoluteFill} fallback={<LinearGradient colors={['#C3EDF1', '#73BFC8', '#347681']} style={[StyleSheet.absoluteFill, styles.placeholder]}><MaterialCommunityIcons name="city-variant-outline" size={112} color="#E3F6F4" /></LinearGradient>} />
       <LinearGradient colors={['transparent', 'rgba(5,40,48,0.12)', 'rgba(4,39,45,0.9)']} locations={[0, 0.4, 1]} style={StyleSheet.absoluteFill} />

@@ -5,6 +5,9 @@ const Worker = require('../models/Worker');
 const ApiError = require('../utils/ApiError');
 const loadExcelWorkbook = require('../utils/loadExcelWorkbook');
 const { workerCreate } = require('../validators/hyperlocal.validator');
+const { createImportLocations } = require('./providerImportLocations');
+const { resolveCityLocation: defaultResolveCityLocation } = require('./cityGeocodingService');
+const { Types } = require('mongoose');
 
 const HEADERS = ['Provider Name', 'Phone', 'WhatsApp', 'City / Location', 'Service Categories', 'Service Areas'];
 const REQUIRED_HEADERS = ['Provider Name', 'Phone', 'City / Location', 'Service Categories'];
@@ -81,18 +84,21 @@ const matchName = (index, name, label) => {
   return matches[0];
 };
 
-const createProviderImporter = ({ CityModel = City, CategoryModel = ServiceCategory, WorkerModel = Worker } = {}) => async (buffer) => {
+const createProviderImporter = ({ CityModel = City, CategoryModel = ServiceCategory, WorkerModel = Worker, resolveCityLocation = defaultResolveCityLocation } = {}) => async (buffer) => {
   // Validate the workbook shape/row limit before any database writes.
   const inputRows = await readProviderWorkbook(buffer);
   const [cities, categories] = await Promise.all([
-    CityModel.find({ isActive: true, servicesEnabled: true }).select('_id name state slug').lean(),
+    CityModel.find({}).select('_id name state slug center localities isActive servicesEnabled').lean(),
     CategoryModel.find({ isActive: true }).select('_id name slug cityAvailability').lean(),
   ]);
-  const cityIndex = nameIndex(cities, (city) => [city.name, city.slug, city.state ? `${city.name}, ${city.state}` : '']);
+  const locations = createImportLocations({ cities, CityModel, resolveCityLocation });
   const categoryIndex = nameIndex(categories, (category) => [category.name, category.slug]);
   const rows = [];
+  const candidates = [];
   const prepared = [];
   const seenPhones = new Set();
+  let citiesCreated = 0;
+  let areasCreated = 0;
   inputRows.forEach((entry) => {
     const values = entry.values;
     const result = { rowNumber: entry.rowNumber, name: values['Provider Name'] || '', phone: values.Phone || '', status: 'error', message: '' };
@@ -100,15 +106,13 @@ const createProviderImporter = ({ CityModel = City, CategoryModel = ServiceCateg
     try {
       if (entry.error) throw new Error(entry.error);
       for (const header of REQUIRED_HEADERS) if (!values[header]) throw new Error(`${header} is required.`);
-      const city = matchName(cityIndex, values['City / Location'], 'City');
+      if (values['City / Location'].length > 200) throw new Error('City / Location must contain a city name, optionally followed by its state, up to 200 characters.');
       const categoryNames = categoryIndex.has(normalise(values['Service Categories'])) ? [values['Service Categories']] : splitValues(values['Service Categories']);
       const matchedCategories = categoryNames.map((name) => matchName(categoryIndex, name, 'Category'));
-      for (const category of matchedCategories) {
-        if (category.cityAvailability?.length && !category.cityAvailability.some((id) => String(id) === String(city._id))) throw new Error(`Category "${category.name}" is not available in ${city.name}.`);
-      }
       const payload = {
         name: values['Provider Name'], phone: normalisePhone(values.Phone), whatsapp: values.WhatsApp ? normalisePhone(values.WhatsApp) : '',
-        cityId: String(city._id), categoryIds: [...new Set(matchedCategories.map((category) => String(category._id)))],
+        // Validate contact/category/area fields before geocoding or creating locations.
+        cityId: String(new Types.ObjectId()), categoryIds: [...new Set(matchedCategories.map((category) => String(category._id)))],
         serviceAreas: splitValues(values['Service Areas']),
       };
       const { error } = workerCreate.extract('body').validate(payload, { abortEarly: false });
@@ -124,28 +128,55 @@ const createProviderImporter = ({ CityModel = City, CategoryModel = ServiceCateg
       }
       result.name = payload.name;
       result.phone = payload.phone;
+      candidates.push({ result, payload, matchedCategories, cityName: values['City / Location'] });
+    } catch (error) { result.message = error.message; }
+  });
+
+  // Existing providers are skipped before location creation. Re-uploading a
+  // workbook cannot create unused cities/areas for duplicate phone numbers.
+  const aliases = [...new Set(candidates.flatMap(({ payload }) => phoneAliases(payload.phone)))];
+  const existing = aliases.length ? await WorkerModel.find({ phone: { $in: aliases } }).select('phone').lean() : [];
+  const existingPhones = new Set(existing.map((worker) => normalisePhone(worker.phone)));
+  for (const { result, payload, matchedCategories, cityName } of candidates) {
+    try {
+      if (existingPhones.has(payload.phone)) {
+        Object.assign(result, { status: 'skipped', message: 'A provider with this phone number already exists; no changes made.' });
+        continue;
+      }
       if (seenPhones.has(payload.phone)) {
         Object.assign(result, { status: 'skipped', message: 'Duplicate phone number in this workbook.' });
-        return;
+        continue;
+      }
+      const city = await locations.resolve(cityName);
+      for (const category of matchedCategories) {
+        if (category.cityAvailability?.length && !category.cityAvailability.some((id) => String(id) === String(city._id))) throw new Error(`Category "${category.name}" is not available in ${city.name}.`);
       }
       seenPhones.add(payload.phone);
-      prepared.push({ result, document: {
+      prepared.push({ result, city, document: {
         name: payload.name, phone: payload.phone, whatsapp: payload.whatsapp, city: city._id,
         categories: matchedCategories.filter((category, index, all) => all.findIndex((item) => String(item._id) === String(category._id)) === index).map((category) => category._id),
         serviceAreas: payload.serviceAreas, availability: 'available', isActive: true, verificationStatus: 'verified',
       } });
     } catch (error) { result.message = error.message; }
-  });
+  }
 
   if (prepared.length) {
-    const aliases = [...new Set(prepared.flatMap(({ document }) => phoneAliases(document.phone)))];
-    const existing = await WorkerModel.find({ phone: { $in: aliases } }).select('phone').lean();
-    const existingPhones = new Set(existing.map((worker) => normalisePhone(worker.phone)));
-    const inserts = prepared.filter(({ result, document }) => {
-      if (!existingPhones.has(document.phone)) return true;
-      Object.assign(result, { status: 'skipped', message: 'A provider with this phone number already exists; no changes made.' });
-      return false;
+    const groups = new Map();
+    prepared.forEach((entry) => {
+      const key = String(entry.city._id);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(entry);
     });
+    const inserts = [];
+    for (const entries of groups.values()) {
+      try {
+        const saved = await locations.save(entries[0].city, entries.flatMap((entry) => entry.document.serviceAreas));
+        citiesCreated += saved.citiesCreated;
+        areasCreated += saved.areasCreated;
+        entries.forEach((entry) => { entry.document.city = saved.city._id; });
+        inserts.push(...entries);
+      } catch (error) { entries.forEach(({ result }) => { result.message = error.message || 'Could not create city or areas. Try again.'; }); }
+    }
     if (inserts.length) {
       const now = new Date();
       const operations = inserts.map(({ document }) => ({ updateOne: {
@@ -155,7 +186,7 @@ const createProviderImporter = ({ CityModel = City, CategoryModel = ServiceCateg
       let writeErrors = [];
       try { outcome = await WorkerModel.bulkWrite(operations, { ordered: false, timestamps: false }); }
       catch (error) {
-        if (!error.result || !error.writeErrors?.length || error.writeConcernErrors?.length) throw new ApiError(503, 'Import was interrupted. Some providers may have been added. Upload the file again; existing phone numbers will be skipped.', 'IMPORT_INTERRUPTED');
+        if (!error.result || !error.writeErrors?.length || error.writeConcernErrors?.length) throw new ApiError(503, 'Import was interrupted. Some providers or locations may have been added. Upload the file again; existing phone numbers will be skipped.', 'IMPORT_INTERRUPTED');
         outcome = error.result;
         writeErrors = error.writeErrors;
       }
@@ -169,7 +200,7 @@ const createProviderImporter = ({ CityModel = City, CategoryModel = ServiceCateg
       });
     }
   }
-  return { total: rows.length, created: rows.filter((row) => row.status === 'created').length, skipped: rows.filter((row) => row.status === 'skipped').length, failed: rows.filter((row) => row.status === 'error').length, rows };
+  return { total: rows.length, created: rows.filter((row) => row.status === 'created').length, skipped: rows.filter((row) => row.status === 'skipped').length, failed: rows.filter((row) => row.status === 'error').length, citiesCreated, areasCreated, rows };
 };
 
 const createProviderTemplate = async () => {

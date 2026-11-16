@@ -33,6 +33,18 @@ const isRateLimitDisabled = (nodeEnv, flag) => nodeEnv !== 'production' && flag 
 
 const nodeEnv = process.env.NODE_ENV || 'development';
 
+if (nodeEnv === 'production') {
+  for (const name of ['JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET', 'OTP_PEPPER']) {
+    const value = process.env[name]?.trim();
+    if (!value || value.length < 32 || /^(?:dev-|test-)|change[-_ ]?me|placeholder/i.test(value)) {
+      throw new Error(`Production requires a non-development ${name} of at least 32 characters`);
+    }
+  }
+  if (process.env.JWT_ACCESS_SECRET === process.env.JWT_REFRESH_SECRET) {
+    throw new Error('Production access and refresh signing secrets must be distinct');
+  }
+}
+
 module.exports = {
   nodeEnv,
   port: toNumber(process.env.PORT, 5000),

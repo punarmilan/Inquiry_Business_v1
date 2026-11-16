@@ -1,40 +1,35 @@
-import { useEffect, useState } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
-import { X } from '@phosphor-icons/react';
+import { useEffect } from 'react';
+import { Link, Outlet, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { Sidebar, SidebarContent } from './Sidebar';
 import { Topbar } from './Topbar';
+import { AdminNavigation } from './AdminNavigation';
+import { navItems } from './navigation';
 
 export const AppShell = () => {
-  const [navOpen, setNavOpen] = useState(false);
   const { pathname } = useLocation();
-  const wide = pathname === '/';
-
-  useEffect(() => setNavOpen(false), [pathname]);
+  const wide = pathname === '/' || pathname.startsWith('/ui/');
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    const item = navItems.find(item => pathname === item.to || (!item.end && pathname.startsWith(`${item.to}/`)));
+    document.title = `${item?.label || 'Admin'} · InquiryExperts Admin`;
+  }, [pathname]);
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-background">
-      <Sidebar />
-
-      {navOpen ? (
-        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
-          <button type="button" className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" onClick={() => setNavOpen(false)} aria-label="Close navigation" />
-          <div className="absolute inset-y-0 left-0 w-[280px] max-w-[85vw] border-r bg-card shadow-2xl">
-            <button type="button" onClick={() => setNavOpen(false)} className="absolute right-3 top-5 flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted" aria-label="Close navigation">
-              <X className="h-5 w-5" />
-            </button>
-            <SidebarContent onNavigate={() => setNavOpen(false)} />
-          </div>
+    <div className="flex min-h-screen w-full flex-col bg-background text-foreground">
+      <Topbar />
+      <div className="flex min-w-0 flex-1 items-start">
+        <aside aria-label="Sidebar" className="sticky top-[72px] hidden h-[calc(100dvh-72px)] w-60 shrink-0 flex-col border-r bg-card lg:flex">
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-5"><AdminNavigation /></div>
+          <Link to="/app-content" className="m-3 rounded-lg border bg-background p-3 text-xs leading-5 text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <span className="block font-semibold text-foreground">Changing the app home?</span>
+            Start with App content →
+          </Link>
+        </aside>
+      <main id="main-content" className="min-w-0 flex-1">
+        <div className={cn('mx-auto w-full px-4 sm:px-6 lg:px-8 py-6', wide ? 'max-w-[1720px]' : 'max-w-7xl')}>
+          <Outlet />
         </div>
-      ) : null}
-
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <Topbar onMenuClick={() => setNavOpen(true)} />
-        <main className="flex-1 overflow-y-auto">
-          <div className={cn('mx-auto w-full px-4 sm:px-6', wide ? 'max-w-[1680px] pb-6 pt-4' : 'max-w-7xl py-5 lg:px-8')}>
-            <Outlet />
-          </div>
-        </main>
+      </main>
       </div>
     </div>
   );

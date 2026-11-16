@@ -20,10 +20,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { theme, createThemedStyles } from '../../theme';
+import { DynamicRenderer } from '../../components/DynamicRenderer';
+import { useUIPage } from '../../hooks/useUIPage';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { GoogleMark } from '../../components/GoogleMark';
 import { useApp } from '../../context/AppContext';
 import { AuthStackParamList } from '../../navigation/types';
+import { uiIllustration } from '../../utils/uiIllustrations';
 import { signInWithGoogle } from '../../services/socialAuth';
 import { isValidIndianPhoneDigits, sanitizeIndianPhoneInput } from '../../utils/phoneValidation';
 import { ApiRequestError } from '../../services/api';
@@ -48,6 +51,8 @@ const authErrorMessage = (error: unknown, fallback: string) => {
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
+  const appearance = useUIPage('login');
+  const themedForm = appearance.option('cardVariant') !== 'default';
   const {
     t,
     language,
@@ -302,12 +307,12 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   return (
-    <ScreenContainer backgroundColor={theme.colors.background}>
+    <ScreenContainer backgroundColor={theme.colors.background} dynamicBackgroundColor={appearance.backgroundColor}>
       <ImageBackground
-        source={LOGIN_BACKGROUND}
+        source={uiIllustration(appearance.option('backgroundArtwork')) || LOGIN_BACKGROUND}
         resizeMode="cover"
-        style={baseStyles.flex}
-        imageStyle={styles.backgroundImage}
+        style={[baseStyles.flex, appearance.backgroundColor && { backgroundColor: appearance.backgroundColor }]}
+        imageStyle={[styles.backgroundImage, appearance.backgroundColor && { opacity: 0 }]}
       >
         <View style={styles.softOverlay} />
 
@@ -353,15 +358,17 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
             </Pressable>
           </View>
 
-          <View style={styles.locationCard} pointerEvents="none">
+          <View style={[styles.locationCard, appearance.header]}>
+            {appearance.hasSections ? <View style={appearance.content}><DynamicRenderer pageKey="login" slot="beforeContent" bounded /><DynamicRenderer pageKey="login" slot="afterContent" bounded /></View> : <>
             <MaterialCommunityIcons
               name="map-marker"
               size={styles.metrics.locationIcon}
-              color="#07978F"
+              color={appearance.option('iconTone') !== 'default' ? appearance.iconColor : '#07978F'}
             />
-            <Text style={styles.locationText}>
+            <Text style={[styles.locationText, appearance.title]}>
               Same{`\n`}neighbourhood.{`\n`}More{`\n`}possibilities.
             </Text>
+            </>}
           </View>
 
           {/* Error is kept outside the form so it never expands the no-scroll card. */}
@@ -390,7 +397,7 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
               { transform: [{ translateY: keyboardTranslateY }] },
             ]}
           >
-            <View style={styles.glassCard}>
+            <View style={[styles.glassCard, appearance.card, appearance.option('formVariant') === 'outlined' && { borderWidth: 1, borderColor: theme.colors.primary }]}>
               {/* Phone / Email segmented control */}
               <View style={styles.segmentOuter}>
                 <ModeTab
@@ -549,7 +556,7 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
                       />
                     )}
                   </View>
-                  <Text style={styles.optionText}>Login with OTP instead</Text>
+                  <Text style={[styles.optionText, themedForm && { color: theme.colors.primary }]}>Login with OTP instead</Text>
                 </Pressable>
 
                 <Pressable
@@ -558,7 +565,7 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
                   hitSlop={8}
                   style={({ pressed }) => pressed && baseStyles.pressed}
                 >
-                  <Text style={styles.forgotText}>Forgot password?</Text>
+                  <Text style={[styles.forgotText, themedForm && { color: theme.colors.primary }]}>Forgot password?</Text>
                 </Pressable>
               </View>
 
@@ -604,20 +611,20 @@ export const PhoneEntryScreen: React.FC<Props> = ({ navigation }) => {
 
               {/* Register */}
               <View style={styles.registerRow}>
-                <Text style={styles.registerMuted}>Don't have an account? </Text>
+                <Text style={[styles.registerMuted, themedForm && { color: theme.colors.textSecondary }]}>Don't have an account? </Text>
                 <Pressable
                   accessibilityRole="button"
                   hitSlop={8}
                   onPress={goToProfileSetup}
                 >
-                  <Text style={styles.registerLink}>Register</Text>
+                  <Text style={[styles.registerLink, themedForm && { color: theme.colors.primary }]}>Register</Text>
                 </Pressable>
               </View>
 
               {/* Divider */}
               <View style={styles.dividerRow}>
                 <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>Or continue with</Text>
+                <Text style={[styles.dividerText, themedForm && { color: theme.colors.textSecondary }]}>Or continue with</Text>
                 <View style={styles.dividerLine} />
               </View>
 

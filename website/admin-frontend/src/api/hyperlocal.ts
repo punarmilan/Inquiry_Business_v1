@@ -56,6 +56,8 @@ export interface ProviderImportResult {
   created: number;
   skipped: number;
   failed: number;
+  citiesCreated: number;
+  areasCreated: number;
   rows: { rowNumber: number; name: string; phone: string; status: 'created' | 'skipped' | 'error'; message: string }[];
 }
 export const importWorkers = (file: File) => {

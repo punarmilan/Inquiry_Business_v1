@@ -12,6 +12,7 @@ const walletTransactionRoutes = require('./walletTransactionRoutes');
 const pricingRoutes = require('./pricingRoutes');
 const adRoutes = require('./adRoutes');
 const hyperlocalRoutes = require('./hyperlocalRoutes');
+const uiRoutes = require('./uiRoutes');
 
 const router = express.Router();
 
@@ -28,5 +29,6 @@ router.use('/wallet', walletTransactionRoutes);
 router.use('/pricing', pricingRoutes);
 router.use('/ads', adRoutes);
 router.use('/hyperlocal', hyperlocalRoutes);
+router.use('/ui', uiRoutes);
 
 module.exports = router;

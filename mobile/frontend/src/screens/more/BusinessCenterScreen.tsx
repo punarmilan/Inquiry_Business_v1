@@ -4,6 +4,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button } from '../../components/Button';
+import { DynamicRenderer } from '../../components/DynamicRenderer';
+import { useUIPage } from '../../hooks/useUIPage';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { useApp } from '../../context/AppContext';
 import type { MoreStackParamList } from '../../navigation/types';
@@ -40,6 +42,7 @@ const hasActivePlan = (business: Business) => Boolean(
 );
 
 export const BusinessCenterScreen: React.FC<Props> = ({ navigation }) => {
+  const appearance = useUIPage('businessCenter');
   const { businesses, businessAccessLoading, refreshBusinesses } = useApp();
 
   useFocusEffect(
@@ -51,21 +54,22 @@ export const BusinessCenterScreen: React.FC<Props> = ({ navigation }) => {
   const openBusiness = (business: Business) => navigation.navigate('BusinessSetup', { businessId: business._id });
 
   return (
-    <ScreenContainer>
-      <View style={styles.top}>
+    <ScreenContainer dynamicBackgroundColor={appearance.backgroundColor}>
+      <View style={[styles.top, appearance.header]}>
         <Pressable onPress={navigation.goBack} style={styles.back} accessibilityRole="button" accessibilityLabel="Go back">
-          <MaterialCommunityIcons name="arrow-left" size={24} color={theme.colors.text} />
+          <MaterialCommunityIcons name="arrow-left" size={24} color={appearance.iconColor} />
         </Pressable>
         <View style={styles.flex}>
-          <Text style={styles.title}>Business Center</Text>
+          <Text style={[styles.title, appearance.title]}>Business Center</Text>
           <Text style={styles.subtitle}>Promote your business to nearby customers</Text>
         </View>
       </View>
 
       <ScrollView
         refreshControl={<RefreshControl refreshing={businessAccessLoading} onRefresh={refreshBusinesses} colors={[theme.colors.primary]} />}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, appearance.content, appearance.option('dashboardVariant') === 'compact' && { gap: 8, padding: 10 }]}
       >
+        <DynamicRenderer pageKey="businessCenter" slot="beforeContent" />
         <View style={styles.hero}>
           <View style={styles.heroIcon}>
             <MaterialCommunityIcons name="storefront-outline" size={35} color={theme.colors.textInverse} />
@@ -77,7 +81,7 @@ export const BusinessCenterScreen: React.FC<Props> = ({ navigation }) => {
         </View>
 
         <Text style={styles.sectionTitle}>How it works</Text>
-        <View style={styles.stepsCard}>
+        <View style={[styles.stepsCard, appearance.card]}>
           {steps.map((step, index) => (
             <View key={step.title} style={[styles.step, index === steps.length - 1 && styles.stepLast]}>
               <View style={styles.stepIcon}><MaterialCommunityIcons name={step.icon} size={22} color={theme.colors.primary} /></View>
@@ -96,14 +100,14 @@ export const BusinessCenterScreen: React.FC<Props> = ({ navigation }) => {
               const approved = business.verificationStatus === 'verified';
               const activePlan = hasActivePlan(business);
               return (
-                <View key={business._id} style={styles.businessCard}>
+                <View key={business._id} style={[styles.businessCard, appearance.card]}>
                   <View style={styles.businessHeader}>
                     <View style={styles.businessIcon}><MaterialCommunityIcons name="storefront-outline" size={24} color={theme.colors.primary} /></View>
                     <View style={styles.flex}>
                       <Text style={styles.businessName}>{business.name}</Text>
                       <Text style={styles.businessCategory}>{business.category}</Text>
                     </View>
-                    <Text style={[styles.status, { color: statusColor(business) }]}>{statusText(business)}</Text>
+                    <Text style={[styles.status, appearance.option('statusVariant') === 'outlined' && { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 8, padding: 6 }, { color: statusColor(business) }]}>{statusText(business)}</Text>
                   </View>
 
                   {business.verificationStatus === 'pending' ? (
@@ -134,7 +138,7 @@ export const BusinessCenterScreen: React.FC<Props> = ({ navigation }) => {
             <Button label="Add another business" variant="outline" onPress={() => navigation.navigate('BusinessSetup')} fullWidth />
           </>
         ) : (
-          <View style={styles.startCard}>
+          <View style={[styles.startCard, appearance.card]}>
             <MaterialCommunityIcons name="rocket-launch-outline" size={30} color={theme.colors.primary} />
             <Text style={styles.startTitle}>Ready to get started?</Text>
             <Text style={styles.startText}>Register your business using your existing InquiryExperts account. No separate account is needed.</Text>
@@ -146,6 +150,7 @@ export const BusinessCenterScreen: React.FC<Props> = ({ navigation }) => {
           <MaterialCommunityIcons name="information-outline" size={21} color={theme.colors.secondary} />
           <Text style={styles.infoText}>The Post option appears in the bottom bar only after your business profile is approved by admin.</Text>
         </View>
+        <DynamicRenderer pageKey="businessCenter" slot="afterContent" />
       </ScrollView>
     </ScreenContainer>
   );

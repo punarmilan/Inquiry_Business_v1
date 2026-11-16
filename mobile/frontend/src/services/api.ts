@@ -24,6 +24,8 @@ import type {
 } from '../types/hyperlocal';
 import type { OfferCardDesign } from '../config/offerCardDesigner';
 import type { OfferSticker } from '../config/offerStickers';
+import type { UIRuntimeFetchOptions, UIRuntimeHTTPResponse } from '../types/dynamicUI';
+import { UI_RENDERER_VERSION } from '../types/dynamicUI';
 
 const API_PORT = 5000;
 
@@ -45,7 +47,18 @@ const parseHostUri = (hostUri: string) => {
 
 const deriveApiBaseUrl = (): string => {
   const explicitApiBaseUrl = (Constants.expoConfig as any)?.extra?.apiBaseUrl;
-  if (explicitApiBaseUrl) return explicitApiBaseUrl;
+  if (typeof explicitApiBaseUrl === 'string') {
+    try {
+      const url = new URL(explicitApiBaseUrl);
+      const local = /^(?:localhost|127\.|0\.0\.0\.0$|\[?::1\]?$|10\.|192\.168\.|169\.254\.|172\.(?:1[6-9]|2\d|3[01])\.)/i.test(url.hostname);
+      if (!url.username && !url.password && !url.search && !url.hash
+        && (url.protocol === 'https:' || (__DEV__ && url.protocol === 'http:')) && (__DEV__ || !local)) {
+        return url.toString().replace(/\/$/, '');
+      }
+    } catch { /* An invalid origin must not redirect authenticated requests. */ }
+  }
+  // Release bundles must never discover an API from stale Metro/LAN metadata.
+  if (!__DEV__) return FALLBACK_API_BASE_URL;
 
   const hostUri =
     Constants.expoConfig?.hostUri ||
@@ -148,6 +161,44 @@ export const setRequestLifecycleHandlers = (handlers: {
 // Lets a caller read back whatever the current pair is after an await, in case a silent
 // refresh (see refreshAccessToken below) rotated it mid-request.
 export const getAuthTokens = () => currentTokens;
+
+/** Public UI metadata transport. Deliberately bypasses auth refresh/loading hooks
+ * and the JSON-only request path, because HTTP 304 has no JSON response body. */
+export async function fetchUIRuntime({ locale, cityId, etag, signal, timeoutMs = 8000 }: UIRuntimeFetchOptions): Promise<UIRuntimeHTTPResponse> {
+  if (etag && !/^(?:W\/)?"[^"\r\n]{1,256}"$/.test(etag)) throw new ApiRequestError(0, 'Invalid UI cache validator', 'UI_RUNTIME_INVALID');
+  if (signal?.aborted) throw new ApiRequestError(0, 'UI request aborted', 'UI_RUNTIME_ABORTED');
+  const controller = new AbortController();
+  let rejectAbort: (error: Error) => void = () => undefined;
+  const aborted = new Promise<never>((_resolve, reject) => { rejectAbort = reject; });
+  const abort = () => { controller.abort(); rejectAbort(new ApiRequestError(0, 'UI request aborted', 'UI_RUNTIME_ABORTED')); };
+  signal?.addEventListener('abort', abort);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const operation = async (): Promise<UIRuntimeHTTPResponse> => {
+      const init: RequestInit = { method: 'GET', cache: 'no-cache', signal: controller.signal, headers: { Accept: 'application/json', ...(etag ? { 'If-None-Match': etag } : {}) } };
+      let response: Response;
+      try { response = await fetch(buildUrl(useLocalhostFallback ? LOCALHOST_API_BASE_URL : API_BASE_URL, '/ui/runtime', { rendererVersion: UI_RENDERER_VERSION, locale, campaignVersion: 1, cityId }), init); }
+      catch (error) {
+        if (!isLanDevHost || useLocalhostFallback || controller.signal.aborted) throw error;
+        response = await fetch(buildUrl(LOCALHOST_API_BASE_URL, '/ui/runtime', { rendererVersion: UI_RENDERER_VERSION, locale, campaignVersion: 1, cityId }), init);
+      }
+      const age = Number(response.headers.get('Age'));
+      const metadata = { etag: response.headers.get('ETag'), serverDate: response.headers.get('Date'), serverAgeMs: Number.isFinite(age) && age >= 0 ? age * 1000 : 0 };
+      if (response.status === 304) return { status: 304, ...metadata };
+      if (response.status !== 200) throw new ApiRequestError(response.status, 'UI configuration is unavailable', 'UI_RUNTIME_HTTP_ERROR');
+      if (Number(response.headers.get('Content-Length')) > 256 * 1024) throw new ApiRequestError(0, 'UI response is too large', 'UI_RUNTIME_INVALID');
+      const text = await response.text();
+      if (text.length > 256 * 1024) throw new ApiRequestError(0, 'UI response is too large', 'UI_RUNTIME_INVALID');
+      return { status: 200, body: JSON.parse(text), ...metadata };
+    };
+    return await Promise.race([operation(), aborted, new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => { controller.abort(); reject(new ApiRequestError(0, 'UI request timed out', 'UI_RUNTIME_TIMEOUT')); }, timeoutMs);
+    })]);
+  } finally {
+    if (timer) clearTimeout(timer);
+    signal?.removeEventListener('abort', abort);
+  }
+}
 
 const buildUrl = (base: string, path: string, query?: RequestOptions['query']) => `${base}${path}${toQueryString(query)}`;
 

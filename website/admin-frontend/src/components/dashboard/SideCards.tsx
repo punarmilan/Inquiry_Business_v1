@@ -14,6 +14,7 @@ import {
   User,
   Users,
   Lightning,
+  House,
   type IconProps,
 } from '@phosphor-icons/react';
 import type { ForwardRefExoticComponent, RefAttributes } from 'react';
@@ -102,6 +103,8 @@ export const SupportBanner = () => (
 );
 
 const QUICK_ACTIONS: { label: string; to: string; icon: PhosphorIcon; tone: string }[] = [
+  { label: 'App content', to: '/app-content', icon: House, tone: 'text-primary' },
+  { label: 'Trending offers', to: '/home-showcase', icon: Ticket, tone: 'text-primary' },
   { label: 'Add City', to: '/cities', icon: MapPin, tone: 'text-emerald-600 dark:text-emerald-400' },
   { label: 'Add Provider', to: '/workers', icon: Users, tone: 'text-blue-600 dark:text-blue-400' },
   { label: 'Create Offer', to: '/offer-templates', icon: Ticket, tone: 'text-orange-500 dark:text-orange-400' },

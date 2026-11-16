@@ -11,12 +11,15 @@ import type { LayoutChangeEvent } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
+import { DynamicRenderer } from '../../components/DynamicRenderer';
+import { useUIPage } from '../../hooks/useUIPage';
+import { uiIllustration } from '../../utils/uiIllustrations';
 import { LanguageToggle } from '../../components/LanguageToggle';
 import { useApp } from '../../context/AppContext';
 import { SCREEN_1, SCREEN_2, SCREEN_3 } from './OnboardingScreen.assets';
 import type { OnboardingAsset } from './OnboardingScreen.assets';
 import { ONBOARDING_COLORS } from './OnboardingScreen.styles';
-import { createThemedStyles } from '../../theme';
+import { createThemedStyles, getThemeOverride, theme } from '../../theme';
 
 type Props = {
   width: number;
@@ -44,6 +47,7 @@ export const IllustratedOnboardingPage: React.FC<Props> = ({
   onSkip,
 }) => {
   const { language, t } = useApp();
+  const appearance = useUIPage('onboarding');
   const [height, setHeight] = useState(0);
   const scale = width / 922;
   const styles = useMemo(() => createStyles(scale), [scale]);
@@ -51,7 +55,9 @@ export const IllustratedOnboardingPage: React.FC<Props> = ({
   const y = (referenceY: number) => contentHeight * referenceY / 1660;
   const womanHeight = Math.min(contentHeight * 0.55, width * 1.24);
   const womanWidth = womanHeight * SCREEN_1.woman.bounds[2] / SCREEN_1.woman.bounds[3];
-  const background = [SCREEN_1.background, SCREEN_2.background, SCREEN_3.background][pageIndex];
+  const themedBackground = appearance.backgroundColor || (typeof appearance.card.backgroundColor === 'string' ? appearance.card.backgroundColor : getThemeOverride('background'));
+  const background = uiIllustration(appearance.option(['welcomeArtwork', 'offersArtwork', 'servicesArtwork'][pageIndex])) || [SCREEN_1.background, SCREEN_2.background, SCREEN_3.background][pageIndex];
+  const textSpacing = appearance.option('spacing') === 'compact' ? -12 : appearance.option('spacing') === 'comfortable' ? 12 : 0;
   const isLastPage = pageIndex === 2;
   const nextLabel = t(isLastPage ? 'onboardingGetStarted' : 'onboardingNext');
 
@@ -63,7 +69,7 @@ export const IllustratedOnboardingPage: React.FC<Props> = ({
     <View
       testID={`onboarding-page-${pageIndex + 1}`}
       onLayout={onLayout}
-      style={[styles.page, { width }]}
+      style={[styles.page, appearance.card, { width, backgroundColor: themedBackground }]}
       accessibilityElementsHidden={!active}
       importantForAccessibility={active ? 'auto' : 'no-hide-descendants'}
     >
@@ -73,7 +79,7 @@ export const IllustratedOnboardingPage: React.FC<Props> = ({
             <Image
               source={background}
               resizeMode="cover"
-              style={styles.backgroundImage}
+              style={[styles.backgroundImage, themedBackground && { opacity: 0 }]}
               accessible={false}
             />
           </View>
@@ -90,7 +96,7 @@ export const IllustratedOnboardingPage: React.FC<Props> = ({
               onPress={onBack}
               style={({ pressed }) => [styles.back, { top: y(53) }, pressed && styles.pressed]}
             >
-              <MaterialCommunityIcons name="arrow-left" size={52 * scale} color={ONBOARDING_COLORS.ink} />
+              <MaterialCommunityIcons name="arrow-left" size={52 * scale} color={appearance.option('iconTone') !== 'default' ? appearance.iconColor : ONBOARDING_COLORS.ink} />
             </Pressable>
           ) : null}
 
@@ -100,7 +106,7 @@ export const IllustratedOnboardingPage: React.FC<Props> = ({
             adjustsFontSizeToFit
             minimumFontScale={0.72}
             maxFontSizeMultiplier={1.15}
-            style={[styles.title, { top: y(149) }]}
+            style={[styles.title, appearance.title, themedBackground && { color: theme.colors.text }, (appearance.option('slideLayout') === 'compact' || appearance.option('headerVariant') === 'compact') && { fontSize: 44 * scale }, { top: y(149) }]}
           >
             {title}
           </Text>
@@ -109,11 +115,12 @@ export const IllustratedOnboardingPage: React.FC<Props> = ({
             adjustsFontSizeToFit
             minimumFontScale={0.8}
             maxFontSizeMultiplier={1.15}
-            style={[styles.subtitle, { top: y(isLastPage ? 428 : 337) }]}
+            style={[styles.subtitle, themedBackground && { color: theme.colors.textSecondary }, { top: y((isLastPage ? 428 : 337) + textSpacing) }]}
           >
             {subtitle}
           </Text>
 
+          {active && appearance.hasSections ? <View style={{ position: 'absolute', top: y(490), left: 16, right: 16, maxHeight: y(700), zIndex: 1 }}><DynamicRenderer pageKey="onboarding" slot="beforeContent" bounded /><DynamicRenderer pageKey="onboarding" slot="afterContent" bounded /></View> : null}
           {pageIndex === 0 ? <>
           <View
             pointerEvents="none"

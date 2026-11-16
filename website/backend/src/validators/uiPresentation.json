@@ -1,0 +1,162 @@
+{
+  "common": {
+    "backgroundToken": [
+      "background",
+      "surface"
+    ],
+    "headerVariant": [
+      "default",
+      "compact",
+      "centered"
+    ],
+    "cardVariant": [
+      "default",
+      "outlined",
+      "soft"
+    ],
+    "spacing": [
+      "default",
+      "compact",
+      "comfortable"
+    ],
+    "iconTone": [
+      "default",
+      "primary",
+      "accent"
+    ]
+  },
+  "pages": {
+    "onboarding": {
+      "slideLayout": [
+        "default",
+        "compact"
+      ],
+      "welcomeTitle": null,
+      "welcomeSubtitle": null,
+      "offersTitle": null,
+      "offersSubtitle": null,
+      "servicesTitle": null,
+      "servicesSubtitle": null,
+      "welcomeArtwork": [
+        "default",
+        "welcome",
+        "offers",
+        "services"
+      ],
+      "offersArtwork": [
+        "default",
+        "welcome",
+        "offers",
+        "services"
+      ],
+      "servicesArtwork": [
+        "default",
+        "welcome",
+        "offers",
+        "services"
+      ]
+    },
+    "login": {
+      "formVariant": [
+        "default",
+        "outlined"
+      ],
+      "backgroundArtwork": [
+        "default",
+        "welcome",
+        "offers",
+        "services"
+      ]
+    },
+    "otp": {
+      "formVariant": [
+        "default",
+        "outlined"
+      ]
+    },
+    "profileSetup": {
+      "formVariant": [
+        "default",
+        "outlined"
+      ]
+    },
+    "offersHome": {},
+    "offerDetails": {
+      "posterVariant": [
+        "default",
+        "contained"
+      ],
+      "detailsVariant": [
+        "default",
+        "stacked"
+      ],
+      "actionVariant": [
+        "default",
+        "outlined"
+      ]
+    },
+    "servicesHome": {
+      "selectorVariant": [
+        "default",
+        "outlined"
+      ],
+      "emptyMessage": null
+    },
+    "serviceCategories": {
+      "categoryLayout": [
+        "default",
+        "twoColumns",
+        "threeColumns"
+      ],
+      "selectorVariant": [
+        "default",
+        "outlined"
+      ],
+      "emptyMessage": null
+    },
+    "serviceProviders": {
+      "providerVariant": [
+        "default",
+        "compact"
+      ],
+      "selectorVariant": [
+        "default",
+        "outlined"
+      ],
+      "emptyMessage": null
+    },
+    "businessCenter": {
+      "dashboardVariant": [
+        "default",
+        "compact"
+      ],
+      "statusVariant": [
+        "default",
+        "outlined"
+      ]
+    },
+    "plans": {
+      "planLayout": [
+        "default",
+        "compact"
+      ],
+      "promotionalLabel": null
+    },
+    "more": {
+      "menuVariant": [
+        "default",
+        "separated"
+      ]
+    },
+    "profile": {
+      "menuVariant": [
+        "default",
+        "separated"
+      ],
+      "identityVariant": [
+        "default",
+        "outlined"
+      ]
+    }
+  }
+}

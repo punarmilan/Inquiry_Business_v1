@@ -20,8 +20,8 @@ const start = async () => {
     attachSocket(io);
     app.set('io', io);
 
-    httpServer.listen(env.port, () => {
-      console.log(`InquiryExperts backend listening on port ${env.port}`);
+    httpServer.listen(env.port, '0.0.0.0', () => {
+      console.log(`InquiryExperts backend listening on 0.0.0.0:${env.port}`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);

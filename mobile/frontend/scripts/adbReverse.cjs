@@ -24,16 +24,19 @@ const restoreMissingReverse = (adbPath, serial, ports) => {
 
 // Re-checks every connected device on a timer. Also covers the adb server itself being
 // killed: listing devices restarts it, and the phone's rules are restored once it is back.
-const keepReverseAlive = ({ adbPath, listDevices, ports, intervalMs = 4000, log = console.log }) => {
-  const timer = setInterval(() => {
+const keepReverseAlive = ({ adbPath, listDevices, ports, intervalMs = 4000, log = console.log, unref = true }) => {
+  const restore = () => {
     for (const serial of listDevices()) {
       const restored = restoreMissingReverse(adbPath, serial, ports);
       if (restored.length > 0) {
         log(`[expo-start] ADB reverse had been dropped for ${serial}; restored port ${restored.join(', ')}.`);
       }
     }
-  }, intervalMs);
-  timer.unref();
+  };
+  // Include phones connected after startup and ports dropped before the first tick.
+  restore();
+  const timer = setInterval(restore, intervalMs);
+  if (unref) timer.unref();
   return () => clearInterval(timer);
 };
 

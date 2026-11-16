@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
+import type { StyleProp, ViewStyle, TextStyle } from 'react-native';
 import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Rect, Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
-import { SkylineMasthead } from '../../components/NeonUI';
-import { theme, createThemedStyles, getThemeMode } from '../../theme';
+import { theme, createThemedStyles, getThemeMode, getThemeOverride } from '../../theme';
 
 // Service-surface palette. Light keeps the original tuned hues; dark switches
 // to the night palette. Read through getters so both resolve at render time.
@@ -14,12 +14,12 @@ const servicePalettes = {
   dark: { background: '#000000', teal: '#00B0BA', darkTeal: '#008B93', text: '#F7FCFD', muted: '#9AADB1', border: '#1A282B' },
 };
 export const serviceColors = {
-  get background() { return servicePalettes[getThemeMode()].background; },
-  get teal() { return servicePalettes[getThemeMode()].teal; },
-  get darkTeal() { return servicePalettes[getThemeMode()].darkTeal; },
-  get text() { return servicePalettes[getThemeMode()].text; },
-  get muted() { return servicePalettes[getThemeMode()].muted; },
-  get border() { return servicePalettes[getThemeMode()].border; },
+  get background() { return getThemeOverride('background') || servicePalettes[getThemeMode()].background; },
+  get teal() { return getThemeOverride('primary') || servicePalettes[getThemeMode()].teal; },
+  get darkTeal() { return getThemeOverride('primaryDark') || servicePalettes[getThemeMode()].darkTeal; },
+  get text() { return getThemeOverride('text') || servicePalettes[getThemeMode()].text; },
+  get muted() { return getThemeOverride('textSecondary') || servicePalettes[getThemeMode()].muted; },
+  get border() { return getThemeOverride('border') || servicePalettes[getThemeMode()].border; },
 };
 export type ServiceIconName = keyof typeof MaterialCommunityIcons.glyphMap;
 export const safeIcon = (name?: string): ServiceIconName => name && name in MaterialCommunityIcons.glyphMap ? name as ServiceIconName : 'tools';
@@ -37,23 +37,21 @@ export const categoryPalette = (name: string) => {
   return palettes[[...name].reduce((sum, character) => sum + character.charCodeAt(0), 0) % palettes.length];
 };
 
-// Service screens sit on the same skyline masthead as the rest of the app, with
-// the backdrop gradient continuing below it.
-export const ServiceBackdrop = () => { const insets = useSafeAreaInsets(); return <View pointerEvents="none" style={[StyleSheet.absoluteFill, { top: insets.top }]}>
-  <LinearGradient colors={[theme.colors.backdropStart, theme.colors.backdropEnd]} style={StyleSheet.absoluteFill} />
-  <SkylineMasthead height={210} />
+// Service screens use the shared theme backdrop without a background image.
+export const ServiceBackdrop = ({ backgroundColor }: { backgroundColor?: string }) => { const insets = useSafeAreaInsets(); return <View pointerEvents="none" style={[StyleSheet.absoluteFill, { top: insets.top }]}>
+  <LinearGradient colors={backgroundColor ? [backgroundColor, backgroundColor] : [theme.colors.backdropStart, theme.colors.backdropEnd]} style={StyleSheet.absoluteFill} />
 </View>; };
 
-export const ServiceSearch = ({ value, onChangeText, placeholder, plain = false }: { value: string; onChangeText: (text: string) => void; placeholder: string; plain?: boolean }) => <View style={[ui.search, plain && ui.plainSearch]}>
+export const ServiceSearch = ({ value, onChangeText, placeholder, plain = false, style }: { value: string; onChangeText: (text: string) => void; placeholder: string; plain?: boolean; style?: StyleProp<ViewStyle> }) => <View style={[ui.search, plain && ui.plainSearch, style]}>
   <MaterialCommunityIcons name="magnify" size={27} color={serviceColors.muted} />
   <TextInput accessibilityLabel={placeholder} value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={serviceColors.muted} style={ui.searchInput} returnKeyType="search" />
   {value ? <Pressable onPress={() => onChangeText('')} accessibilityRole="button" accessibilityLabel="Clear search" hitSlop={10}><MaterialCommunityIcons name="close-circle" size={21} color={serviceColors.muted} /></Pressable> : null}
 </View>;
 
-export const ServiceHeader = ({ title, subtitle, onBack, icon = 'map-marker-radius', onAction, compact = false, plain = false }: { title: string; subtitle?: string; onBack?: () => void; icon?: ServiceIconName; onAction?: () => void; compact?: boolean; plain?: boolean }) => <View style={[ui.header, plain && ui.plainHeader]}>
-  {onBack ? <Pressable accessibilityLabel="Go back" accessibilityRole="button" onPress={onBack} style={ui.back}><MaterialCommunityIcons name="arrow-left" size={27} color={plain ? theme.colors.text : serviceColors.text} /></Pressable> : <MaterialCommunityIcons name="map-marker" size={37} color={serviceColors.teal} />}
-  <View style={ui.headerCopy}><Text style={[ui.title, !onBack && { fontSize: 27 }, compact && { fontSize: 19, lineHeight: 24 }, plain && ui.plainTitle]} numberOfLines={2}>{title}</Text>{subtitle ? <Text style={[ui.subtitle, !onBack && ui.homeSubtitle, plain && ui.plainSubtitle]}>{subtitle}</Text> : null}</View>
-  {onAction ? <Pressable onPress={onAction} accessibilityLabel="Change location" accessibilityRole="button" style={[ui.locationButton, plain && ui.plainLocationButton]}><MaterialCommunityIcons name={icon} size={27} color={plain ? theme.colors.text : serviceColors.teal} /></Pressable> : null}
+export const ServiceHeader = ({ title, subtitle, onBack, icon = 'map-marker-radius', onAction, compact = false, plain = false, style, titleStyle, locationStyle, iconColor }: { iconColor?: string; title: string; subtitle?: string; onBack?: () => void; icon?: ServiceIconName; onAction?: () => void; compact?: boolean; plain?: boolean; style?: StyleProp<ViewStyle>; titleStyle?: StyleProp<TextStyle>; locationStyle?: StyleProp<ViewStyle> }) => <View style={[ui.header, plain && ui.plainHeader, style]}>
+  {onBack ? <Pressable accessibilityLabel="Go back" accessibilityRole="button" onPress={onBack} style={ui.back}><MaterialCommunityIcons name="arrow-left" size={27} color={iconColor || (plain ? theme.colors.text : serviceColors.text)} /></Pressable> : <MaterialCommunityIcons name="map-marker" size={37} color={iconColor || serviceColors.teal} />}
+  <View style={ui.headerCopy}><Text style={[ui.title, !onBack && { fontSize: 27 }, compact && { fontSize: 19, lineHeight: 24 }, plain && ui.plainTitle, titleStyle]} numberOfLines={2}>{title}</Text>{subtitle ? <Text style={[ui.subtitle, !onBack && ui.homeSubtitle, plain && ui.plainSubtitle]}>{subtitle}</Text> : null}</View>
+  {onAction ? <Pressable onPress={onAction} accessibilityLabel="Change location" accessibilityRole="button" style={[ui.locationButton, plain && ui.plainLocationButton, locationStyle]}><MaterialCommunityIcons name={icon} size={27} color={iconColor || (plain ? theme.colors.text : serviceColors.teal)} /></Pressable> : null}
 </View>;
 
 export const ServiceImage = ({ uri, style, fallback }: { uri?: string; style: React.ComponentProps<typeof Image>['style']; fallback: React.ReactNode }) => {
@@ -76,14 +74,14 @@ export const CoolingArtwork = ({ width = 90 }: { width?: number }) => <Svg width
 export const ui = createThemedStyles((c) => ({
   header: { minHeight: 85, paddingHorizontal: 18, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
   plainHeader: { minHeight: 72, backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.divider },
-  back: { minHeight: 44, width: 30, justifyContent: 'center' }, headerCopy: { flex: 1 },
+  back: { minHeight: 48, width: 48, justifyContent: 'center' }, headerCopy: { flex: 1 },
   title: { fontSize: 23, lineHeight: 29, fontWeight: '800', color: serviceColors.text },
   plainTitle: { color: c.text },
   subtitle: { fontSize: 16, fontWeight: '700', color: c.primaryDark, marginTop: 2 },
   plainSubtitle: { fontSize: 14, fontWeight: '500', color: c.textSecondary },
   homeSubtitle: { fontSize: 12, lineHeight: 18, fontWeight: '400', color: c.textSecondary },
-  locationButton: { height: 47, width: 47, borderRadius: 15, borderWidth: 1.5, borderColor: c.cardBorder, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center', shadowColor: c.shadowStrong, shadowOpacity: 0.17, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
-  plainLocationButton: { width: 42, height: 42, borderRadius: 21, borderWidth: 1, borderColor: c.border, shadowOpacity: 0, elevation: 0 },
+  locationButton: { height: 48, width: 48, borderRadius: 15, borderWidth: 1.5, borderColor: c.cardBorder, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center', shadowColor: c.shadowStrong, shadowOpacity: 0.17, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  plainLocationButton: { width: 48, height: 48, borderRadius: 21, borderWidth: 1, borderColor: c.border, shadowOpacity: 0, elevation: 0 },
   search: { minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 16, marginBottom: 18, paddingHorizontal: 16, backgroundColor: c.surface, borderRadius: 20, borderWidth: 1, borderColor: c.cardBorder, shadowColor: c.cardGlow, shadowOpacity: 1, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 2 },
   plainSearch: { minHeight: 50, marginTop: 16, marginBottom: 16, borderColor: c.border, shadowOpacity: 0, elevation: 0 },
   searchInput: { flex: 1, fontSize: 14, color: serviceColors.text, paddingVertical: 15, minWidth: 0 },

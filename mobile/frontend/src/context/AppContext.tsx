@@ -1,9 +1,9 @@
-import React, { createContext, useContext, useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useMemo, useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
 import { AppState, Platform } from 'react-native';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { translations, Language, TranslationKey } from '../i18n/translations';
-import { getThemeMode, setThemeMode as applyThemeMode, type ThemeMode } from '../theme';
+import { getThemeMode, getThemeRevision, subscribeToThemeRevision, setThemeMode as applyThemeMode, type ThemeMode } from '../theme';
 import { AccountType, CategoryMeta, EmployerProfile, Gender, KycProfile, User, WalletProfile, WorkerProfile } from '../types';
 import type { Business } from '../types/hyperlocal';
 import {
@@ -152,6 +152,7 @@ interface AppContextValue {
   language: Language;
   setLanguage: (lang: Language) => void;
   themeMode: ThemeMode;
+  themeRevision: number;
   setThemeMode: (mode: ThemeMode) => void;
   t: (key: TranslationKey) => string;
 
@@ -209,6 +210,8 @@ const isLanguage = (value: string | null): value is Language => value === 'en' |
 const isThemeMode = (value: string | null): value is ThemeMode => value === 'light' || value === 'dark';
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Notify existing theme consumers without remounting navigation or changing auth state.
+  const themeRevision = useSyncExternalStore(subscribeToThemeRevision, getThemeRevision, getThemeRevision);
   const [language, setLanguageState] = useState<Language>('en');
   const [themeMode, setThemeModeState] = useState<ThemeMode>(getThemeMode);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -707,6 +710,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       language,
       setLanguage,
       themeMode,
+      themeRevision,
       setThemeMode,
       t,
       isAuthenticated,
@@ -752,6 +756,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       language,
       setLanguage,
       themeMode,
+      themeRevision,
       setThemeMode,
       t,
       isAuthenticated,

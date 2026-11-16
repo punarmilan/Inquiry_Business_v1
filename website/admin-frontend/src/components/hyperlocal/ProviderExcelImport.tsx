@@ -67,7 +67,7 @@ export const ProviderExcelImport = ({ disabled, onImported }: { disabled?: boole
       <div className="space-y-3" aria-busy={importWorkers.isPending}>
         <p className="text-sm text-muted-foreground">Upload your filled Excel file to add providers directly. Existing phone numbers are skipped.</p>
         <p className="text-xs leading-relaxed text-muted-foreground">Columns: Provider Name, Phone, WhatsApp, City / Location, Service Categories, Service Areas.</p>
-        <p className="text-xs leading-relaxed text-muted-foreground">City and category names must already exist and be active. WhatsApp and Service Areas are optional. Separate multiple categories or areas with commas.</p>
+        <p className="text-xs leading-relaxed text-muted-foreground">Missing cities and service areas are created automatically. Categories must already exist and be active. For cities with the same name, use City, State. WhatsApp and Service Areas are optional; separate multiple categories or areas with commas.</p>
         <div className="flex flex-wrap items-center gap-3">
           <input ref={inputRef} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="hidden" aria-label="Choose provider Excel file" onChange={(event) => void upload(event.target.files?.[0])} disabled={busy} />
           <Button type="button" className="min-h-11" disabled={busy} onClick={() => inputRef.current?.click()}>
@@ -85,6 +85,7 @@ export const ProviderExcelImport = ({ disabled, onImported }: { disabled?: boole
         {result && (
           <div className="space-y-3 border-t pt-3">
             <p role="status" className="text-sm font-medium">{result.created} added · {result.skipped} skipped · {result.failed} rows need correction · {result.total} total</p>
+            {!!(result.citiesCreated || result.areasCreated) && <p role="status" className="text-sm text-muted-foreground">{result.citiesCreated} {result.citiesCreated === 1 ? 'city' : 'cities'} and {result.areasCreated} service {result.areasCreated === 1 ? 'area' : 'areas'} created.</p>}
             {result.failed > 0 && <p className="text-xs text-muted-foreground">Correct the rows below and upload again. Providers already added will be skipped.</p>}
             {issues.length > 0 && (
               <details open={result.failed > 0}>

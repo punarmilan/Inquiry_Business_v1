@@ -20,6 +20,48 @@ export const router = createBrowserRouter([
         element: <AppShell />,
         children: [
           {
+            path: '/home-content',
+            lazy: async () => {
+              const { HomeCardsPage } = await import('@/pages/admin/HomeCardsPage');
+              return { Component: HomeCardsPage };
+            },
+          },
+          {
+            path: '/app-content',
+            lazy: async () => {
+              const { AppContentPage } = await import('@/pages/admin/AppContentPage');
+              return { Component: AppContentPage };
+            },
+          },
+          {
+            path: '/ui/campaigns',
+            lazy: async () => {
+              const { CampaignManagerPage } = await import('@/pages/admin/CampaignManagerPage');
+              return { Component: CampaignManagerPage };
+            },
+          },
+          {
+            path: '/ui/themes',
+            lazy: async () => {
+              const { ThemeStudioPage } = await import('@/pages/admin/ThemeStudioPage');
+              return { Component: ThemeStudioPage };
+            },
+          },
+          {
+            path: '/ui/pages/offersHome',
+            lazy: async () => {
+              const { UIPageBuilderPage } = await import('@/pages/admin/UIPageBuilderPage');
+              return { Component: UIPageBuilderPage };
+            },
+          },
+          {
+            path: '/ui/animations',
+            lazy: async () => {
+              const { AnimationStudioPage } = await import('@/pages/admin/AnimationStudioPage');
+              return { Component: AnimationStudioPage };
+            },
+          },
+          {
             path: '/',
             lazy: async () => {
               const { DashboardPage } = await import('@/pages/DashboardPage');

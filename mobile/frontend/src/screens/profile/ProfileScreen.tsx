@@ -5,6 +5,8 @@ import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { DynamicRenderer } from '../../components/DynamicRenderer';
+import { useUIPage } from '../../hooks/useUIPage';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { Avatar } from '../../components/Avatar';
 import { listMyBusinesses } from '../../services/api';
@@ -18,6 +20,7 @@ import { tabBarScrollProps } from '../../navigation/hideTabBarOnScroll';
 type Props = NativeStackScreenProps<ProfileStackParamList, 'ProfileMain'>;
 
 export const ProfileScreen: React.FC<Props> = ({ navigation }) => {
+  const appearance = useUIPage('profile');
   const { currentUser, accessToken, logout, refreshProfile, language, t } = useApp();
   const insets = useSafeAreaInsets();
   const [business, setBusiness] = useState<Business | null>(null);
@@ -38,9 +41,9 @@ export const ProfileScreen: React.FC<Props> = ({ navigation }) => {
   };
   const phone = currentUser?.phone?.replace(/^\+91\s*-?\s*(\d{10})$/, '+91 - $1');
 
-  return <ScreenContainer edges={['left', 'right']}>
-    <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} {...tabBarScrollProps}>
-      <View style={[styles.hero, { paddingTop: insets.top + 12 }]}>
+  return <ScreenContainer edges={['left', 'right']} dynamicBackgroundColor={appearance.backgroundColor}>
+    <ScrollView contentContainerStyle={[styles.content, appearance.content]} showsVerticalScrollIndicator={false} {...tabBarScrollProps}>
+      <View style={[styles.hero, appearance.header, appearance.option('identityVariant') === 'outlined' && { borderWidth: 1, borderColor: theme.colors.primary, backgroundColor: theme.colors.surface }, { paddingTop: insets.top + 12 }]}>
         <View style={styles.heroActions}>
           <Pressable accessibilityRole="button" accessibilityLabel={t('back')} onPress={goBack} style={styles.back}>
             <ArrowLeft size={26} color={theme.colors.text} strokeWidth={STROKE} />
@@ -59,34 +62,36 @@ export const ProfileScreen: React.FC<Props> = ({ navigation }) => {
             <Avatar uri={currentUser?.avatar} name={currentUser?.name || t('userFallback')} size={68} verified={currentUser?.verified} />
           </Pressable>
           <View style={styles.identityCopy}>
-            <Text numberOfLines={1} style={styles.name}>{currentUser?.name || t('userFallback')}</Text>
+            <Text numberOfLines={1} style={[styles.name, appearance.title]}>{currentUser?.name || t('userFallback')}</Text>
             {phone ? <Text numberOfLines={1} style={styles.identityText}>{phone}</Text> : null}
           </View>
         </View>
       </View>
 
+      <DynamicRenderer pageKey="profile" slot="beforeContent" />
       <View style={styles.options}>
-        <View style={styles.optionGroup}>
-          <Menu icon={MapPin} title={t('savedLocationsTitle')} onPress={() => navigation.navigate('SavedLocations')} />
-          <Menu icon={Tag} title={t('savedOffersTitle')} onPress={() => navigation.navigate('SavedOffers')} />
+        <View style={[styles.optionGroup, appearance.card]}>
+          <Menu appearance={appearance} icon={MapPin} title={t('savedLocationsTitle')} onPress={() => navigation.navigate('SavedLocations')} />
+          <Menu appearance={appearance} icon={Tag} title={t('savedOffersTitle')} onPress={() => navigation.navigate('SavedOffers')} />
           {business ? <>
-            <Menu icon={Store} title={business.name} subtitle={`${t('verification')}: ${business.verificationStatus}`} onPress={() => navigation.navigate('MyBusiness')} photo={business.logoUrl || business.coverImageUrl} />
-            <Menu icon={Crown} title={business.activeSubscription ? t('activeBusinessPlan') : t('chooseBusinessPlan')} subtitle={business.activeSubscription ? `${subscriptionPlanName(business.activeSubscription) ? `${subscriptionPlanName(business.activeSubscription)} · ` : ''}${t('validUntil')} ${new Date(business.activeSubscription.endsAt).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-IN')}` : t('planRequired')} onPress={() => navigation.navigate('Plans', { businessId: business._id })} />
+            <Menu appearance={appearance} icon={Store} title={business.name} subtitle={`${t('verification')}: ${business.verificationStatus}`} onPress={() => navigation.navigate('MyBusiness')} photo={business.logoUrl || business.coverImageUrl} />
+            <Menu appearance={appearance} icon={Crown} title={business.activeSubscription ? t('activeBusinessPlan') : t('chooseBusinessPlan')} subtitle={business.activeSubscription ? `${subscriptionPlanName(business.activeSubscription) ? `${subscriptionPlanName(business.activeSubscription)} · ` : ''}${t('validUntil')} ${new Date(business.activeSubscription.endsAt).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-IN')}` : t('planRequired')} onPress={() => navigation.navigate('Plans', { businessId: business._id })} />
           </> : <View style={styles.menu}><View style={styles.menuIcon}><Store size={24} color={theme.colors.text} strokeWidth={STROKE} /></View><Text style={styles.noBusinessText}>{t('createBusinessHint')}</Text></View>}
-          <Menu icon={UserCog} title={t('accountSettings')} onPress={() => navigation.navigate('Settings')} />
-          <Menu icon={LifeBuoy} title={t('help')} onPress={() => navigation.navigate('HelpSupport')} />
-          <Menu icon={LogOut} title={t('logout')} onPress={confirmLogout} last emphasized />
+          <Menu appearance={appearance} icon={UserCog} title={t('accountSettings')} onPress={() => navigation.navigate('Settings')} />
+          <Menu appearance={appearance} icon={LifeBuoy} title={t('help')} onPress={() => navigation.navigate('HelpSupport')} />
+          <Menu appearance={appearance} icon={LogOut} title={t('logout')} onPress={confirmLogout} last emphasized />
         </View>
       </View>
+      <DynamicRenderer pageKey="profile" slot="afterContent" />
     </ScrollView>
   </ScreenContainer>;
 };
 
 const STROKE = 1.75;
 
-const Menu = ({ icon: Icon, title, subtitle, onPress, photo, last = false, emphasized = false }: { icon: LucideIcon; title: string; subtitle?: string; onPress: () => void; photo?: string; last?: boolean; emphasized?: boolean }) => (
-  <Pressable accessibilityRole="button" accessibilityLabel={title} onPress={onPress} style={({ pressed }) => [styles.menu, last && styles.lastMenu, pressed && styles.pressed]}>
-    {photo ? <Image source={{ uri: photo }} style={styles.menuPhoto} resizeMode="cover" /> : <View style={styles.menuIcon}><Icon size={24} color={theme.colors.text} strokeWidth={STROKE} /></View>}
+const Menu = ({ icon: Icon, title, subtitle, onPress, photo, last = false, emphasized = false, appearance }: { appearance: ReturnType<typeof useUIPage>; icon: LucideIcon; title: string; subtitle?: string; onPress: () => void; photo?: string; last?: boolean; emphasized?: boolean }) => (
+  <Pressable accessibilityRole="button" accessibilityLabel={title} onPress={onPress} style={({ pressed }) => [styles.menu, appearance.option('menuVariant') === 'separated' && { marginVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border }, last && styles.lastMenu, pressed && styles.pressed]}>
+    {photo ? <Image source={{ uri: photo }} style={styles.menuPhoto} resizeMode="cover" /> : <View style={styles.menuIcon}><Icon size={24} color={appearance.iconColor} strokeWidth={STROKE} /></View>}
     <View style={styles.flex}>
       <Text numberOfLines={1} style={[styles.menuTitle, emphasized && styles.emphasizedText]}>{title}</Text>
       {subtitle ? <Text numberOfLines={2} style={styles.menuSubtitle}>{subtitle}</Text> : null}

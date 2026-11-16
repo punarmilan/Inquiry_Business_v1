@@ -18,6 +18,7 @@ const offerTemplateRoutes = require('./offerTemplateRoutes');
 const templateStickerRoutes = require('./templateStickerRoutes');
 const commerceRoutes = require('./commerceRoutes');
 const serviceRoutes = require('./serviceRoutes');
+const uiRoutes = require('./uiRoutes');
 
 const router = express.Router();
 
@@ -40,5 +41,6 @@ router.use('/offer-templates', offerTemplateRoutes);
 router.use('/stickers', templateStickerRoutes);
 router.use('/', commerceRoutes);
 router.use('/services', serviceRoutes);
+router.use('/ui', uiRoutes);
 
 module.exports = router;

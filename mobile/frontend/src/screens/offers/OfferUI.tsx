@@ -6,7 +6,7 @@ import { PosterLayers } from '../../components/OfferCard';
 import { isPosterUploadOffer } from '../../config/offerCardDesigner';
 import type { Offer } from '../../types/hyperlocal';
 import type { TranslationKey } from '../../i18n/translations';
-import { createThemedStyles, getThemeMode } from '../../theme';
+import { createThemedStyles, getThemeMode, getThemeOverride } from '../../theme';
 
 // Offer-surface palette. Light keeps the original tuned hues; dark switches to
 // the night palette. Read through getters so both resolve at render time.
@@ -15,11 +15,11 @@ const offerPalettes = {
   dark: { bg: '#00161B', teal: '#00E5EF', ink: '#EAF7F9', muted: '#A7C3C9', line: '#0F4551' },
 };
 export const colors = {
-  get bg() { return offerPalettes[getThemeMode()].bg; },
-  get teal() { return offerPalettes[getThemeMode()].teal; },
-  get ink() { return offerPalettes[getThemeMode()].ink; },
-  get muted() { return offerPalettes[getThemeMode()].muted; },
-  get line() { return offerPalettes[getThemeMode()].line; },
+  get bg() { return getThemeOverride('background') || offerPalettes[getThemeMode()].bg; },
+  get teal() { return getThemeOverride('primary') || offerPalettes[getThemeMode()].teal; },
+  get ink() { return getThemeOverride('text') || offerPalettes[getThemeMode()].ink; },
+  get muted() { return getThemeOverride('textSecondary') || offerPalettes[getThemeMode()].muted; },
+  get line() { return getThemeOverride('border') || offerPalettes[getThemeMode()].line; },
 };
 export type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 

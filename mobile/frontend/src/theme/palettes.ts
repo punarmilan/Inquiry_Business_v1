@@ -31,6 +31,13 @@ export const lightColors = {
   background: '#F8FAFB',
   surface: '#FFFFFF',
   surfaceAlt: '#F0F3F5',
+  discoverySurface: '#F9EEDC',
+  marketHeader: '#FF742A',
+  marketHeaderMid: '#FF9A68',
+  marketHeaderEnd: '#FFAB7F',
+  marketLocation: '#FFD6BF',
+  marketInk: '#24170F',
+  marketActionInk: '#24170F',
   border: '#DDE3E7',
   divider: '#E5EAEC',
 
@@ -48,9 +55,8 @@ export const lightColors = {
   cardGlow: 'rgba(42, 109, 112, 0.16)',
   cardFillStart: '#FFFFFF',
   cardFillEnd: '#F4FAFB',
-  // Wash laid over assets/bg.png so the same night-skyline photo reads as a
-  // pale daylight haze in light mode and stays dark in dark mode. Kept light
-  // enough that the teal wash and skyline stay visible behind the header.
+  // Retained palette role for compatibility; decorative image backdrops
+  // are no longer rendered on offer or service screens.
   mastheadScrim: 'rgba(246, 252, 253, 0.55)',
 
   text: '#171717',
@@ -103,6 +109,13 @@ export const darkColors: ThemeColors = {
   background: '#000000',
   surface: '#080E10',
   surfaceAlt: '#0D1517',
+  discoverySurface: '#151E20',
+  marketHeader: '#6B2F13',
+  marketHeaderMid: '#512916',
+  marketHeaderEnd: '#3A2218',
+  marketLocation: '#4A2C1D',
+  marketInk: '#FFF3E9',
+  marketActionInk: '#24170F',
   border: '#1A282B',
   divider: '#142124',
 

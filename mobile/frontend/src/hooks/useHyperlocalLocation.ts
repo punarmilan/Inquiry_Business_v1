@@ -4,6 +4,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { getCityAvailability, listSupportedCities } from '../services/api';
 import type { City } from '../types/hyperlocal';
+import { setUICity } from '../services/uiCampaignLocation';
+import { useApp } from '../context/AppContext';
+import { needsManualLocationRepair, resolveManualCoordinates } from '../services/manualLocation';
 
 const STORAGE_KEY = 'inquiryexperts_hyperlocal_location';
 const SAVED_LOCATIONS_KEY = 'inquiryexperts_saved_locations';
@@ -36,24 +39,11 @@ export interface HyperlocalLocation {
   source: 'gps' | 'manual';
 }
 
-const resolveManualCoordinates = async (city: City, locality?: string) => {
-  const fallback = { longitude: city.center.coordinates[0], latitude: city.center.coordinates[1] };
-  if (!locality || locality === city.name) return fallback;
-
-  try {
-    const matches = await Location.geocodeAsync(`${locality}, ${city.name}, ${city.state}, India`);
-    const match = matches[0];
-    if (match) return { longitude: match.longitude, latitude: match.latitude };
-  } catch {
-    // The city centre remains a safe fallback when device geocoding is unavailable.
-  }
-  return fallback;
-};
-
 export const useHyperlocalLocation = ({
   autoDetect = false,
   promptOnEmpty = true,
 }: { autoDetect?: boolean; promptOnEmpty?: boolean } = {}) => {
+  const { accessToken } = useApp();
   const [location, setLocation] = useState<HyperlocalLocation | null>(null);
   const [savedLocations, setSavedLocations] = useState<HyperlocalLocation[]>([]);
   const [cities, setCities] = useState<City[]>([]);
@@ -64,6 +54,7 @@ export const useHyperlocalLocation = ({
   const lastGpsAtRef = useRef(0);
 
   const persistLocation = useCallback(async (next: HyperlocalLocation) => {
+    setUICity(next.city?._id);
     const raw = await AsyncStorage.getItem(SAVED_LOCATIONS_KEY);
     let saved: HyperlocalLocation[] = [];
     try { saved = raw ? JSON.parse(raw) : []; } catch { saved = []; }
@@ -80,7 +71,11 @@ export const useHyperlocalLocation = ({
 
   const chooseManual = useCallback(async (city: City, locality?: string) => {
     setLocationError(null);
-    const coordinates = await resolveManualCoordinates(city, locality);
+    const coordinates = await resolveManualCoordinates(city, locality, accessToken);
+    if (!coordinates) {
+      setLocationError('Could not locate this area. Try again or choose another area.');
+      return;
+    }
     const next: HyperlocalLocation = {
       city,
       locality: locality || city.name,
@@ -90,7 +85,7 @@ export const useHyperlocalLocation = ({
     setLocation(next);
     setPickerVisible(false);
     await persistLocation(next);
-  }, [persistLocation]);
+  }, [accessToken, persistLocation]);
 
   const selectCoordinates = useCallback(async (coordinates: { latitude: number; longitude: number }) => {
     const [place, availability] = await Promise.all([
@@ -264,13 +259,18 @@ export const useHyperlocalLocation = ({
           // Older manual selections stored the city centre even when a user
           // chose a locality such as Wakad. Resolve it once so the nearby feed
           // uses the chosen locality rather than a distant city-centre pin.
-          if (saved.source === 'manual' && saved.city && saved.locality && saved.locality !== saved.city.name) {
-            resolveManualCoordinates(saved.city, saved.locality).then(async (coordinates) => {
-              if (!active) return;
+          if (needsManualLocationRepair(saved) && saved.city) {
+            resolveManualCoordinates(saved.city, saved.locality, accessToken).then(async (coordinates) => {
+              if (!active || !coordinates) return;
+              // A late migration must not overwrite a newer user selection.
+              const latestRaw = await AsyncStorage.getItem(STORAGE_KEY);
+              const latest = latestRaw ? JSON.parse(latestRaw) as HyperlocalLocation : null;
+              if (!active || !latest || latest.city?._id !== saved.city?._id || latest.locality !== saved.locality
+                || latest.latitude !== saved.latitude || latest.longitude !== saved.longitude || latest.source !== saved.source) return;
               const corrected = { ...saved, ...coordinates };
               setLocation(corrected);
-              await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(corrected));
-            });
+              await persistLocation(corrected);
+            }).catch(() => undefined);
           }
         } catch { /* ignore stale storage */ }
         setLoadingLocation(false);
@@ -304,7 +304,7 @@ export const useHyperlocalLocation = ({
       }
     })();
     return () => { active = false; };
-  }, [autoDetect, detect, promptOnEmpty]);
+  }, [accessToken, autoDetect, detect, persistLocation, promptOnEmpty]);
 
   return { location, savedLocations, cities, pickerVisible, setPickerVisible, chooseManual, selectCoordinates, selectSavedLocation, removeSavedLocation, detect, clearLocation, refreshStoredLocation, loadingLocation, locationError };
 };

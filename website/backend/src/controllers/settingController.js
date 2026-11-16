@@ -1,5 +1,6 @@
 const Setting = require('../models/Setting');
 const asyncHandler = require('../utils/asyncHandler');
+const ApiError = require('../utils/ApiError');
 
 const getSettings = asyncHandler(async (req, res) => {
   const settings = await Setting.find().sort({ key: 1 });
@@ -8,6 +9,9 @@ const getSettings = asyncHandler(async (req, res) => {
 
 const upsertSetting = asyncHandler(async (req, res) => {
   const { key } = req.params;
+  if (key.startsWith('ui.')) {
+    throw new ApiError(403, 'UI settings are managed through the versioned UI API', 'UI_SETTING_RESERVED');
+  }
   const { type, value } = req.body;
 
   const setting = await Setting.findOneAndUpdate(

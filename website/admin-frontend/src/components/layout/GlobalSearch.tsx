@@ -109,7 +109,7 @@ export const GlobalSearch = ({ className }: { className?: string }) => {
         onFocus={() => setOpen(true)}
         onBlur={() => window.setTimeout(() => setOpen(false), 150)}
         onKeyDown={onKeyDown}
-        placeholder="Search anything... (cities, users, offers, businesses...)"
+        placeholder="Find pages, offers, people..."
         aria-label="Search the admin panel"
         className="h-11 w-full rounded-xl border border-transparent bg-muted/70 pl-11 pr-20 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary/40 focus:bg-card focus:ring-4 focus:ring-primary/10 [&::-webkit-search-cancel-button]:hidden"
       />

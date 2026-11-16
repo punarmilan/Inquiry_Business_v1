@@ -20,4 +20,8 @@ export {
   getThemeMode,
   setThemeMode,
   subscribeToThemeMode,
+  getThemeRevision,
+  subscribeToThemeRevision,
+  setThemeOverrides,
+  getThemeOverride,
 } from './runtime';

@@ -1,0 +1,40 @@
+import client from './client';
+import type { UIPage, UITheme, UIAssetMetadata } from '../../../../mobile/frontend/src/types/dynamicUI';
+
+export type UIConfig = UIPage | UITheme;
+export type UIAnimationAsset = Omit<UIAssetMetadata, 'id'> & { _id: string; name: string; enabled: boolean; archived: boolean; assetVersion: number; animation?: Record<string, unknown> };
+export const listUIAssets = async (page = 1) => (await client.get<List<UIAnimationAsset>>('/ui/assets', { params: { page, limit: 100 } })).data;
+export const getUIAsset = async (id: string) => (await client.get<{ asset: UIAnimationAsset }>(`/ui/assets/${id}`)).data.asset;
+export const uploadUIAsset = async (name: string, animation: unknown) => (await client.post<{ asset: UIAnimationAsset }>('/ui/assets', { name, mimeType: 'application/json', animation })).data.asset;
+export const uploadUIImage = async (name: string, mimeType: 'image/png' | 'image/jpeg', dataBase64: string, signal?: AbortSignal) => (await client.post<{ asset: UIAnimationAsset }>('/ui/assets/image', { name, mimeType, dataBase64 }, { signal, timeout: 30_000 })).data.asset;
+export const getUIImageContent = async (id: string, signal?: AbortSignal) => (await client.get<Blob>(`/ui/assets/${id}/content`, { responseType: 'blob', signal, timeout: 15_000 })).data;
+export const updateUIAsset = async (asset: UIAnimationAsset, name: string, enabled: boolean) => (await client.put<{ asset: UIAnimationAsset }>(`/ui/assets/${asset._id}`, { name, enabled, expectedVersion: asset.assetVersion })).data.asset;
+export const archiveUIAsset = async (asset: UIAnimationAsset) => (await client.post(`/ui/assets/${asset._id}/archive`, { expectedVersion: asset.assetVersion })).data;
+export type UIRevision = { _id: string; kind: 'page' | 'theme'; key: string; status: 'draft' | 'published'; draftVersion: number; config: UIConfig; createdAt: string; updatedAt: string };
+export type UIRelease = { _id: string; generation: number; pageRevisionIds: Record<string, string>; themeRevisionId: string | null; reason: string; createdAt: string };
+type List<T> = { data: T[]; pagination: { page: number; pages: number; total: number } };
+export const listUIConfigs = async (kind: UIConfig['kind'], page = 1) => (await client.get<List<UIRevision>>('/ui/configs', { params: { kind, status: 'draft', page, limit: 100 } })).data;
+export const getUIConfig = async (id: string) => (await client.get<{ config: UIRevision }>(`/ui/configs/${id}`)).data.config;
+export const saveUIConfig = async (config: UIConfig, draft: UIRevision | null, sourceRevisionId?: string) => {
+  const body = draft ? { config, expectedDraftVersion: draft.draftVersion } : { config, ...(sourceRevisionId ? { sourceRevisionId } : {}) };
+  return (draft ? await client.put<{ config: UIRevision }>(`/ui/configs/${draft._id}`, body) : await client.post<{ config: UIRevision }>('/ui/configs', body)).data.config;
+};
+export const validateUIConfig = async (config: UIConfig) => (await client.post('/ui/configs/validate', { config })).data;
+export const validateUIDraft = async (draft: UIRevision) => (await client.post<{ generation: number }>(`/ui/configs/${draft._id}/validate`, { expectedDraftVersion: draft.draftVersion })).data;
+export const publishUIDraft = async (draft: UIRevision, expectedGeneration: number, reason: string) => (await client.post(`/ui/configs/${draft._id}/publish`, { expectedDraftVersion: draft.draftVersion, expectedGeneration, reason })).data;
+export const listUIReleases = async (page = 1) => (await client.get<List<UIRelease>>('/ui/releases', { params: { page, limit: 10 } })).data;
+export const rollbackUIRelease = async (id: string, expectedGeneration: number, reason: string) => (await client.post(`/ui/releases/${id}/rollback`, { expectedGeneration, reason })).data;
+export type UICampaignInput = { identifier: string; name: string; festival: 'diwali' | 'holi' | 'christmas' | 'new-year' | 'custom'; releaseId: string; animationAssetId: string | null;
+  startsAt: string; endsAt: string; timezone: 'Asia/Kolkata'; cityIds: string[]; priority: number; state: 'draft' | 'scheduled' | 'disabled'; enabled: boolean; reason: string; expectedVersion?: number };
+export type UICampaign = Omit<UICampaignInput, 'reason' | 'expectedVersion'> & { _id: string; version: number; status: 'draft' | 'scheduled' | 'active' | 'expired' | 'disabled';
+  audit?: { actor: string; at: string; reason: string; version: number }[] };
+export const listUICampaigns = async (page = 1) => (await client.get<List<UICampaign>>('/ui/campaigns', { params: { page, limit: 20 } })).data;
+export const getUICampaign = async (id: string) => (await client.get<{ campaign: UICampaign }>(`/ui/campaigns/${id}`)).data.campaign;
+export const saveUICampaign = async (id: string | null, input: UICampaignInput) => (id ? await client.put<{ campaign: UICampaign }>(`/ui/campaigns/${id}`, input) : await client.post<{ campaign: UICampaign }>('/ui/campaigns', input)).data.campaign;
+export const previewUICampaign = async (input: UICampaignInput) => (await client.post<{ base: import('../../../../mobile/frontend/src/types/dynamicUI').UIRuntime['base']; conflicts: { id: string; name: string; priority: number }[] }>('/ui/campaigns/preview', input)).data;
+export const uiError = (error: unknown) => {
+  const response = (error as { response?: { status?: number; data?: { error?: { code?: string; message?: string; details?: { message: string }[] } } } })?.response;
+  if (['UI_CAMPAIGN_OVERLAP', 'UI_CAMPAIGN_DUPLICATE'].includes(response?.data?.error?.code || '')) return response!.data!.error!.message || 'Campaign conflict';
+  if (response?.status === 409) return 'Another administrator changed this draft or release. Your edits are retained. Reload before retrying.';
+  return response?.data?.error?.details?.map((item) => item.message).join('; ') || response?.data?.error?.message || (error instanceof Error ? error.message : 'Request failed. Try again.');
+};

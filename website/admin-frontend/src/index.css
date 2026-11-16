@@ -2,6 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  .profile-navigation-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+
+  .profile-navigation-scroll::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .profile-navigation-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .profile-navigation-scroll::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: hsl(var(--border));
+  }
+
+  .profile-navigation-scroll::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+}
+
 @layer base {
   :root {
     --background: 204 29% 96.7%;
@@ -62,5 +88,20 @@
 
   ::selection {
     @apply bg-primary/20 text-foreground;
+  }
+
+  :root {
+    scrollbar-gutter: stable;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.5) hsl(var(--muted) / 0.5);
+  }
+  *::-webkit-scrollbar { width: 8px; height: 8px; }
+  *::-webkit-scrollbar-track { background: hsl(var(--muted) / 0.5); }
+  *::-webkit-scrollbar-thumb { border-radius: 8px; background: hsl(var(--muted-foreground) / 0.5); }
+  *::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.75); }
+  @media (forced-colors: active) {
+    * { scrollbar-color: auto; scrollbar-width: auto; }
   }
 }

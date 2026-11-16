@@ -23,6 +23,7 @@
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
     "expo-web-browser": "~57.0.3",
+    "lottie-react-native": "7.3.8",
     "lucide-react-native": "^1.47.0",
     "react": "^19.2.3",
     "react-native": "0.86.3",
@@ -48,6 +49,7 @@
     "start:clear": "node ./scripts/start-expo.cjs --clear",
     "start:tunnel": "node ./scripts/start-expo.cjs --tunnel",
     "start:localhost": "node ./scripts/start-expo.cjs --localhost",
+    "start:usb": "node ./scripts/start-expo.cjs --usb",
     "android": "node ./scripts/start-expo.cjs --android",
     "ios": "node ./scripts/start-expo.cjs --ios",
     "web": "expo start --web"

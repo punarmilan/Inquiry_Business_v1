@@ -5,10 +5,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useUIPage } from '../../hooks/useUIPage';
 import { useApp } from '../../context/AppContext';
 import type { AuthStackParamList } from '../../navigation/types';
 import { IllustratedOnboardingPage } from './IllustratedOnboardingPage';
-import { onboardingStyles as styles, ONBOARDING_COLORS } from './OnboardingScreen.styles';
+import { onboardingStyles as styles } from './OnboardingScreen.styles';
 import { LogoLoader } from '../../components/LogoLoader';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Onboarding'>;
@@ -17,6 +18,7 @@ const LEGACY_ONBOARDING_SEEN_KEY: string = 'anywork_onboarding_seen_v2';
 
 export const OnboardingScreen: React.FC<Props> = ({ navigation, route }) => {
   const { t } = useApp();
+  const appearance = useUIPage('onboarding');
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const pageWidth = Math.max(1, width);
@@ -32,20 +34,20 @@ export const OnboardingScreen: React.FC<Props> = ({ navigation, route }) => {
   const pages = useMemo(() => [
     {
       key: 'welcome',
-      title: t('onboardingWelcomeTitle') + '\n' + t('onboardingWelcomeAccent'),
-      subtitle: t('onboardingWelcomeSubtitle'),
+      title: appearance.copy('welcomeTitle', t('onboardingWelcomeTitle') + '\n' + t('onboardingWelcomeAccent')),
+      subtitle: appearance.copy('welcomeSubtitle', t('onboardingWelcomeSubtitle')),
     },
     {
       key: 'offers',
-      title: t('onboardingOffersTitle') + '\n' + t('onboardingOffersAccent'),
-      subtitle: t('onboardingOffersSubtitle'),
+      title: appearance.copy('offersTitle', t('onboardingOffersTitle') + '\n' + t('onboardingOffersAccent')),
+      subtitle: appearance.copy('offersSubtitle', t('onboardingOffersSubtitle')),
     },
     {
       key: 'services',
-      title: t('onboardingServicesTitle') + '\n' + t('onboardingServicesAccent'),
-      subtitle: t('onboardingServicesSubtitle'),
+      title: appearance.copy('servicesTitle', t('onboardingServicesTitle') + '\n' + t('onboardingServicesAccent')),
+      subtitle: appearance.copy('servicesSubtitle', t('onboardingServicesSubtitle')),
     },
-  ], [t]);
+  ], [t, appearance]);
 
   useEffect(() => {
     let cancelled = false;
@@ -115,7 +117,7 @@ export const OnboardingScreen: React.FC<Props> = ({ navigation, route }) => {
   }
 
   return (
-    <LinearGradient colors={['#EDFFFC', '#D9F6F0', '#F1FFFD']} style={styles.screen}>
+    <LinearGradient colors={appearance.backgroundColor ? [appearance.backgroundColor, appearance.backgroundColor, appearance.backgroundColor] : ['#EDFFFC', '#D9F6F0', '#F1FFFD']} style={styles.screen}>
       <StatusBar hidden barStyle="dark-content" />
       <ScrollView
         ref={scrollRef}

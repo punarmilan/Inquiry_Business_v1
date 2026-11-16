@@ -5,6 +5,8 @@ import { ChevronRight, Siren, X } from 'lucide-react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { DynamicRenderer } from '../../components/DynamicRenderer';
+import { useUIPage } from '../../hooks/useUIPage';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { listServiceCategories } from '../../services/api';
 import type { ServiceCategory } from '../../types/hyperlocal';
@@ -21,6 +23,7 @@ export const ServiceCategoriesScreen: React.FC<Props> = ({ route, navigation }) 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [emergencyOnly, setEmergencyOnly] = useState(false);
+  const appearance = useUIPage('serviceCategories');
   const insets = useSafeAreaInsets();
   const load = useCallback(async () => {
     setLoading(true);
@@ -31,11 +34,13 @@ export const ServiceCategoriesScreen: React.FC<Props> = ({ route, navigation }) 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
   const visibleCategories = useMemo(() => categories.filter((category) => (!emergencyOnly || isEmergencyCategory(category.name)) && normalize(category.name + ' ' + (category.description || '')).includes(normalize(search))), [categories, search, emergencyOnly]);
 
-  return <ScreenContainer>
-    <ServiceHeader title={route.params.locality} subtitle={route.params.cityName} onBack={navigation.goBack} icon="map-marker-radius" onAction={() => navigation.navigate('ServicesHome')} plain />
-    <ServiceSearch value={search} onChangeText={setSearch} placeholder="Search services you are looking for" plain />
-    <FlatList data={visibleCategories} keyExtractor={(item) => item._id} contentContainerStyle={[styles.content, { paddingBottom: 90 + insets.bottom }]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" refreshing={loading} onRefresh={load}
+  const columns = appearance.option('categoryLayout') === 'twoColumns' ? 2 : appearance.option('categoryLayout') === 'threeColumns' ? 3 : 1;
+  return <ScreenContainer dynamicBackgroundColor={appearance.backgroundColor}>
+    <ServiceHeader iconColor={appearance.option('iconTone') !== 'default' ? appearance.iconColor : undefined} style={appearance.header} titleStyle={appearance.title} locationStyle={appearance.selector} title={route.params.locality} subtitle={route.params.cityName} onBack={navigation.goBack} icon="map-marker-radius" onAction={() => navigation.navigate('ServicesHome')} plain />
+    <ServiceSearch style={appearance.selector} value={search} onChangeText={setSearch} placeholder="Search services you are looking for" plain />
+    <FlatList key={columns} numColumns={columns} columnWrapperStyle={columns > 1 ? { gap: 8 } : undefined} data={visibleCategories} keyExtractor={(item) => item._id} contentContainerStyle={[styles.content, appearance.content, { paddingBottom: 90 + insets.bottom }]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" refreshing={loading} onRefresh={load}
       ListHeaderComponent={<>
+        <DynamicRenderer pageKey="serviceCategories" slot="beforeContent" />
         <Pressable accessibilityRole="button" accessibilityLabel={emergencyOnly ? 'Show all services' : 'Show local emergency contacts'} onPress={() => { setEmergencyOnly(!emergencyOnly); setSearch(''); }} style={({ pressed }) => [styles.emergency, pressed && styles.pressed]}>
           <View style={styles.icon}><Siren size={26} color={theme.colors.text} strokeWidth={1.75} /></View>
           <View style={styles.emergencyCopy}><Text style={styles.emergencyTitle}>Local Emergency Contacts</Text><Text style={styles.emergencyText}>Ambulance, Fire Brigade, Police...</Text></View>
@@ -45,13 +50,14 @@ export const ServiceCategoriesScreen: React.FC<Props> = ({ route, navigation }) 
         {error ? <View style={ui.empty}><Text style={ui.emptyText}>{error}</Text><Pressable onPress={load} style={ui.pill}><Text style={ui.pillText}>Retry</Text></Pressable></View> : null}
       </>}
       renderItem={({ item: category, index }) => {
-        return <Pressable accessibilityRole="button" accessibilityLabel={'View ' + category.name + ' providers'} onPress={() => navigation.navigate('ServiceProviders', { cityId: route.params.cityId, cityName: route.params.cityName, locality: route.params.locality, categoryId: category._id, categoryName: category.name })} style={({ pressed }) => [styles.categoryRow, index % 4 === 0 && styles.firstCategory, index > 0 && index % 4 === 0 && styles.groupSpacing, (index % 4 === 3 || index === visibleCategories.length - 1) && styles.lastCategory, pressed && styles.pressed]}>
-          <View style={styles.icon}><MaterialCommunityIcons name={safeIcon(category.icon)} size={26} color={theme.colors.text} /></View>
+        return <Pressable accessibilityRole="button" accessibilityLabel={'View ' + category.name + ' providers'} onPress={() => navigation.navigate('ServiceProviders', { cityId: route.params.cityId, cityName: route.params.cityName, locality: route.params.locality, categoryId: category._id, categoryName: category.name })} style={({ pressed }) => [styles.categoryRow, appearance.card, columns > 1 && { flex: 1, flexDirection: 'column', borderWidth: 1, borderRadius: 16, marginBottom: 8 }, index % 4 === 0 && styles.firstCategory, index > 0 && index % 4 === 0 && styles.groupSpacing, (index % 4 === 3 || index === visibleCategories.length - 1) && styles.lastCategory, pressed && styles.pressed]}>
+          <View style={styles.icon}><MaterialCommunityIcons name={safeIcon(category.icon)} size={26} color={appearance.iconColor} /></View>
           <Text style={styles.categoryName}>{category.name}</Text>
           <ChevronRight size={21} color={theme.colors.textMuted} strokeWidth={1.75} />
         </Pressable>;
       }}
-      ListEmptyComponent={loading ? <ActivityIndicator color={colors.teal} style={{ marginVertical: 30 }} /> : !error ? <View style={ui.empty}><Text style={ui.emptyText}>{emergencyOnly ? 'No emergency contacts have been added for this city yet.' : 'No services match your search.'}</Text></View> : null}
+      ListFooterComponent={<DynamicRenderer pageKey="serviceCategories" slot="afterContent" />}
+      ListEmptyComponent={loading ? <ActivityIndicator color={colors.teal} style={{ marginVertical: 30 }} /> : !error ? <View style={ui.empty}><Text style={ui.emptyText}>{appearance.copy('emptyMessage', emergencyOnly ? 'No emergency contacts have been added for this city yet.' : 'No services match your search.')}</Text></View> : null}
     />
   </ScreenContainer>;
 };

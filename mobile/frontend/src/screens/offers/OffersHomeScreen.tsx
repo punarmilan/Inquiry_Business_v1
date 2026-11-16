@@ -1,6 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Image, ImageBackground, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
-import type { ImageSourcePropType } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 import { StatusBar } from 'expo-status-bar';
@@ -11,46 +10,46 @@ import { ScreenContainer } from '../../components/ScreenContainer';
 import { HyperlocalHeader } from '../../components/HyperlocalHeader';
 import { CityPickerModal } from '../../components/CityPickerModal';
 import { OfferCard } from '../../components/OfferCard';
-import { isPosterUploadOffer } from '../../config/offerCardDesigner';
+import { DynamicRenderer } from '../../components/DynamicRenderer';
+import { UIHomeBanner } from '../../components/UIHomeBanner';
+import { homeCards, homeCopy } from '../../utils/uiHome';
+import type { UIHomeCard } from '../../types/dynamicUI';
+import { useUIConfig } from '../../hooks/useUIConfig';
+import type { UIActions, UIBusinessData } from '../../components/ComponentRegistry';
 import { useHyperlocalLocation } from '../../hooks/useHyperlocalLocation';
-import { getHomeShowcase, listNearbyOffers, toggleSavedOffer } from '../../services/api';
+import { getHomeShowcase, listNearbyOffers, listSavedOffers, toggleSavedOffer } from '../../services/api';
 import type { HomeShowcaseBanner } from '../../services/api';
-import type { Business, Offer } from '../../types/hyperlocal';
+import type { Offer } from '../../types/hyperlocal';
 import type { MainTabParamList, OffersStackParamList } from '../../navigation/types';
-import { tabBarScrollProps } from '../../navigation/hideTabBarOnScroll';
 import { useApp } from '../../context/AppContext';
-import { SkylineMasthead, SectionHeading, SegmentedTabs } from '../../components/NeonUI';
+import { SectionHeading } from '../../components/NeonUI';
 import { offerCategories } from './OfferUI';
-import { buildHeroRotationPages } from './heroRotation';
+import { HomePromoCarousel } from './HomePromoCarousel';
+import { HomeShortcuts } from './HomeShortcuts';
+import { openHomeLink } from '../../services/homeLinks';
+import { showTabBar } from '../../navigation/hideTabBarOnScroll';
 import { theme, createThemedStyles } from '../../theme';
 import type { TranslationKey } from '../../i18n/translations';
 
 type Props = NativeStackScreenProps<OffersStackParamList, 'OffersHome'>;
 type CategoryIcon = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 type RadiusKm = number;
-// Keep these quick entries aligned with the four actions on the Post screen.
-const quickTiles: Array<{ id: string; titleKey: TranslationKey; icon: CategoryIcon; tint: string; image: ImageSourcePropType; enabled: boolean }> = [
-  { id: 'offer', titleKey: 'quickTileLocalOffer', icon: 'cube-outline', tint: '#00E2B0', image: require('../../../assets/screen-3/03-post-offer-character.png'), enabled: true },
-  { id: 'update', titleKey: 'quickTileUpdate', icon: 'pencil-outline', tint: '#00CFFF', image: require('../../../assets/provider-avatars/developer.jpg'), enabled: false },
-  { id: 'event', titleKey: 'quickTileEvent', icon: 'calendar-month-outline', tint: '#A86BFF', image: require('../../../assets/provider-avatars/designer.jpg'), enabled: false },
-  { id: 'service', titleKey: 'quickTilePostService', icon: 'tools', tint: '#FF7A3D', image: require('../../../assets/provider-avatars/plumber.jpg'), enabled: false },
-];
 // Quick filters above the feed. These narrow which offers are shown; the sort
 // tabs further down only reorder whatever survives the filter.
 type FeedFilter = 'all' | 'popular' | 'offers' | 'nearby';
-const feedFilters: Array<{ key: FeedFilter; labelKey: TranslationKey; icon: CategoryIcon }> = [
+const feedFilters: Array<{ key: FeedFilter | 'saved'; labelKey: TranslationKey; icon: CategoryIcon }> = [
   { key: 'all', labelKey: 'filterAll', icon: 'view-grid' },
   { key: 'popular', labelKey: 'filterPopular', icon: 'fire' },
   { key: 'offers', labelKey: 'chipOffers', icon: 'tag-outline' },
   { key: 'nearby', labelKey: 'filterNearby', icon: 'map-marker-outline' },
+  { key: 'saved', labelKey: 'homeShortcutSaved', icon: 'heart-outline' },
 ];
 const NEARBY_KM = 5;
 const BIG_DISCOUNT = 30;
 
-// Promo banner artwork is 2172x724, so the card is sized from the screen width
-// to keep those proportions exactly — the text in the image distorts otherwise.
-const SUPPORT_LOCAL_BANNER = require('../../../assets/support-local-banner.png');
-const BANNER_RATIO = 2172 / 724;
+// Match the reference banner frame; cover trims the artwork edges uniformly.
+const SUPPORT_LOCAL_BANNER = require('../../../assets/reference-home/support-local.png');
+const BANNER_RATIO = 3.8;
 const BANNER_MARGIN = 13;
 
 // Feed ordering. 'Top Offers' ranks by discount, 'This Week' by newest, and
@@ -61,10 +60,17 @@ type SortTab = typeof sortTabs[number];
 const filterCategories = offerCategories;
 
 export const OffersHomeScreen: React.FC<Props> = ({ navigation }) => {
-  const { accessToken, currentUser, unreadNotificationCount, t, themeMode } = useApp();
+  const { accessToken, currentUser, unreadNotificationCount, t, themeMode, hasApprovedBusiness } = useApp();
+  const { refresh: refreshUI, state: uiState, locale: uiLocale = 'en' } = useUIConfig();
+  const managedHome = useMemo(() => uiState?.config.enabled && !uiState.config.useNativeFallback ? homeCards(uiState.config.base.pages.offersHome) : [], [uiState?.config]);
+  const homeControlled = managedHome.length > 0;
+  const topBanner = managedHome.find(card => card.props.placement === 'aboveTrending');
+  const bottomBanner = managedHome.find(card => card.props.placement === 'belowTrending');
+  const trendingSettings = managedHome.find(card => card.props.placement === 'trending');
+  const showTrending = !homeControlled || Boolean(trendingSettings && !trendingSettings.hidden);
   const locationState = useHyperlocalLocation();
   const { width: windowWidth } = useWindowDimensions();
-  const pageWidth = windowWidth;
+  const trendingCardWidth = (windowWidth - 28 - 18) / 4;
   const bannerWidth = windowWidth - BANNER_MARGIN * 2;
   const bannerHeight = Math.round(bannerWidth / BANNER_RATIO);
   const [offers, setOffers] = useState<Offer[]>([]);
@@ -75,11 +81,12 @@ export const OffersHomeScreen: React.FC<Props> = ({ navigation }) => {
   const [draftRadiusKm, setDraftRadiusKm] = useState<RadiusKm>(10);
   const [draftRadiusInput, setDraftRadiusInput] = useState('10');
   const [filterVisible, setFilterVisible] = useState(false);
-  const [sortTab, setSortTab] = useState<SortTab>('topOffers');
+  const [sortTab] = useState<SortTab>('topOffers');
   const [feedFilter, setFeedFilter] = useState<FeedFilter>('all');
-  const [heroPage, setHeroPage] = useState(0);
   const [homeShowcase, setHomeShowcase] = useState<{ configured: boolean; banner: HomeShowcaseBanner | null; trendingOffers: Offer[] } | null>(null);
   const [savedIds, setSavedIds] = useState<string[]>([]);
+  const savedRequestId = useRef(0);
+  const savingIds = useRef(new Set<string>());
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -91,8 +98,17 @@ export const OffersHomeScreen: React.FC<Props> = ({ navigation }) => {
   const showcaseRequestId = useRef(0);
   const showcaseLocationKey = useRef('');
   const scrollRef = useRef<ScrollView>(null);
-  const heroCarouselRef = useRef<ScrollView>(null);
-  const heroPageRef = useRef(0);
+  const searchRef = useRef<TextInput>(null);
+
+  useFocusEffect(useCallback(() => {
+    const current = ++savedRequestId.current;
+    let active = true;
+    if (!accessToken) setSavedIds([]);
+    else void listSavedOffers(accessToken).then(result => {
+      if (active && current === savedRequestId.current) setSavedIds(result.data.map(offer => offer._id));
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [accessToken]));
 
   const loadHomeShowcase = useCallback(async () => {
     if (!locationState.location) {
@@ -195,11 +211,16 @@ export const OffersHomeScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   const save = async (offerId: string) => {
-    if (!accessToken) return;
+    if (!accessToken || savingIds.current.has(offerId)) return;
+    savingIds.current.add(offerId);
+    savedRequestId.current += 1;
+    const wasSaved = savedIds.includes(offerId);
     // Flip the heart immediately, then reconcile with whatever the server says.
     setSavedIds((ids) => ids.includes(offerId) ? ids.filter((id) => id !== offerId) : [...ids, offerId]);
     const result = await toggleSavedOffer(accessToken, offerId).catch(() => null);
-    if (result) setSavedIds((ids) => result.saved ? [...ids.filter((id) => id !== offerId), offerId] : ids.filter((id) => id !== offerId));
+    const saved = result ? result.saved : wasSaved;
+    setSavedIds((ids) => saved ? [...ids.filter((id) => id !== offerId), offerId] : ids.filter((id) => id !== offerId));
+    savingIds.current.delete(offerId);
   };
 
   const openFilter = () => {
@@ -251,36 +272,13 @@ export const OffersHomeScreen: React.FC<Props> = ({ navigation }) => {
     if (sortTab === 'thisWeek') return list.sort((a, b) => new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime());
     return list.sort((a, b) => (a.distanceKm ?? Number.POSITIVE_INFINITY) - (b.distanceKm ?? Number.POSITIVE_INFINITY));
   }, [offers, sortTab, feedFilter]);
-  const heroOffers = useMemo(() => homeShowcase?.configured ? homeShowcase.trendingOffers : sortedOffers.slice(0, 9), [homeShowcase, sortedOffers]);
-  const heroPages = useMemo(() => buildHeroRotationPages(heroOffers), [heroOffers]);
-  useFocusEffect(useCallback(() => {
-    if (heroPages.length < 2) return;
-    const rotation = setInterval(() => {
-      const next = (heroPageRef.current + 1) % heroPages.length;
-      heroPageRef.current = next;
-      setHeroPage(next);
-      heroCarouselRef.current?.scrollTo({ x: next * pageWidth, animated: next !== 0 });
-    }, 5_000);
-    return () => clearInterval(rotation);
-  }, [heroPages.length, pageWidth]));
-  useFocusEffect(useCallback(() => {
-    setHeroPage(0);
-    heroPageRef.current = 0;
-    heroCarouselRef.current?.scrollTo({ x: 0, animated: false });
-  }, [homeShowcase?.configured, homeShowcase?.trendingOffers.map((offer) => offer._id).join(',')]));
-  const [trendingOffsetY, setTrendingOffsetY] = useState(0);
-  const openPostOption = (tile: typeof quickTiles[number]) => {
-    // "Local Offers" is about browsing what's already on this screen, not
-    // posting — so it scrolls down to the feed instead of leaving the page.
-    if (tile.id === 'offer') {
-      scrollRef.current?.scrollTo({ y: Math.max(trendingOffsetY - 12, 0), animated: true });
-      return;
-    }
-    if (!tile.enabled) {
-      Alert.alert(t('postStatusUpcoming'), `${t(tile.titleKey)} ${t('postOptionComingSoon')}`);
-      return;
-    }
-    navigation.getParent<NavigationProp<MainTabParamList>>()?.navigate('PostTab', { screen: 'PostEntry' });
+  const hasFeedFilters = Boolean(search.trim() || category !== 'All' || feedFilter !== 'all');
+  const heroOffers = useMemo(() => homeShowcase?.configured && !hasFeedFilters ? homeShowcase.trendingOffers : sortedOffers, [hasFeedFilters, homeShowcase, sortedOffers]);
+  const visibleHeroOffers = heroOffers.filter(offer => !managedHome.some(card => card.props.placement === 'offer' && card.props.offerId === offer._id && card.hidden)).slice(0, trendingSettings?.props.limit || 40);
+  useFocusEffect(useCallback(() => { showTabBar(); }, []));
+
+  const showUpcoming = (title: TranslationKey) => {
+    Alert.alert(t('postStatusUpcoming'), `${t(title)} ${t('postOptionComingSoon')}`);
   };
   const openOffer = (offerId: string) => navigation.navigate('OfferDetails', { offerId, latitude: locationState.location?.latitude, longitude: locationState.location?.longitude });
   const openAllOffers = () => {
@@ -294,14 +292,43 @@ export const OffersHomeScreen: React.FC<Props> = ({ navigation }) => {
   };
   const openWishlist = () => navigation.getParent<NavigationProp<MainTabParamList>>()?.navigate('MoreTab', { screen: 'SavedOffers' });
   const openProfile = () => navigation.getParent<NavigationProp<MainTabParamList>>()?.navigate('ProfileTab', { screen: 'ProfileMain' });
+  // Presentation only: the same APIs, location/search filters, saved state and
+  // route gates used by the native homepage remain authoritative.
+  const uiActions: UIActions = {
+    'offers.openAll': openAllOffers,
+    'business.openCenter': () => navigation.getParent<NavigationProp<MainTabParamList>>()?.navigate('MoreTab', { screen: 'BusinessCenter' }),
+    'profile.openSettings': () => navigation.getParent<NavigationProp<MainTabParamList>>()?.navigate('ProfileTab', { screen: 'Settings' }),
+  };
+  const uiData: UIBusinessData = {
+    offers: { nearby: sortedOffers, showcase: homeShowcase?.trendingOffers || [] },
+    savedOfferIds: savedIds, onOfferPress: openOffer, onOfferSave: (id) => { void save(id); },
+  };
+
+  const cityLabel = locationState.location ? `${locationState.location.locality}${locationState.location.city ? `, ${locationState.location.city.name}` : ''}` : t('chooseLocation');
+  const openServices = () => navigation.getParent<NavigationProp<MainTabParamList>>()?.navigate('ServicesTab', { screen: 'ServicesHome' });
+  const openPost = () => {
+    const tabs = navigation.getParent<NavigationProp<MainTabParamList>>();
+    if (hasApprovedBusiness) tabs?.navigate('PostTab', { screen: 'PostMenu' });
+    else tabs?.navigate('MoreTab', { screen: 'BusinessCenter' });
+  };
+
+  const homeAction = (card: UIHomeCard) => {
+    if (card.props.homeAction === 'link') { void openHomeLink(card.props.linkUrl, uiLocale); }
+    else if (card.props.homeAction === 'post') openPost();
+    else if (card.props.homeAction === 'services') openServices();
+    else if (card.props.homeAction === 'events') showUpcoming('quickTileEvent');
+    else openAllOffers();
+  };
 
   return (
     <ScreenContainer edges={['top', 'left', 'right']} backgroundColor={theme.colors.background}>
       <StatusBar style={themeMode === 'dark' ? 'light' : 'dark'} />
-      <SkylineMasthead height={290} />
+      <Image source={require('../../../assets/reference-home/skyline.png')}
+        style={[styles.scenicBackdrop, { height: windowWidth * 0.85, opacity: themeMode === 'dark' ? 0.18 : 0.55 }]} resizeMode="cover" />
       <HyperlocalHeader
         offersStyle
-        cityLabel={locationState.location ? `${locationState.location.locality}${locationState.location.city ? `, ${locationState.location.city.name}` : ''}` : t('chooseLocation')}
+        locationLabel={t('homeDiscoverTitle')}
+        cityLabel={cityLabel}
         onLocationPress={() => locationState.setPickerVisible(true)}
         onNotifications={() => navigation.navigate('Notifications')}
         unreadCount={unreadNotificationCount}
@@ -311,66 +338,51 @@ export const OffersHomeScreen: React.FC<Props> = ({ navigation }) => {
         avatarUri={currentUser?.avatar}
         avatarName={currentUser?.name}
       />
+      <Text style={styles.communityTagline}>{t('homeCommunityTagline')}</Text>
       <ScrollView
         ref={scrollRef}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); loadHomeShowcase(); }} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); loadHomeShowcase(); void refreshUI(); }} />}
         contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        {...tabBarScrollProps}
       >
-        <View style={styles.tileRow}>
-          {quickTiles.map((tile) => {
-            return <Pressable key={tile.id} accessibilityRole="button" onPress={() => openPostOption(tile)} style={({ pressed }) => [
-              styles.tile,
-              { borderColor: tile.tint, shadowColor: tile.tint },
-              pressed && styles.tilePressed,
-            ]}>
-              <View style={styles.tileMedia}>
-                <Image source={tile.image} style={styles.tileImage} resizeMode="cover" />
-                <View
-                  accessible
-                  accessibilityLabel={t(tile.enabled ? 'postStatusActive' : 'postStatusUpcoming')}
-                  style={[styles.tileStatus, tile.enabled ? styles.tileStatusActive : styles.tileStatusUpcoming]}
-                >
-                  <MaterialCommunityIcons
-                    name={tile.enabled ? 'check-bold' : 'clock-outline'}
-                    size={11}
-                    color={tile.enabled ? '#7FFFE0' : '#D6E1E4'}
-                  />
-                </View>
-              </View>
-              <View style={[styles.tileIcon, { backgroundColor: tile.tint }]}><MaterialCommunityIcons name={tile.icon} size={18} color="#FFFFFF" /></View>
-              <View style={styles.tileCopy}>
-                <View style={styles.tileTitleRow}>
-                  <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.75} style={styles.tileTitle}>{t(tile.titleKey)}</Text>
-                  <MaterialCommunityIcons name="chevron-right" size={14} color={tile.tint} />
-                </View>
-              </View>
-            </Pressable>;
-          })}
-        </View>
-        <View style={styles.searchFilterRow}>
-          <View style={styles.searchBox}>
-            <View pointerEvents="none" style={styles.searchSheen} />
-            <MaterialCommunityIcons name="magnify" size={22} color={theme.colors.textMuted} />
-            <TextInput value={search} onChangeText={setSearch} placeholder={t('searchOffers')} placeholderTextColor={theme.colors.textMuted} style={styles.searchInput} multiline={false} returnKeyType="search" />
-            {search ? <Pressable onPress={() => setSearch('')}><MaterialCommunityIcons name="close-circle" size={20} color={theme.colors.textMuted} /></Pressable> : null}
-          <Pressable onPress={openFilter} accessibilityLabel={t('openFilters')} style={({ pressed }) => [styles.filterButton, pressed && styles.filterPressed]}>
-            <MaterialCommunityIcons name="tune-variant" size={22} color={theme.colors.primary} />
-            {filterCount > 0 && <View style={styles.filterBadge}><Text style={styles.filterBadgeText}>{filterCount}</Text></View>}
-          </Pressable>
+        <DynamicRenderer pageKey="offersHome" slot="beforeContent" actions={uiActions} data={uiData}
+          isVisible={(block) => block.type !== 'offerRail' || Boolean(locationState.location && !loading && !error && !comingSoon)} />
+        <HomePromoCarousel cards={homeControlled ? managedHome.filter(card => card.props.placement === 'promo') : undefined}
+          settings={uiState?.config.enabled && !uiState.config.useNativeFallback ? uiState.config.base.pages.offersHome.homeHeader : undefined}
+          onCardPress={homeAction}
+          onOffers={openAllOffers}
+          onServices={openServices}
+          onPost={openPost}
+          onEvents={() => showUpcoming('quickTileEvent')}
+        />
+        <HomeShortcuts onSelect={shortcut => {
+          if (shortcut === 'services') openServices();
+          else if (shortcut === 'post') openPost();
+          else if (shortcut === 'events') showUpcoming('quickTileEvent');
+          else openAllOffers();
+        }} />
+          <View style={styles.searchFilterRow}>
+            <View style={styles.searchBox}>
+              <MaterialCommunityIcons name="magnify" size={22} color={theme.colors.textMuted} />
+              <TextInput ref={searchRef} value={search} onChangeText={setSearch} accessibilityLabel={t('searchOffers')} placeholder={t('homeSearchPlaceholder')} placeholderTextColor={theme.colors.textMuted} style={styles.searchInput} multiline={false} returnKeyType="search" />
+              {search ? <Pressable accessibilityRole="button" accessibilityLabel={t('clearSearch')} hitSlop={8} onPress={() => { setSearch(''); searchRef.current?.focus(); }}><MaterialCommunityIcons name="close-circle" size={20} color={theme.colors.textMuted} /></Pressable> : null}
+            <Pressable onPress={openFilter} accessibilityLabel={t('openFilters')} style={({ pressed }) => [styles.filterButton, pressed && styles.filterPressed]}>
+              <MaterialCommunityIcons name="tune-variant" size={22} color={theme.colors.primary} />
+              {filterCount > 0 && <View style={styles.filterBadge}><Text style={styles.filterBadgeText}>{filterCount}</Text></View>}
+            </Pressable>
+            </View>
           </View>
-        </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
           {feedFilters.map((item) => {
             const isSelected = feedFilter === item.key;
-            return <Pressable key={item.key} accessibilityRole="button" accessibilityState={{ selected: isSelected }} onPress={() => setFeedFilter(item.key)} style={[styles.category, isSelected && styles.categoryActive]}>
-              <MaterialCommunityIcons name={item.icon} size={17} color={isSelected ? (themeMode === 'dark' ? '#001014' : theme.colors.textInverse) : theme.colors.primary} />
-              <Text style={[styles.categoryText, isSelected && styles.categoryTextActive, isSelected && themeMode === 'dark' && styles.categoryTextActiveDark]}>{t(item.labelKey)}</Text>
+            return <Pressable key={item.key} accessibilityRole="button" accessibilityState={{ selected: isSelected }} onPress={() => item.key === 'saved' ? openWishlist() : setFeedFilter(item.key)} style={[styles.category, isSelected && styles.categoryActive]}>
+              <MaterialCommunityIcons name={item.icon} size={19} color={isSelected ? '#FFFFFF' : item.key === 'popular' || item.key === 'saved' ? theme.colors.accent : theme.colors.primary} />
+              <Text style={[styles.categoryText, isSelected && styles.categoryTextActive]}>{t(item.labelKey)}</Text>
             </Pressable>;
           })}
         </ScrollView>
-        <Pressable accessibilityRole="button" accessibilityLabel={homeShowcase?.banner?.buttonText || 'Explore offers'} onPress={openAllOffers} style={styles.bannerWrap}>
+        {homeControlled ? (topBanner ? <UIHomeBanner card={topBanner} locale={uiLocale} width={bannerWidth} onPress={() => homeAction(topBanner)} /> : null) : (<Pressable accessibilityRole="button" accessibilityLabel={homeShowcase?.banner?.buttonText || t('navExplore')} onPress={openAllOffers} style={styles.bannerWrap}>
           {homeShowcase?.banner && Object.values(homeShowcase.banner).some(Boolean) ? (homeShowcase.banner.imageUrl ? <ImageBackground source={{ uri: homeShowcase.banner.imageUrl }} style={{ width: bannerWidth, height: bannerHeight }} resizeMode="cover">
             <View style={styles.bannerOverlay}>
               <Text numberOfLines={2} style={styles.bannerTitle}>{homeShowcase.banner.title}</Text>
@@ -382,66 +394,48 @@ export const OffersHomeScreen: React.FC<Props> = ({ navigation }) => {
             {homeShowcase.banner.subtitle ? <Text numberOfLines={2} style={styles.bannerSubtitle}>{homeShowcase.banner.subtitle}</Text> : null}
             {homeShowcase.banner.buttonText ? <View style={styles.bannerButton}><Text style={styles.bannerButtonText}>{homeShowcase.banner.buttonText}  →</Text></View> : null}
           </View></View>) : <Image source={SUPPORT_LOCAL_BANNER} style={{ width: bannerWidth, height: bannerHeight }} resizeMode="cover" />}
-        </Pressable>
-        <View style={styles.discoverBlock} onLayout={(event) => setTrendingOffsetY(event.nativeEvent.layout.y)}>
-          <SectionHeading icon="fire" title={t('discoverLocal')} action={{ label: t('viewAll'), onPress: openAllOffers }} />
-        </View>
-        {/* Featured carousel: one large poster beside two stacked ones per page. */}
-        {heroPages.length ? <>
-          <ScrollView
-            ref={heroCarouselRef}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onMomentumScrollEnd={(event) => {
-              const current = Math.max(0, Math.min(heroPages.length - 1, Math.round(event.nativeEvent.contentOffset.x / pageWidth)));
-              heroPageRef.current = current;
-              setHeroPage(current);
-            }}
-            scrollEventThrottle={16}
-          >
-            {heroPages.map((page, index) => (
-              <View key={index} style={[styles.heroPage, { width: pageWidth }]}>
-                <View style={styles.heroMain}>
-                  <OfferCard offer={page[0]} variant="hero" onPress={() => openOffer(page[0]._id)} onSave={() => save(page[0]._id)} saved={savedIds.includes(page[0]._id)} />
-                </View>
-                {page.length > 1 ? <View style={styles.heroSide}>
-                  {page.slice(1).map((offer) => (
-                    <OfferCard key={offer._id} offer={offer} variant="hero" compact onPress={() => openOffer(offer._id)} onSave={() => save(offer._id)} saved={savedIds.includes(offer._id)} />
-                  ))}
-                </View> : null}
+        </Pressable>)}
+        {showTrending ? <View style={styles.discoverBlock}>
+          <SectionHeading variant="home" icon="fire" iconColor="#FF5A0A" title={trendingSettings ? homeCopy(trendingSettings.props.title, uiLocale) : t('discoverLocal')} action={{ label: t('viewAll'), onPress: openAllOffers }} />
+        </View> : null}
+        {showTrending && visibleHeroOffers.length ? <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.trendingRail} onScroll={homeShowcase?.configured && !hasFeedFilters ? undefined : onFeedScroll} scrollEventThrottle={150}>
+          {visibleHeroOffers.map(offer => <View key={offer._id} style={{ width: trendingCardWidth }}>
+            <OfferCard offer={offer} variant="neighbourhood" height={116} homeMedia={managedHome.find(card => card.props.placement === 'offer' && card.props.offerId === offer._id) || (trendingSettings?.props.media !== 'none' ? trendingSettings : undefined)}
+              onPress={() => openOffer(offer._id)} onSave={() => save(offer._id)} saved={savedIds.includes(offer._id)} />
+          </View>)}
+          {loadingMore ? <ActivityIndicator color={theme.colors.primary} style={styles.feedLoader} /> : null}
+        </ScrollView> : null}
+        {homeControlled ? (bottomBanner ? <UIHomeBanner card={bottomBanner} locale={uiLocale} width={bannerWidth} onPress={() => homeAction(bottomBanner)} /> : null) : (<Pressable accessibilityRole="button"
+          accessibilityLabel={`${t('homeMoreDealsTitle')} ${t('navExplore')}`}
+          onPress={openAllOffers} style={({ pressed }) => [styles.bannerWrap, styles.moreDealsBanner, pressed && { opacity: 0.85 }]}>
+          <ImageBackground source={require('../../../assets/reference-home/more-local-deals.png')}
+            style={{ width: bannerWidth, minHeight: Math.max(100, bannerHeight) }} resizeMode="cover">
+            <View style={styles.moreDealsCopy}>
+              <Text style={styles.moreDealsTitle}>{t('homeMoreDealsTitle')}</Text>
+              <Text style={styles.moreDealsCaption}>{t('homeMoreDealsCaption')}</Text>
+              <View style={[styles.bannerButton, styles.moreDealsButton]}>
+                <Text style={styles.moreDealsButtonText}>{t('navExplore')}</Text>
+                <MaterialCommunityIcons name="arrow-right" size={14} color="#FFFFFF" />
               </View>
-            ))}
-          </ScrollView>
-          {heroPages.length > 1 ? <View style={styles.dots}>
-            {heroPages.map((_, index) => <View key={index} style={[styles.dot, index === heroPage && styles.dotActive]} />)}
-          </View> : null}
-        </> : null}
-        {sortedOffers.length ? <View style={styles.sortRow}><SegmentedTabs options={sortTabs.map((tab) => t(tab))} value={t(sortTab)} onChange={(label) => setSortTab(sortTabs.find((tab) => t(tab) === label) || 'topOffers')} /></View> : null}
+            </View>
+          </ImageBackground>
+        </Pressable>)}
         {loading && !offers.length ? <ActivityIndicator color={theme.colors.primary} style={styles.loader} /> : null}
         {error ? <Pressable onPress={load} style={styles.emptyCard}><Text style={styles.emptyText}>{error}</Text><Text style={styles.chooseText}>Tap to retry</Text></Pressable> : null}
-        {!error && (comingSoon || (!loading && !offers.length)) && (
+        {!error && (comingSoon || (!loading && !sortedOffers.length)) && (
           <View style={styles.emptyCard}>
             <MaterialCommunityIcons name="map-marker-alert-outline" size={42} color={theme.colors.primary} />
-            <Text style={styles.emptyTitle}>{comingSoon ? t('offerComingSoon') : t('noNearbyOffers')}</Text>
-            <Text style={styles.emptyText}>{t('tryAnotherEnabledCity')}</Text>
-            <Pressable onPress={() => locationState.setPickerVisible(true)} style={styles.chooseButton}><Text style={styles.chooseText}>{t('seeAvailableCities')}</Text></Pressable>
+            <Text style={styles.emptyTitle}>{comingSoon ? t('offerComingSoon') : hasFeedFilters ? t('noOffersMatch') : t('noNearbyOffers')}</Text>
+            <Text style={styles.emptyText}>{t(hasFeedFilters && !comingSoon ? 'noOffersMatchHint' : 'tryAnotherEnabledCity')}</Text>
+            <Pressable accessibilityRole="button" onPress={() => {
+              if (hasFeedFilters && !comingSoon) { setSearch(''); setCategory('All'); setFeedFilter('all'); setRadiusKm(10); }
+              else locationState.setPickerVisible(true);
+            }} style={styles.chooseButton}><Text style={styles.chooseText}>{t(hasFeedFilters && !comingSoon ? 'resetFilters' : 'seeAvailableCities')}</Text></Pressable>
           </View>
         )}
-        {sortedOffers.length ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.offerFeed} onScroll={onFeedScroll} scrollEventThrottle={150}>
-            {sortedOffers.map((offer) => (
-              <OfferTile
-                key={offer._id}
-                offer={offer}
-                saved={savedIds.includes(offer._id)}
-                onPress={() => openOffer(offer._id)}
-                onSave={() => save(offer._id)}
-              />
-            ))}
-            {loadingMore ? <ActivityIndicator color={theme.colors.primary} style={styles.feedLoader} /> : null}
-          </ScrollView>
-        ) : null}
+        <DynamicRenderer pageKey="offersHome" slot="afterContent" actions={uiActions} data={uiData}
+          isVisible={(block) => block.type !== 'offerRail' || Boolean(locationState.location && !loading && !error && !comingSoon)} />
       </ScrollView>
       <CityPickerModal
         visible={locationState.pickerVisible}
@@ -495,97 +489,38 @@ export const OffersHomeScreen: React.FC<Props> = ({ navigation }) => {
   );
 };
 
-// Compact feed card: poster thumbnail with the discount badge and save heart,
-// then the business name and the three metadata lines from the design.
-const OfferTile: React.FC<{ offer: Offer; saved: boolean; onPress: () => void; onSave: () => void }> = ({ offer, saved, onPress, onSave }) => {
-  const business = (offer.businessDocument || offer.business) as Business | undefined;
-  const photo = offer.imageUrls?.[0] || offer.cardDesign?.previewUrl;
-  const area = offer.locality || offer.addressDetails?.area || offer.addressDetails?.city;
-  return (
-    <Pressable accessibilityRole="button" accessibilityLabel={offer.title} onPress={onPress} style={({ pressed }) => [styles.tileCard, pressed && styles.tilePressed]}>
-      <View style={styles.tilePhotoWrap}>
-        {photo
-          ? <Image source={{ uri: photo }} style={styles.tilePhoto} resizeMode="cover" />
-          : <View style={[styles.tilePhoto, styles.tilePhotoFallback]}><MaterialCommunityIcons name="sale" size={34} color={theme.colors.primary} /></View>}
-        {isPosterUploadOffer(offer) ? null : <View style={styles.tileBadge}><Text style={styles.tileBadgeText}>{Math.round(offer.discountPercentage)}% OFF</Text></View>}
-        <Pressable accessibilityRole="button" accessibilityLabel={saved ? 'Unsave offer' : 'Save offer'} hitSlop={8} onPress={onSave} style={styles.tileHeart}>
-          <MaterialCommunityIcons name={saved ? 'heart' : 'heart-outline'} size={17} color={saved ? theme.colors.danger : theme.colors.text} />
-        </Pressable>
-      </View>
-      <View style={styles.tileBody}>
-        <Text numberOfLines={1} style={styles.tileName}>{business?.name || offer.title}</Text>
-        <TileMeta icon="tag-outline" text={offer.category} />
-        {area ? <TileMeta icon="map-marker-outline" text={area} /> : null}
-        <TileMeta icon="clock-outline" text={`Valid till ${new Date(offer.expiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`} />
-      </View>
-    </Pressable>
-  );
-};
-
-const TileMeta = ({ icon, text }: { icon: CategoryIcon; text: string }) => (
-  <View style={styles.tileMeta}>
-    <MaterialCommunityIcons name={icon} size={13} color={theme.colors.textMuted} />
-    <Text numberOfLines={1} style={styles.tileMetaText}>{text}</Text>
-  </View>
-);
-
 const styles = createThemedStyles((c) => ({
-  content: { paddingBottom: 120 },
-  tileRow: { flexDirection: 'row', gap: 6, paddingHorizontal: 11, marginTop: 2, marginBottom: 5 },
-  tile: { flex: 1, minWidth: 0, height: 132, borderRadius: 16, borderWidth: 1.25, backgroundColor: c.surface, overflow: 'hidden', shadowColor: c.cardGlow, shadowOpacity: 0.55, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 3 },
-  tilePressed: { opacity: 0.75 },
-  tileMedia: { height: 72, backgroundColor: c.surfaceAlt },
-  tileImage: { width: '100%', height: '100%' },
-  tileStatus: { position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: 11, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  tileStatusUpcoming: { backgroundColor: 'rgba(7, 12, 14, 0.82)', borderColor: 'rgba(180, 194, 197, 0.42)' },
-  tileStatusActive: { backgroundColor: 'rgba(0, 45, 37, 0.88)', borderColor: '#00E2B0' },
-  // Sits astride the photo/body seam like the badges in the design.
-  tileIcon: { position: 'absolute', left: 8, top: 54, zIndex: 2, width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 2.5, borderColor: c.surface, shadowColor: '#000000', shadowOpacity: 0.26, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4 },
-  tileCopy: { flex: 1, paddingTop: 22, paddingHorizontal: 6, paddingBottom: 6 },
-  tileTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 1 },
-  tileTitle: { flex: 1, minWidth: 0, fontSize: 12, lineHeight: 14, fontWeight: '900', color: c.text },
-  bannerWrap: { alignSelf: 'center', marginTop: 12, borderRadius: 20, overflow: 'hidden', backgroundColor: c.surface, shadowColor: c.cardGlow, shadowOpacity: 0.55, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 3 },
+  content: { paddingBottom: 104 },
+  scenicBackdrop: { position: 'absolute', top: 0, width: '100%' },
+  communityTagline: { marginLeft: 64, marginRight: 14, marginTop: -4, marginBottom: 5, color: c.textSecondary, fontSize: 9, lineHeight: 14 },
+  trendingRail: { paddingHorizontal: 14, gap: 6, paddingBottom: 10 },
+  moreDealsBanner: { marginTop: 2, backgroundColor: '#FFE7D5' },
+  moreDealsCopy: { width: '65%', paddingHorizontal: 14, paddingVertical: 12, alignItems: 'flex-start', justifyContent: 'center' },
+  moreDealsTitle: { color: '#173142', fontSize: 15, lineHeight: 19, fontWeight: '800', letterSpacing: -0.3 },
+  moreDealsCaption: { color: '#475560', fontSize: 9, lineHeight: 13, marginTop: 3 },
+  moreDealsButton: { backgroundColor: '#086C6F', flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 5, paddingHorizontal: 10, marginTop: 7 },
+  moreDealsButtonText: { color: '#FFFFFF', fontSize: 9, lineHeight: 13, fontWeight: '700' },
+  bannerWrap: { alignSelf: 'center', marginTop: 7, borderRadius: 17, overflow: 'hidden', backgroundColor: c.surface, shadowColor: c.cardGlow, shadowOpacity: 0.55, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 3 },
   bannerOverlay: { flex: 1, justifyContent: 'center', alignItems: 'flex-start', paddingHorizontal: 23, paddingVertical: 8, backgroundColor: 'rgba(0, 37, 36, 0.42)' },
   bannerTitle: { color: '#FFFFFF', fontSize: 18, lineHeight: 20, fontWeight: '900', maxWidth: '70%' },
   bannerSubtitle: { color: '#FFFFFF', fontSize: 9, lineHeight: 11, marginTop: 2, maxWidth: '70%' },
   bannerButton: { backgroundColor: '#FFFFFF', borderRadius: 14, paddingHorizontal: 9, paddingVertical: 3, marginTop: 4 },
   bannerButtonText: { color: '#075C5C', fontSize: 9, fontWeight: '800' },
-  discoverBlock: { paddingHorizontal: 14, paddingTop: 4, paddingBottom: 10 },
-  sortRow: { paddingHorizontal: 13, paddingTop: 3, paddingBottom: 12 },
-  searchFilterRow: { flexDirection: 'row', alignItems: 'center', gap: 0, marginHorizontal: 13, marginTop: 10, marginBottom: 2 },
-  searchBox: { flex: 1, height: 52, backgroundColor: c.surface, borderRadius: 27, borderWidth: 1, borderColor: c.cardBorder, flexDirection: 'row', alignItems: 'center', paddingLeft: 16, paddingRight: 5, gap: 10, shadowColor: c.cardGlow, shadowOpacity: 0.48, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 3, overflow: 'hidden' },
-  searchSheen: { position: 'absolute', top: 0, left: 28, right: 28, height: 14, borderRadius: 99, backgroundColor: c.cardFillStart, opacity: 0.6 },
-  searchInput: { flex: 1, fontSize: 16, lineHeight: 22, color: c.text, paddingVertical: 0, textAlignVertical: 'center' },
-  filterButton: { width: 44, height: 44, borderRadius: 14, borderWidth: 1.25, borderColor: c.cardBorder, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center', shadowColor: c.cardGlow, shadowOpacity: 0.42, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 3 },
+  discoverBlock: { paddingHorizontal: 14, paddingTop: 12, paddingBottom: 8 },
+  searchFilterRow: { flexDirection: 'row', alignItems: 'center', gap: 0, marginHorizontal: 13, marginTop: 4, marginBottom: 3 },
+  searchBox: { flex: 1, height: 42, backgroundColor: c.surface, borderRadius: 24, borderWidth: 1, borderColor: c.cardBorder, flexDirection: 'row', alignItems: 'center', paddingLeft: 15, paddingRight: 4, gap: 10, shadowColor: c.cardGlow, shadowOpacity: 0, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 3, overflow: 'hidden' },
+  searchInput: { flex: 1, fontSize: 12, lineHeight: 18, color: c.text, paddingVertical: 0, textAlignVertical: 'center' },
+  filterButton: { width: 39, height: 32, borderRadius: 17, borderWidth: 1.25, borderColor: c.cardBorder, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center', shadowColor: c.cardGlow, shadowOpacity: 0.42, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 3 },
   filterPressed: { transform: [{ scale: 0.9 }], opacity: 0.7 },
   filterBadge: { position: 'absolute', top: -3, right: -3, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: c.accent, borderWidth: 2, borderColor: c.surface },
-  filterBadgeText: { fontSize: 11, lineHeight: 14, fontWeight: '900', color: c.textInverse },
-  categoryRow: { paddingHorizontal: 13, paddingVertical: 11, gap: 7 },
-  category: { minWidth: 82, minHeight: 39, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 12, borderRadius: 22, backgroundColor: c.surface, borderWidth: 1.25, borderColor: c.cardBorder, shadowColor: c.shadow, shadowOpacity: 0.72, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2, overflow: 'hidden' },
-  categoryActive: { backgroundColor: c.primary, borderColor: c.primary, shadowColor: c.primary, shadowOpacity: 0.38, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 4 },
-  categoryText: { fontSize: 13, lineHeight: 17, color: c.text, fontWeight: '700' },
-  categoryTextActive: { color: c.textInverse, fontWeight: '800' },
-  categoryTextActiveDark: { color: '#001014' },
+  filterBadgeText: { fontSize: 11, lineHeight: 14, fontWeight: '900', color: c.marketActionInk },
+  categoryRow: { paddingHorizontal: 13, paddingTop: 7, paddingBottom: 7, gap: 5, minWidth: '100%' },
+  category: { flex: 1, minHeight: 35, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 7, borderRadius: 22, backgroundColor: c.surface, borderWidth: 1, borderColor: c.cardBorder },
+  categoryActive: { backgroundColor: c.primaryDark, borderColor: c.primaryDark },
+  categoryText: { fontSize: 10, lineHeight: 15, color: c.text, fontWeight: '700' },
+  categoryTextActive: { color: '#FFFFFF', fontWeight: '800' },
   loader: { marginTop: 50 },
-  offerFeed: { gap: 10, paddingHorizontal: 13, paddingTop: 2, paddingBottom: 10 },
   feedLoader: { width: 60, alignSelf: 'center' },
-  heroPage: { height: 218, flexDirection: 'row', gap: 8, paddingHorizontal: 13 },
-  heroMain: { flex: 1.58, minWidth: 0 },
-  heroSide: { flex: 1, minWidth: 0, height: 218, justifyContent: 'space-between', gap: 8, overflow: 'hidden' },
-  dots: { flexDirection: 'row', justifyContent: 'center', gap: 7, paddingTop: 11, paddingBottom: 4 },
-  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: c.border },
-  dotActive: { width: 18, backgroundColor: c.primary },
-  tileCard: { width: 158, borderRadius: 16, borderWidth: 1, borderColor: c.cardBorder, backgroundColor: '#FFFFFF', overflow: 'hidden', shadowColor: c.cardGlow, shadowOpacity: 1, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 3 },
-  tilePhotoWrap: { width: '100%', height: 112 },
-  tilePhoto: { width: '100%', height: '100%' },
-  tilePhotoFallback: { backgroundColor: c.primaryLight, alignItems: 'center', justifyContent: 'center' },
-  tileBadge: { position: 'absolute', top: 8, left: 8, borderRadius: 8, backgroundColor: '#FFD54A', paddingHorizontal: 8, paddingVertical: 4 },
-  tileBadgeText: { fontSize: 11, fontWeight: '900', color: '#1A1A1A' },
-  tileHeart: { position: 'absolute', top: 6, right: 6, width: 28, height: 28, borderRadius: 14, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center' },
-  tileBody: { padding: 10, gap: 3 },
-  tileName: { fontSize: 14, lineHeight: 19, fontWeight: '800', color: '#102333' },
-  tileMeta: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  tileMetaText: { flex: 1, minWidth: 0, fontSize: 11, lineHeight: 15, color: '#53677C' },
   emptyCard: { margin: 18, padding: 28, backgroundColor: c.surface, borderRadius: 22, alignItems: 'center', borderWidth: 1, borderColor: c.border },
   emptyTitle: { ...theme.typography.h3, color: c.primaryDark, marginTop: 12, textAlign: 'center' }, emptyText: { ...theme.typography.body, color: c.textSecondary, textAlign: 'center', marginTop: 6 },
   chooseButton: { marginTop: 16, paddingHorizontal: 18, paddingVertical: 11, borderRadius: 99, backgroundColor: c.primaryLight }, chooseText: { ...theme.typography.caption, color: c.primaryDark, fontWeight: '800' },

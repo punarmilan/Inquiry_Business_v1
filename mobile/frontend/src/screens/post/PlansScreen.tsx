@@ -2,6 +2,8 @@ import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { DynamicRenderer } from '../../components/DynamicRenderer';
+import { useUIPage } from '../../hooks/useUIPage';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { Button } from '../../components/Button';
 import { PlanPaymentSheet } from '../../components/PlanPaymentSheet';
@@ -19,6 +21,7 @@ import {
 } from '../../utils/subscription';
 
 export const PlansScreen: React.FC<any> = ({ route, navigation }) => {
+  const appearance = useUIPage('plans');
   const { accessToken, refreshBusinesses } = useApp();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [businesses, setBusinesses] = useState<Business[]>([]);
@@ -72,14 +75,16 @@ export const PlansScreen: React.FC<any> = ({ route, navigation }) => {
   const currentPlanName = subscriptionPlanName(currentSubscription);
 
   return (
-    <ScreenContainer>
-      <View style={styles.top}>
-        <Pressable onPress={navigation.goBack} style={styles.back}>
-          <MaterialCommunityIcons name="arrow-left" size={24} />
+    <ScreenContainer dynamicBackgroundColor={appearance.backgroundColor}>
+      <View style={[styles.top, appearance.header]}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={navigation.goBack} style={styles.back}>
+          <MaterialCommunityIcons name="arrow-left" color={appearance.iconColor} size={24} />
         </Pressable>
-        <Text style={styles.title}>Business Plans</Text>
+        <Text style={[styles.title, appearance.title]}>Business Plans</Text>
       </View>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, appearance.content]}>
+        <DynamicRenderer pageKey="plans" slot="beforeContent" />
+        {!!appearance.copy('promotionalLabel', '') && <Text accessibilityLabel="Promotion" style={styles.popular}>{appearance.copy('promotionalLabel', '')}</Text>}
         <Text style={styles.heading}>Choose the right plan</Text>
         <Text style={styles.subheading}>Prices and quotas are managed by InquiryExperts Admin.</Text>
 
@@ -128,7 +133,7 @@ export const PlansScreen: React.FC<any> = ({ route, navigation }) => {
           ? plans.map((plan, index) => {
               const isCurrent = currentPlanId === plan._id;
               return (
-              <View key={plan._id} style={[styles.card, index === 1 && !isCurrent && styles.featured, isCurrent && styles.currentPlanBorder]}>
+              <View key={plan._id} style={[styles.card, appearance.card, appearance.option('planLayout') === 'compact' && { padding: 12, marginBottom: 10 }, index === 1 && !isCurrent && styles.featured, isCurrent && styles.currentPlanBorder]}>
                 {isCurrent ? <Text style={styles.currentTag}>CURRENT PLAN</Text> : index === 1 && <Text style={styles.popular}>POPULAR</Text>}
                 <Text style={styles.planName}>{plan.name}</Text>
                 <Text style={styles.planDescription}>{plan.description}</Text>
@@ -165,6 +170,7 @@ export const PlansScreen: React.FC<any> = ({ route, navigation }) => {
         <Text style={styles.security}>
           <MaterialCommunityIcons name="shield-check-outline" size={16} /> Payment success is never trusted from the app. Activation is server verified.
         </Text>
+        <DynamicRenderer pageKey="plans" slot="afterContent" />
       </ScrollView>
 
       <PlanPaymentSheet

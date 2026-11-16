@@ -1,5 +1,5 @@
 import React from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -10,28 +10,6 @@ export type NeonIcon = keyof typeof MaterialCommunityIcons.glyphMap;
 // The whole neon system is one geometry with two palettes: every radius, inset
 // and font size below is shared, and only the colors come from the theme. That
 // is what keeps light and dark pixel-identical in layout.
-
-// ---------------------------------------------------------------------------
-// City skyline masthead
-//
-// One artwork (assets/bg.png — the night skyline from the design) backs both
-// modes. Dark shows it nearly as-is; light lays a near-opaque pale wash over it
-// so it reads as a soft daylight haze. Geometry is identical either way.
-const SKYLINE = require('../../assets/bg.png');
-
-export const SkylineMasthead: React.FC<{ height?: number; style?: StyleProp<ViewStyle> }> = ({ height = 230, style }) => (
-  <View pointerEvents="none" style={[styles.masthead, { height }, style]}>
-    {getThemeMode() === 'light' ? (
-      <>
-        <Image source={SKYLINE} style={{ position: 'absolute', top: 0, width: '100%', aspectRatio: 941 / 1672 }} resizeMode="cover" />
-        <View style={styles.mastheadScrim} />
-        <LinearGradient colors={['transparent', theme.colors.background]} style={styles.skylineFade} />
-      </>
-    ) : (
-      <View style={styles.darkMasthead} />
-    )}
-  </View>
-);
 
 // ---------------------------------------------------------------------------
 // Cards and buttons
@@ -106,7 +84,7 @@ export const SegmentedTabs: React.FC<{
   </View>
 );
 
-export const SectionHeading: React.FC<{ title: string; accent?: string; subtitle?: string; icon?: NeonIcon; iconColor?: string; action?: { label: string; onPress: () => void } }> = ({ title, accent, subtitle, icon, iconColor, action }) => (
+export const SectionHeading: React.FC<{ title: string; accent?: string; subtitle?: string; icon?: NeonIcon; iconColor?: string; variant?: 'default' | 'home'; action?: { label: string; onPress: () => void } }> = ({ title, accent, subtitle, icon, iconColor, action, variant = 'default' }) => (
   <View style={styles.headingRow}>
     {icon ? <MaterialCommunityIcons name={icon} size={23} color={iconColor || theme.colors.accent} style={styles.headingIcon} /> : null}
     <View style={styles.headingCopy}>
@@ -114,7 +92,7 @@ export const SectionHeading: React.FC<{ title: string; accent?: string; subtitle
       {subtitle ? <Text style={styles.headingSub}>{subtitle}</Text> : null}
     </View>
     {action ? (
-      <Pressable accessibilityRole="button" onPress={action.onPress} style={({ pressed }) => [styles.headingAction, pressed && styles.pressed]}>
+      <Pressable accessibilityRole="button" onPress={action.onPress} style={({ pressed }) => [styles.headingAction, variant === 'home' && styles.homeHeadingAction, pressed && styles.pressed]}>
         <Text style={styles.headingActionText}>{action.label}</Text>
         <MaterialCommunityIcons name="chevron-right" size={18} color={theme.colors.primary} />
       </Pressable>
@@ -123,11 +101,6 @@ export const SectionHeading: React.FC<{ title: string; accent?: string; subtitle
 );
 
 const styles = createThemedStyles((c) => ({
-  masthead: { position: 'absolute', left: 0, right: 0, top: 0, overflow: 'hidden' },
-  darkMasthead: { ...StyleSheet.absoluteFill, backgroundColor: '#000000' },
-  mastheadScrim: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: c.mastheadScrim },
-  skylineFade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 90 },
-
   card: { borderRadius: 20, borderWidth: 1, borderColor: c.cardBorder, backgroundColor: c.surface, boxShadow: `0 0 14px ${c.cardGlow}`, overflow: 'hidden', shadowColor: c.cardGlow, shadowOpacity: 1, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 3 },
   cardPadded: { padding: 16 },
   pressed: { opacity: 0.75 },
@@ -155,4 +128,5 @@ const styles = createThemedStyles((c) => ({
   headingSub: { fontSize: 12.5, lineHeight: 17, color: c.textSecondary, marginTop: 1 },
   headingAction: { minHeight: 40, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: c.primary, flexDirection: 'row', alignItems: 'center', gap: 2 },
   headingActionText: { fontSize: 13, fontWeight: '800', color: c.primary },
+  homeHeadingAction: { minHeight: 34, paddingHorizontal: 12 },
 }));

@@ -4,6 +4,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { DynamicRenderer } from '../../components/DynamicRenderer';
+import { useUIPage } from '../../hooks/useUIPage';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { getOfferDetails, listSavedOffers, recordOfferEvent, submitReport, toggleSavedOffer } from '../../services/api';
 import { isPosterUploadOffer } from '../../config/offerCardDesigner';
@@ -15,6 +17,7 @@ import { theme, createThemedStyles } from '../../theme';
 
 type Props = NativeStackScreenProps<OffersStackParamList, 'OfferDetails'>;
 export const OfferDetailsScreen: React.FC<Props> = ({ route, navigation }) => {
+  const appearance = useUIPage('offerDetails');
   const { accessToken } = useApp();
   const insets = useSafeAreaInsets();
   const [offer, setOffer] = useState<Offer | null>(null);
@@ -62,15 +65,16 @@ export const OfferDetailsScreen: React.FC<Props> = ({ route, navigation }) => {
     if (whatsapp) return contact('whatsapp', whatsappUrl(whatsapp));
     Alert.alert('No contact available', 'This business has not published a phone number yet.');
   };
-  return <ScreenContainer backgroundColor={colors.bg}>
-    <View style={s.top}><Pressable accessibilityLabel="Go back" onPress={navigation.goBack} style={s.icon}><MaterialCommunityIcons name="arrow-left" size={24} color={colors.ink} /></Pressable><Text style={s.topTitle}>Offer Details</Text><Pressable accessibilityLabel="Share offer" onPress={share} style={s.icon}><MaterialCommunityIcons name="share-variant-outline" size={23} color={colors.ink} /></Pressable></View>
+  return <ScreenContainer backgroundColor={colors.bg} dynamicBackgroundColor={appearance.backgroundColor}>
+    <View style={[s.top, appearance.header]}><Pressable accessibilityLabel="Go back" onPress={navigation.goBack} style={s.icon}><MaterialCommunityIcons name="arrow-left" size={24} color={appearance.option('iconTone') !== 'default' ? appearance.iconColor : colors.ink} /></Pressable><Text style={[s.topTitle, appearance.title]}>Offer Details</Text><Pressable accessibilityLabel="Share offer" onPress={share} style={s.icon}><MaterialCommunityIcons name="share-variant-outline" size={23} color={appearance.option('iconTone') !== 'default' ? appearance.iconColor : colors.ink} /></Pressable></View>
     {loading ? <View style={s.center}><ActivityIndicator color={colors.teal} /></View> : error || !offer || !business ? <View style={s.center}><Text style={s.body}>{error || 'Offer unavailable.'}</Text><Pressable onPress={() => setRetry(n => n + 1)}><Text style={s.retry}>Retry</Text></Pressable></View> : <>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[s.content, { paddingBottom: 160 + insets.bottom }]}>
-        <OfferArtwork offer={offer} />
-        <Pressable style={s.business} onPress={() => { recordOfferEvent(offer._id, 'business_profile_visit').catch(() => undefined); navigation.navigate('BusinessDetails', { businessId: business._id }); }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[s.content, appearance.content, { paddingBottom: 160 + insets.bottom }]}>
+        <DynamicRenderer pageKey="offerDetails" slot="beforeContent" />
+        <View style={appearance.option('posterVariant') === 'contained' ? { padding: 12, borderRadius: 16, borderWidth: 1, borderColor: theme.colors.border } : undefined}><OfferArtwork offer={offer} /></View>
+        <Pressable style={[s.business, appearance.card]} onPress={() => { recordOfferEvent(offer._id, 'business_profile_visit').catch(() => undefined); navigation.navigate('BusinessDetails', { businessId: business._id }); }}>
           <RemotePhoto uri={business.logoUrl} style={s.logo} /><View style={s.flex}><View style={s.nameRow}><Text style={s.businessName}>{business.name}</Text>{business.verificationStatus === 'verified' && <MaterialCommunityIcons name="check-decagram" size={18} color="#209AF4" />}</View><Text style={s.body}>{business.category || offer.category}</Text></View><View style={s.storePill}><Text style={s.storePillText}>View Store</Text><MaterialCommunityIcons name="chevron-right" size={17} color={theme.colors.primary} /></View>
         </Pressable>
-        <View style={[s.priceRow, isPoster && s.priceRowPoster]}>{isPoster ? null : <><Text style={s.original}>{money(offer.originalPrice)}</Text><Text style={s.price}>{money(offer.offerPrice)}</Text><Text style={s.saving}>Save {money(Math.max(0, offer.originalPrice - offer.offerPrice))}</Text></>}<Pressable accessibilityRole="button" accessibilityLabel="Grab this offer" onPress={grab} style={({ pressed }) => [s.grab, pressed && { opacity: 0.8 }]}><Text style={s.grabText}>Grab Offer</Text><MaterialCommunityIcons name="arrow-right" size={19} color={theme.colors.textInverse} /></Pressable></View>
+        <View style={[s.priceRow, isPoster && s.priceRowPoster, appearance.option('detailsVariant') === 'stacked' && { flexDirection: 'column', alignItems: 'stretch', gap: 8 }]}>{isPoster ? null : <><Text style={s.original}>{money(offer.originalPrice)}</Text><Text style={s.price}>{money(offer.offerPrice)}</Text><Text style={s.saving}>Save {money(Math.max(0, offer.originalPrice - offer.offerPrice))}</Text></>}<Pressable accessibilityRole="button" accessibilityLabel="Grab this offer" onPress={grab} style={({ pressed }) => [s.grab, appearance.option('actionVariant') === 'outlined' && { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.primary }, pressed && { opacity: 0.8 }]}><Text style={[s.grabText, appearance.option('actionVariant') === 'outlined' && { color: theme.colors.text }]}>Grab Offer</Text><MaterialCommunityIcons name="arrow-right" size={19} color={appearance.option('actionVariant') === 'outlined' ? theme.colors.text : theme.colors.textInverse} /></Pressable></View>
         {isPoster ? null : <Info title="About this offer" body={offer.description} icon="text-box-outline" />}
         <Info title="Validity" body={new Date(offer.startsAt).toLocaleDateString('en-IN') + ' – ' + new Date(offer.expiresAt).toLocaleDateString('en-IN')} icon="calendar-clock-outline" />
         <Info title="Terms & Conditions" body={offer.terms || 'Please confirm availability and terms with the business before purchase.'} icon="file-document-outline" />
@@ -80,6 +84,7 @@ export const OfferDetailsScreen: React.FC<Props> = ({ route, navigation }) => {
         {whatsapp ? <RoundAction icon="whatsapp" label="WhatsApp" onPress={() => contact('whatsapp', whatsappUrl(whatsapp))} /> : null}
         <RoundAction icon="directions" label="Directions" onPress={directions} /><RoundAction icon={saved ? 'bookmark' : 'bookmark-outline'} label={saving ? 'Saving' : saved ? 'Saved' : 'Save'} disabled={saving} onPress={save} /><RoundAction icon="share-variant" label="Share" onPress={share} />
       </View>
+        <DynamicRenderer pageKey="offerDetails" slot="afterContent" />
       </ScrollView>
     </>}
   </ScreenContainer>;

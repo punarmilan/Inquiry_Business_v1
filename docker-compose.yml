@@ -88,6 +88,7 @@ services:
       - JWT_ACCESS_EXPIRES_IN=15m
       - JWT_REFRESH_EXPIRES_IN=7d
       - CORS_ORIGIN=https://admin.inquiry.business,https://inquiry.business
+      - GOOGLE_MAPS_SERVER_API_KEY=${GOOGLE_MAPS_SERVER_API_KEY:-}
     networks:
       - inquiryexperts-net
 

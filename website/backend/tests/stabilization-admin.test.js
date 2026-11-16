@@ -40,8 +40,8 @@ test('city/category deactivation stays separate from dependency-safe hard delete
   const controller = read('backend/src/controllers/hyperlocalController.js');
   const cities = read('admin-frontend/src/pages/hyperlocal/CitiesPage.tsx');
   const categories = read('admin-frontend/src/pages/hyperlocal/ServiceCategoriesPage.tsx');
-  assert.match(cities, /Deactivate/);
-  assert.match(categories, /Deactivate/);
+  assert.match(cities, /payload: \{ isActive: !city\.isActive \}/);
+  assert.match(categories, /payload: \{ isActive: !item\.isActive \}/);
   assert.match(controller, /CITY_HAS_DEPENDENCIES/);
   assert.match(controller, /CATEGORY_HAS_DEPENDENCIES/);
 });
@@ -53,6 +53,8 @@ test('business hard delete is authenticated and blocked while dependent records 
   assert.ok(routes.indexOf('router.use(requireAdminAuth)') < routes.indexOf("router.delete('/businesses/:id'"));
   assert.match(controller, /BUSINESS_HAS_DEPENDENCIES/);
   assert.match(controller, /Report\.deleteMany\(\{ targetType: 'business', targetId: business\._id \}\)/);
-  assert.match(page, /Soft Delete/);
-  assert.match(page, /Hard Delete/);
+  assert.match(page, /setNoteTarget\(\{ business: b, action: 'delete' \}\)/);
+  assert.match(page, /noteTarget\.action !== 'delete'/);
+  assert.match(page, /hardDeleteBusiness\.mutate\(hardDeleteTarget\._id/);
+  assert.match(page, /confirmLabel="Delete Permanently"/);
 });
