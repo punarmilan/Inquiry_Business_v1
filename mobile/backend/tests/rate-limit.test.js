@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
+const { randomBytes } = require('node:crypto');
 
 const { isRateLimitDisabled } = require('../src/config/env');
 
@@ -109,6 +110,11 @@ test('polling limiter is bypassed in development with DISABLE_RATE_LIMIT=true', 
 test('production still rate-limits even with DISABLE_RATE_LIMIT=true', async () => {
   const child = await startServer({
     NODE_ENV: 'production',
+    // This isolated server must satisfy production startup validation in CI,
+    // without depending on developer credentials or deployment secrets.
+    JWT_ACCESS_SECRET: randomBytes(32).toString('hex'),
+    JWT_REFRESH_SECRET: randomBytes(32).toString('hex'),
+    OTP_PEPPER: randomBytes(32).toString('hex'),
     DISABLE_RATE_LIMIT: 'true',
     RATE_LIMIT_MAX: '2',
     RATE_LIMIT_WINDOW_MS: '60000',
