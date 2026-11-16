@@ -1,6 +1,20 @@
-import type { AnimationObject } from 'lottie-react-native';
 import { jsonBytes } from './dynamicUI';
 import { UI_ANIMATION_MAX_BYTES } from './uiAnimationLimits';
+
+// Shared JSON contract: usable by both native playback and the web editor.
+export interface AnimationObject {
+  v: string;
+  fr: number;
+  ip: number;
+  op: number;
+  w: number;
+  h: number;
+  nm?: string;
+  ddd?: number;
+  assets: any[];
+  layers: any[];
+  markers?: any[];
+}
 
 /** Same self-contained vector subset accepted by the upload API. */
 export function parseUIAnimation(input: unknown): AnimationObject {

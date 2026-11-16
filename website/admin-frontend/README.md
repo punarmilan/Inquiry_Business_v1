@@ -1,5 +1,15 @@
 # React + TypeScript + Vite
 
+## Docker build
+
+Run from the repository root:
+
+```sh
+docker build -f website/admin-frontend/Dockerfile -t inquiryexperts-admin-frontend .
+```
+
+The admin editor imports shared mobile types, utilities, and artwork. Its Dockerfile uses the repository root context and a dedicated `Dockerfile.dockerignore` to include those dependencies while excluding local environment files and installed packages.
+
 ## Provider Excel import
 
 On `/workers`, use **Upload Excel** to import an `.xlsx` file, or **Download template** for a blank workbook with these columns:

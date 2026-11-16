@@ -121,7 +121,7 @@ jobs:
       - name: Build and Push Admin Frontend
         uses: docker/build-push-action@v7
         with:
-          context: ./website/admin-frontend
+          context: .
           file: ./website/admin-frontend/Dockerfile
           build-args: |
             VITE_API_BASE_URL=https://web-api.inquiry.business

@@ -1,0 +1,18 @@
+# This Dockerfile uses the repository root as its build context.
+# Include only the admin application and its shared mobile source/assets.
+**
+!website/
+!website/admin-frontend/
+!website/admin-frontend/**
+!mobile/
+!mobile/frontend/
+!mobile/frontend/src/
+!mobile/frontend/src/**
+!mobile/frontend/assets/
+!mobile/frontend/assets/**
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+**/*.log
+**/coverage
