@@ -47,6 +47,7 @@ services:
       - JWT_REFRESH_SECRET=${MOBILE_JWT_REFRESH_SECRET:-mobile-refresh-secret-inquiryexperts-prod-2026}
       - JWT_ACCESS_EXPIRES_IN=15m
       - JWT_REFRESH_EXPIRES_IN=30d
+      - OTP_PEPPER=${MOBILE_OTP_PEPPER:?MOBILE_OTP_PEPPER must be set for production}
       - CORS_ORIGIN=*
       # Server-side Places API key for location search. Injected by the deploy
       # workflow into /var/www/inquiryexperts/.env from the GitHub secret of the

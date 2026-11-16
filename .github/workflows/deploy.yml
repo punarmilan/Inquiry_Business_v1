@@ -236,6 +236,14 @@ jobs:
             } >> .env.tmp
             mv .env.tmp .env
             chmod 600 .env
+            # Keep the OTP pepper stable across releases. Older deployments did
+            # not have one; generate it once on the VPS without logging it.
+            if ! grep -qE '^MOBILE_OTP_PEPPER=.{32,}$' .env; then
+              grep -v '^MOBILE_OTP_PEPPER=' .env > .env.tmp || true
+              printf 'MOBILE_OTP_PEPPER=%s\n' "$(openssl rand -hex 32)" >> .env.tmp
+              chmod 600 .env.tmp
+              mv .env.tmp .env
+            fi
             # The mobile backend stores every uploaded image in Cloudinary and
             # answers 503 without these, so fail the deploy before replacing the
             # running containers rather than shipping a build that cannot save images.
@@ -296,5 +304,16 @@ jobs:
               echo "Waiting for gateway services (attempt $attempt/12)..."
               sleep 5
             done
-            test "$ready" -eq 1
+            if [ "$ready" -ne 1 ]; then
+              echo "Gateway readiness failed; checking each service independently" >&2
+              for host_path in inquiry.business/ admin.inquiry.business/login web-api.inquiry.business/health app-api.inquiry.business/health; do
+                host=${host_path%%/*}
+                path=/${host_path#*/}
+                printf '%s ' "$host"
+                curl --silent --show-error --max-time 10 --output /dev/null --write-out '%{http_code}\n' -H "Host: $host" "http://127.0.0.1:8088$path" || true
+              done
+              docker compose --project-name inquiryexperts --env-file .env ps -a
+              docker compose --project-name inquiryexperts --env-file .env logs --tail 60 mobile-backend website-backend gateway
+              exit 1
+            fi
             docker image prune -f
